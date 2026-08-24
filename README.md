@@ -110,6 +110,36 @@ The FastAPI world owns observation and navigation decisions through
 `GET /world/map`, `POST /world/observe`, and `POST /world/path`. Phaser reads the
 same map to render the town; it does not decide whether a move is valid.
 
+### Live movement pipeline
+
+At startup, the backend turns each persona's current plan into a named map
+destination, finds a collision-safe four-direction A* route, and advances the
+agent by one tile every spatial tick. `ws://localhost:8000/ws/world` broadcasts
+the latest authoritative snapshot; Zustand validates and stores it, and Phaser
+animates the pixel agents to those coordinates.
+
+Useful endpoints:
+
+- `GET /world/spatial/state`: inspect the current revision, route, and positions
+- `POST /world/spatial/step`: advance one deterministic step for debugging
+- `WS /ws/world`: subscribe to the live spatial snapshot stream
+
+The spatial world starts independently of the PostgreSQL/LLM cognitive runtime.
+If the LLM is unavailable, map movement and the WebSocket remain usable while
+cognitive endpoints return `503`.
+
+If port `8000` is occupied, run the backend on another port and point Vite at it:
+
+```bash
+uv run --project packages/backend uvicorn api.main:app --app-dir packages/backend/src --port 8001
+VITE_WORLD_WS_URL=ws://localhost:8001/ws/world pnpm dev:frontend
+```
+
+To expand Briar Cove, add or move semantic objects in
+`packages/shared/assets/briar-cove.tmj`. Keep stable object IDs and add a
+`location_path`; the backend and pixel renderer consume the same layers without
+requiring a second map definition.
+
 ## Reference
 
 - Paper: [Generative Agents: Interactive Simulacra of Human Behavior](https://arxiv.org/abs/2304.03442)

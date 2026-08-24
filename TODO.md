@@ -230,11 +230,18 @@
     - [x] 단일 기준 시계로 tick이 안정적으로 증가한다
     - [x] tick loop에서 perceive-plan-act 순서가 유지된다
 
-- [ ] `P1` WebSocket state broadcast를 구현한다
+- [x] `P1` spatial WebSocket snapshot broadcast를 구현한다
   - Depends on: world clock + tick scheduler 연동
   - DoD:
-    - [ ] `position`, `action`, `dialogue`, `emoji`, `current_plan`을 브로드캐스트한다
-    - [ ] 누락 필드 없이 클라이언트에서 파싱 가능하다
+    - [x] `revision`, `position`, `destination`, `action`, `plan`, `route_remaining`을 브로드캐스트한다
+    - [x] 느린 클라이언트에는 stale frame 대신 최신 snapshot을 전달한다
+    - [x] shared contract 기반 runtime validation 후 클라이언트에서 파싱한다
+
+- [ ] `P1` cognitive/social WebSocket overlay를 구현한다
+  - Depends on: spatial WebSocket snapshot broadcast 구현
+  - DoD:
+    - [ ] `dialogue`, `emoji`, 세분화된 current plan item을 전달한다
+    - [ ] spatial snapshot과 동일 revision/timestamp 기준으로 합칠 수 있다
 
 ### 4-B. Frontend 시각화
 
@@ -246,13 +253,13 @@
     - [x] 전체 지도 축소 대신 agent 추적/드래그/줌 카메라를 제공한다
     - [x] WebSocket spatial snapshot이 agent 이동과 HUD 상태에 반영된다
 
-- [ ] `P2` Tiled map + collision을 연결한다
+- [x] `P2` Tiled map + collision을 연결한다
   - Depends on: WebSocket state broadcast 구현
   - DoD:
     - [x] 맵 충돌 레이어가 backend A\* 이동 후보를 제한한다
-    - [ ] agent 이동이 충돌 규칙을 위반하지 않는다
+    - [x] agent 이동이 backend route만 소비해 충돌 규칙을 위반하지 않는다
 
-- [ ] `P2` A\* pathfinding을 적용한다
+- [x] `P2` A\* pathfinding을 적용한다
   - Depends on: Tiled map + collision 연결
   - DoD:
     - [x] 목표 좌표까지 유효 경로를 계산한다

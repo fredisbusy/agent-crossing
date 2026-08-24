@@ -208,7 +208,18 @@ react 정책:
 - `GET /world/map`: 장소, 충돌, 상호작용 물체, 스폰의 canonical snapshot
 - `POST /world/observe`: 좌표와 반경을 입력받아 현재 위치와 주변 affordance 반환
 - `POST /world/path`: tile 좌표 입력을 받아 충돌을 우회하는 4방향 A\* 경로 반환
+- `GET /world/spatial/state`: 현재 공간 revision, 좌표, 목적지, 남은 경로 반환
+- `POST /world/spatial/step`: 결정론적 공간 tick을 한 번 진행
+- `WS /ws/world`: 최신 공간 snapshot을 약 650ms 간격으로 전달
 - 목적지가 막혔거나 도달 불가능하면 `reachable=false`, `path=[]`를 반환
+
+공간 실행 규칙:
+
+- persona의 `current_plan_context`에서 canonical location 또는 alias를 찾는다.
+- 목적지 bounds에서 현재 위치와 가장 가까운 walkable tile을 선택한다.
+- backend가 계산한 4방향 A\* route를 한 tick에 한 tile씩 소비한다.
+- plan이 바뀌면 기존 route를 폐기하고 현재 tile에서 다시 탐색한다.
+- 공간 runtime/stream은 DB/LLM 인지 runtime의 실패와 독립적으로 부팅한다.
 
 대화/정보 확산:
 
@@ -222,17 +233,33 @@ react 정책:
 
 ---
 
-## 9. API / 이벤트 계약 (초안)
+## 9. API / 이벤트 계약
 
-WebSocket 이벤트 최소 단위:
+`WS /ws/world`는 개별 이벤트가 아니라 최신 상태 전체를 보내는 snapshot
+스트림이다. 느린 클라이언트에는 오래된 frame을 버리고 가장 최신 frame만
+유지한다.
+
+snapshot 필드:
+
+- `revision`
+- `map_id`
+- `agents[]`
+
+agent 필드:
 
 - `agent_id`
+- `name`
+- `tile_position`
 - `position`
+- `destination`
 - `current_action`
-- `current_plan_item`
-- `dialogue`
-- `emoji`
-- `timestamp`
+- `plan`
+- `route_remaining`
+
+프런트엔드는 수신 JSON을 shared contract에 맞게 runtime validation한 뒤
+Zustand에 저장한다. Phaser는 `position`만 렌더링에 사용하며 충돌/경로를
+재계산하지 않는다. `dialogue`, `emoji`, cognitive plan item은 후속 social
+overlay 이벤트로 확장한다.
 
 God mode 입력:
 
