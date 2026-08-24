@@ -20,7 +20,7 @@ LLM_BACKEND: Final[Literal["ollama", "google_ai_studio"]] = cast(
 )
 
 _default_base_url = (
-    "https://model.fredly.dev"
+    "https://model.byfred.io"
     if LLM_BACKEND == "ollama"
     else "https://generativelanguage.googleapis.com/v1beta"
 )

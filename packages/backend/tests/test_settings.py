@@ -49,12 +49,12 @@ print(json.dumps({
     return json.loads(result.stdout)
 
 
-def test_settings_ollama_backend_uses_fredly_gateway() -> None:
+def test_settings_ollama_backend_uses_byfred_gateway() -> None:
     settings_payload = _load_settings_with_env({"LLM_BACKEND": "ollama"})
 
     assert settings_payload == {
         "LLM_BACKEND": "ollama",
-        "LLM_BASE_URL": "https://model.fredly.dev",
+        "LLM_BASE_URL": "https://model.byfred.io",
         "LLM_MODEL": "ollama_chat/qwen2.5:7b-instruct",
         "EMBEDDING_MODEL": "ollama/bge-m3",
         "LLM_API_KEY": "",

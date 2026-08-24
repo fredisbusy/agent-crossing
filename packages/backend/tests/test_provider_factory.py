@@ -7,12 +7,12 @@ def test_build_provider_client_returns_litellm_client() -> None:
         timeout_seconds=4.0,
         generation_model="ollama_chat/qwen2.5:7b-instruct",
         embedding_model="ollama/bge-m3",
-        base_url="https://model.fredly.dev",
+        base_url="https://model.byfred.io",
         api_key="test-key",
     )
 
     assert isinstance(client, LiteLlmClient)
-    assert client.base_url == "https://model.fredly.dev"
+    assert client.base_url == "https://model.byfred.io"
     assert client.api_key == "test-key"
 
 
