@@ -18,8 +18,8 @@ import {
 import { drawDollhouseBuilding } from "./DollhouseBuilding";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 import { ServerGridMovement } from "./gridMovement";
+import { agentBubbleLabel } from "./agentBubble";
 import {
-  homeActionLabel,
   isAgentAtHome,
   resolveHomeRoom,
 } from "./homeInterior";
@@ -352,13 +352,16 @@ export class MainScene extends Phaser.Scene {
       );
       const eyes = this.add.rectangle(0, -16, 10, 2, 0x3d3835);
       const bubble = this.add
-        .text(13, -38, id === "Jiho" ? "☕" : "📚", {
+        .text(0, -38, "", {
           fontFamily: PIXEL_FONT,
-          fontSize: "12px",
+          fontSize: "8px",
+          color: "#2d3028",
           backgroundColor: "#fffbed",
-          padding: { x: 4, y: 3 },
+          padding: { x: 5, y: 3 },
+          wordWrap: { width: 170 },
+          align: "center",
         })
-        .setOrigin(0.5)
+        .setOrigin(0.5, 1)
         .setVisible(false)
         .setResolution(1);
       const nameplate = this.add
@@ -485,7 +488,7 @@ export class MainScene extends Phaser.Scene {
           .setPosition(position.x + occupancy * 18, position.y)
           .setDepth(home.depth + 12 + occupancy)
           .setVisible(true);
-        indoorView.bubble.setText(homeActionLabel(state));
+        indoorView.bubble.setText(agentBubbleLabel(state));
         if (this.followedAgentId === characterId) {
           this.cameras.main.startFollow(indoorView.container, true, 0.12, 0.12);
         }
@@ -502,19 +505,10 @@ export class MainScene extends Phaser.Scene {
       view.leftLeg.y = isMoving ? 8 : 10;
       view.rightLeg.y = isMoving ? 12 : 10;
       view.bubble
-        .setText(this.actionEmoji(state.current_action))
+        .setText(agentBubbleLabel(state))
         .setVisible(true);
       view.nameplate.setText(state.name);
     }
-  }
-
-  private actionEmoji(action: string): string {
-    if (action.includes("cafe") || action.includes("Honey")) return "☕";
-    if (action.includes("library") || action.includes("Story")) return "📚";
-    if (action.includes("market") || action.includes("Willow")) return "🧺";
-    if (action.includes("park") || action.includes("Moonflower")) return "🌿";
-    if (action.includes("moving")) return "…";
-    return "💭";
   }
 
   private configureCamera(): void {

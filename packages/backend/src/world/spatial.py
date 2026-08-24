@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import datetime
 from dataclasses import dataclass
+from typing import Literal
 
 from agents.planning.lifecycle import AgentPlanSnapshot, PlanItemSnapshot
 
@@ -30,6 +31,8 @@ class SpatialAgentSnapshot:
     active_hourly: PlanItemSnapshot | None
     active_minute: PlanItemSnapshot | None
     day_plan: tuple[PlanItemSnapshot, ...]
+    bubble_kind: Literal["speech", "thought", "action"]
+    bubble_text: str
 
 
 @dataclass(frozen=True)
@@ -54,6 +57,8 @@ class _MutableAgentMovement:
     current_action: str = "idle"
     explicit_location: str | None = None
     schedule: AgentPlanSnapshot | None = None
+    cognitive_kind: Literal["speech", "thought"] | None = None
+    cognitive_text: str = ""
 
 
 class SpatialWorldRuntime:
@@ -123,6 +128,27 @@ class SpatialWorldRuntime:
             self._current_time = current_time
             self._turn = turn
             self._scheduler_running = scheduler_running
+
+    def clear_cognitive_overlays(self) -> None:
+        with self._lock:
+            for agent in self._agents.values():
+                agent.cognitive_kind = None
+                agent.cognitive_text = ""
+
+    def set_cognitive_overlay(
+        self,
+        *,
+        agent_id: str,
+        kind: Literal["speech", "thought"],
+        text: str,
+    ) -> None:
+        normalized_text = text.strip()
+        if not normalized_text:
+            return
+        with self._lock:
+            agent = self._require_agent(agent_id)
+            agent.cognitive_kind = kind
+            agent.cognitive_text = normalized_text
 
     def tick(self) -> SpatialWorldSnapshot:
         with self._lock:
@@ -230,6 +256,12 @@ class SpatialWorldRuntime:
                         agent.schedule.active_minute if agent.schedule else None
                     ),
                     day_plan=agent.schedule.day_plan if agent.schedule else (),
+                    bubble_kind=agent.cognitive_kind or "action",
+                    bubble_text=(
+                        agent.cognitive_text
+                        if agent.cognitive_kind is not None
+                        else agent.plan
+                    ),
                 )
                 for agent in self._agents.values()
             ),

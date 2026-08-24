@@ -279,11 +279,15 @@ agent 필드:
 - `current_action`
 - `plan`
 - `route_remaining`
+- `bubble_kind`: `speech | thought | action`
+- `bubble_text`: 괄호를 포함하지 않은 사용자 관찰용 한 문장
 
 프런트엔드는 수신 JSON을 shared contract에 맞게 runtime validation한 뒤
 Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하며
-충돌/경로를 재계산하지 않는다. `dialogue`, `emoji`, cognitive plan item은
-후속 social overlay 이벤트로 확장한다.
+충돌/경로를 재계산하지 않는다. `bubble_kind=speech`는 실제 확정 발화를 괄호
+없이 표시하고, `thought|action`은 프런트엔드가 정확히 한 겹의 괄호로 감싼다.
+`model_thought`, self critique, decision trace 같은 내부 진단은 snapshot에 싣지
+않는다.
 
 God mode 입력:
 

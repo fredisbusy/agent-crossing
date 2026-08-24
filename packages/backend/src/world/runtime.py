@@ -112,6 +112,20 @@ class WorldRuntime:
                 speaking_partner=speaking_partner,
             )
             self.current_time = step_result.now
+            if self.spatial_runtime is not None:
+                self.spatial_runtime.clear_cognitive_overlays()
+                if step_result.reply:
+                    self.spatial_runtime.set_cognitive_overlay(
+                        agent_id=speaker.identity.id,
+                        kind="speech",
+                        text=step_result.reply,
+                    )
+                elif step_result.observability.thought:
+                    self.spatial_runtime.set_cognitive_overlay(
+                        agent_id=speaker.identity.id,
+                        kind="thought",
+                        text=step_result.observability.thought,
+                    )
             if dialogue_was_active and not self.session.is_active:
                 self._last_dialogue_end_time = self.current_time
             if self.spatial_runtime is not None:

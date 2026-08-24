@@ -72,6 +72,8 @@ export interface SpatialAgentState {
   active_hourly: PlanItemState | null;
   active_minute: PlanItemState | null;
   day_plan: PlanItemState[];
+  bubble_kind: "speech" | "thought" | "action";
+  bubble_text: string;
 }
 
 export interface PlanItemState {

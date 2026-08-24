@@ -79,6 +79,8 @@ function App() {
         active_hourly: null,
         active_minute: null,
         day_plan: [],
+        bubble_kind: "action",
+        bubble_text: "자율 세계에 연결하는 중…",
       }
     );
   });

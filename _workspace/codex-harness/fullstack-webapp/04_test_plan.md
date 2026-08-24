@@ -15,6 +15,13 @@
 - Run the full backend suite and recursive package build.
 - Restart the live backend and observe automatic clock advancement and canonical destinations.
 
+## Readable resident bubbles
+
+- Verify spatial overlays default to action text and accept non-empty speech/thought.
+- Verify blank cognitive overlays fall back to action text.
+- Build shared/frontend contracts and inspect the live WebSocket payload.
+- Confirm outdoor, home, and expanded interior views share the same parentheses rule.
+
 ## Resident card interaction
 
 - Build: `pnpm --filter @agent-crossing/frontend build`.

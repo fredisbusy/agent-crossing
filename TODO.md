@@ -259,11 +259,12 @@
     - [x] HTTPS frontend는 same-origin `wss://.../ws/world`를 사용한다
     - [x] reverse proxy가 `/ws/world`를 backend로 전달한다
 
-- [ ] `P1` cognitive/social WebSocket overlay를 구현한다
+- [x] `P1` cognitive/social WebSocket overlay를 구현한다
   - Depends on: spatial WebSocket snapshot broadcast 구현
   - DoD:
-    - [ ] `dialogue`, `emoji`, 세분화된 current plan item을 전달한다
-    - [ ] spatial snapshot과 동일 revision/timestamp 기준으로 합칠 수 있다
+    - [x] 실제 dialogue와 사용자 관찰용 thought/action을 세분화해 전달한다
+    - [x] spatial snapshot과 동일 revision/게임 시각으로 전달한다
+    - [x] speech는 평문, thought/action은 괄호 한 겹으로 표시한다
 
 ### 4-B. Frontend 시각화
 

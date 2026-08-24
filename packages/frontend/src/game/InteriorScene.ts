@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { useGameStore } from "../stores/game.store";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
+import { agentBubbleLabel } from "./agentBubble";
 
 const ROOM_COLUMNS = 20;
 const ROOM_ROWS = 14;
@@ -280,6 +281,18 @@ export class InteriorScene extends Phaser.Scene {
       graphics.fillRect(x - 8, y - 15, 16, 15);
       graphics.fillStyle(0x3e322e, 1);
       graphics.fillRect(x - 9, y - 20, 18, 7);
+      this.add
+        .text(x, y - 34, agentBubbleLabel(agent), {
+          fontFamily: PIXEL_FONT,
+          fontSize: "9px",
+          color: "#2d3028",
+          backgroundColor: "#fffbed",
+          padding: { x: 5, y: 3 },
+          wordWrap: { width: 220 },
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(y + 32)
+        .setResolution(1);
       this.add
         .text(x, y + 31, agent.name, {
           fontFamily: PIXEL_FONT,

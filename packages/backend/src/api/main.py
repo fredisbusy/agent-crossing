@@ -225,10 +225,14 @@ def _spatial_response(snapshot: SpatialWorldSnapshot) -> SpatialWorldResponse:
                 active_hourly=optional_plan_item(agent.active_hourly),
                 active_minute=optional_plan_item(agent.active_minute),
                 day_plan=[plan_item(item) for item in agent.day_plan],
+                bubble_kind=agent.bubble_kind,
+                bubble_text=agent.bubble_text,
             )
             for agent in snapshot.agents
         ],
-        current_time=(snapshot.current_time.isoformat() if snapshot.current_time else None),
+        current_time=(
+            snapshot.current_time.isoformat() if snapshot.current_time else None
+        ),
         turn=snapshot.turn,
         scheduler_running=snapshot.scheduler_running,
     )

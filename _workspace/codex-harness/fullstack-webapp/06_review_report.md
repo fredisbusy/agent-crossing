@@ -29,6 +29,14 @@ The cognitive runtime logged an Ollama TLS embedding connection error during sta
 - Runtime capacity: qwen authors day broad strokes in the background; deterministic hour/minute subdivision keeps the 27B model available for real encounters.
 - Remaining scope: restart persistence and non-dialogue perceive/retrieve/reflect are tracked as incomplete TODO items; this is an accelerated daily-life MVP, not full paper parity.
 
+## Readable bubble review scope
+
+- Actual policy-approved replies cross the runtime-to-spatial WebSocket boundary as `speech`.
+- User-facing thought summaries and active actions use `thought`/`action`; raw model thought and diagnostics remain private.
+- Frontend owns punctuation: speech is plain, thought/action receive exactly one pair of parentheses.
+- Regression: 124 backend tests passed, 10 live/optional tests skipped; frontend production build passed.
+- Live contract: action overlays publish Korean text through `bubble_kind=action`; bridge tests prove policy-approved speech and public thought summaries replace it without leaking model thought or self-critique.
+
 ## 2026-08-24 resident card interaction review
 
 - Root cause: resident rows were decorative `article` elements with no interaction handler; only Phaser sprites could call camera follow.

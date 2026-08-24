@@ -13,6 +13,13 @@
 - Persona premise: Jiho privately likes Sujin; Sujin knows him as a friend and retains independent goals and boundaries.
 - Generation model: `ollama_chat/qwen3.8:27b-mlx`; embedding model: `bge-m3:latest`.
 
+## 2026-08-24 readable resident bubbles
+
+- Replace emoji-only bubbles with visible Korean text.
+- Render actual speech without parentheses.
+- Render public thought summaries and actions inside one pair of parentheses.
+- Never expose model chain-of-thought, self-critique, or governance traces.
+
 ## 2026-08-24 resident card interaction fix
 
 - Symptom: tapping the Jiho Park or Sujin Lee rows in the mobile observer panel has no effect.

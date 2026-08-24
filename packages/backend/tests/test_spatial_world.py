@@ -88,3 +88,41 @@ def test_spatial_runtime_keeps_unmapped_plan_idle() -> None:
 
     assert jiho.destination is None
     assert jiho.current_action == "idle:no_mapped_destination"
+
+
+def test_spatial_runtime_exposes_speech_and_restores_action_overlay() -> None:
+    runtime = _runtime()
+    initial_jiho = next(
+        agent for agent in runtime.snapshot().agents if agent.agent_id == "jiho"
+    )
+    assert initial_jiho.bubble_kind == "action"
+    assert initial_jiho.bubble_text == initial_jiho.plan
+
+    runtime.set_cognitive_overlay(
+        agent_id="jiho",
+        kind="speech",
+        text="수진아, 좋은 아침이야.",
+    )
+    speaking_jiho = next(
+        agent for agent in runtime.snapshot().agents if agent.agent_id == "jiho"
+    )
+    assert speaking_jiho.bubble_kind == "speech"
+    assert speaking_jiho.bubble_text == "수진아, 좋은 아침이야."
+
+    runtime.clear_cognitive_overlays()
+    active_jiho = next(
+        agent for agent in runtime.snapshot().agents if agent.agent_id == "jiho"
+    )
+    assert active_jiho.bubble_kind == "action"
+    assert active_jiho.bubble_text == active_jiho.plan
+
+
+def test_spatial_runtime_does_not_publish_blank_thought_overlay() -> None:
+    runtime = _runtime()
+
+    runtime.set_cognitive_overlay(agent_id="jiho", kind="thought", text="   ")
+
+    jiho = next(
+        agent for agent in runtime.snapshot().agents if agent.agent_id == "jiho"
+    )
+    assert jiho.bubble_kind == "action"

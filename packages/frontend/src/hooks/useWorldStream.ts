@@ -65,6 +65,8 @@ function parseAgent(value: unknown): SpatialAgentState | null {
     activeHourly === null && value.active_hourly !== null ||
     activeMinute === null && value.active_minute !== null ||
     dayPlan === null || dayPlan.some((item) => item === null)
+    || !["speech", "thought", "action"].includes(String(value.bubble_kind))
+    || typeof value.bubble_text !== "string"
   ) {
     return null;
   }
@@ -81,6 +83,8 @@ function parseAgent(value: unknown): SpatialAgentState | null {
     active_hourly: activeHourly,
     active_minute: activeMinute,
     day_plan: dayPlan.filter((item): item is PlanItemState => item !== null),
+    bubble_kind: value.bubble_kind as SpatialAgentState["bubble_kind"],
+    bubble_text: value.bubble_text,
   };
 }
 

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -116,6 +118,8 @@ class SpatialAgentResponse(BaseModel):
     active_hourly: "PlanItemResponse | None"
     active_minute: "PlanItemResponse | None"
     day_plan: list["PlanItemResponse"]
+    bubble_kind: Literal["speech", "thought", "action"]
+    bubble_text: str
 
 
 class PlanItemResponse(BaseModel):
