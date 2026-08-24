@@ -27,7 +27,7 @@ def test_spatial_runtime_resolves_plan_alias_and_builds_routes() -> None:
 
     assert snapshot.revision == 1
     assert {agent.destination for agent in snapshot.agents} == {
-        "Briar Cove > The Honey Cup"
+        "브라이어 코브 > 허니컵 카페"
     }
     assert all(
         agent.current_action.startswith("moving_to:") for agent in snapshot.agents
@@ -82,8 +82,8 @@ def test_spatial_runtime_replans_when_agent_plan_changes() -> None:
     snapshot = runtime.tick()
     jiho = next(agent for agent in snapshot.agents if agent.agent_id == "jiho")
 
-    assert jiho.destination == "Briar Cove > Story House"
-    assert jiho.current_action == "moving_to:Story House"
+    assert jiho.destination == "브라이어 코브 > 스토리하우스 도서관"
+    assert jiho.current_action == "moving_to:스토리하우스 도서관"
 
 
 def test_spatial_runtime_keeps_unmapped_plan_idle() -> None:

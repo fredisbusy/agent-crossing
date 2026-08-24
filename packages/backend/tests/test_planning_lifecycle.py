@@ -21,13 +21,13 @@ class FakePlanner:
             DayPlanItem(
                 start_time=datetime.datetime.combine(date, datetime.time(6)),
                 end_time=datetime.datetime.combine(date, datetime.time(12)),
-                location="Briar Cove > Story House",
+                location="브라이어 코브 > 스토리하우스 도서관",
                 action_content="도서관 오전 업무를 한다.",
             ),
             DayPlanItem(
                 start_time=datetime.datetime.combine(date, datetime.time(12)),
                 end_time=datetime.datetime.combine(date, datetime.time(18)),
-                location="Briar Cove > Town Square",
+                location="브라이어 코브 > 마을 광장",
                 action_content="오후 일과를 보낸다.",
             ),
         ]
@@ -78,7 +78,7 @@ def test_planning_coordinator_generates_hierarchy_just_in_time_and_caches() -> N
     agent = FakeAgent(
         identity=AgentIdentity(id="jiho", name="Jiho Park", age=29, traits=["차분함"]),
         profile=AgentProfile(
-            fixed=FixedPersona(identity_stable_set=["Story House의 사서다."]),
+            fixed=FixedPersona(identity_stable_set=["스토리하우스 도서관의 사서다."]),
             extended=ExtendedPersona(
                 lifestyle_and_routine=["아침에 출근한다."], current_plan_context=[]
             ),
@@ -94,7 +94,7 @@ def test_planning_coordinator_generates_hierarchy_just_in_time_and_caches() -> N
     )
 
     assert first.active_minute.action_content == "책 반납함을 정리한다."
-    assert second.active_day.location == "Briar Cove > Story House"
+    assert second.active_day.location == "브라이어 코브 > 스토리하우스 도서관"
     assert (planner.day_calls, planner.hourly_calls, planner.minute_calls) == (1, 1, 1)
     assert agent.profile.extended.current_plan_context[0] == "책 반납함을 정리한다."
 
@@ -115,7 +115,7 @@ def test_planning_coordinator_uses_half_open_boundaries() -> None:
         now=datetime.datetime(2026, 8, 24, 12, 0),
     )
 
-    assert snapshot.active_day.location == "Briar Cove > Town Square"
+    assert snapshot.active_day.location == "브라이어 코브 > 마을 광장"
     assert planner.hourly_calls == 1
 
 
@@ -196,6 +196,38 @@ def test_future_minute_plan_raises_instead_of_resetting_progress_to_zero() -> No
     with pytest.raises(
         PlanningGenerationError,
         match="minute plan does not cover the current world time",
+    ):
+        PlanningCoordinator().bootstrap(
+            agent=agent, now=datetime.datetime(2026, 8, 24, 6, 5)
+        )
+
+
+def test_shortened_minute_location_raises_instead_of_losing_destination() -> None:
+    planner = FakePlanner()
+
+    def shortened_minute_plan(*, agent_name, current_time, hourly_plan_item):
+        _ = agent_name, current_time
+        return [
+            MinutePlanItem(
+                start_time=hourly_plan_item.start_time,
+                end_time=hourly_plan_item.start_time + datetime.timedelta(minutes=15),
+                location="브라이어 코브",
+                action_content="집에서 아침을 준비한다.",
+            )
+        ]
+
+    planner.generate_minute_plan = shortened_minute_plan
+    agent = FakeAgent(
+        identity=AgentIdentity(id="jiho", name="Jiho Park", age=29, traits=["차분함"]),
+        profile=AgentProfile(
+            fixed=FixedPersona(identity_stable_set=[]),
+            extended=ExtendedPersona(lifestyle_and_routine=[], current_plan_context=[]),
+        ),
+        brain=FakeBrain(planner=planner),
+    )
+
+    with pytest.raises(
+        PlanningGenerationError, match="minute plan contains non-canonical locations"
     ):
         PlanningCoordinator().bootstrap(
             agent=agent, now=datetime.datetime(2026, 8, 24, 6, 5)

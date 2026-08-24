@@ -25,8 +25,8 @@ describe("resolveCharacterTextOverlaps", () => {
 
   it("does not move unrelated location labels", () => {
     const label: GameTextOverlay = {
-      id: "location:Story House",
-      text: "Story House",
+      id: "location:스토리하우스 도서관",
+      text: "스토리하우스 도서관",
       left: 200,
       top: 160,
       tone: "location",

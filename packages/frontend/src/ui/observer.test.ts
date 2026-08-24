@@ -43,10 +43,10 @@ describe("resident presentation", () => {
     expect(residentDestinationLabel(agent(), "live")).toBe("목적지 없음");
     expect(
       residentDestinationLabel(
-        agent({ destination: "Briar Cove > Story House" }),
+        agent({ destination: "브라이어 코브 > 스토리하우스 도서관" }),
         "live",
       ),
-    ).toBe("Story House");
+    ).toBe("스토리하우스 도서관");
   });
 
   it("prefers the active minute plan over fallbacks", () => {
@@ -57,7 +57,7 @@ describe("resident presentation", () => {
           active_minute: {
             start_time: "2026-08-24T10:00:00+09:00",
             end_time: "2026-08-24T10:10:00+09:00",
-            location: "Briar Cove > Story House",
+            location: "브라이어 코브 > 스토리하우스 도서관",
             action_content: "책을 정리한다",
           },
         }),
@@ -73,7 +73,7 @@ describe("main event presentation", () => {
         active_minute: {
           start_time: "2026-08-24T10:00:00+09:00",
           end_time: "2026-08-24T10:10:00+09:00",
-          location: "Briar Cove > Story House",
+          location: "브라이어 코브 > 스토리하우스 도서관",
           action_content: "도서관 서가를 정리한다",
         },
       }),
@@ -82,7 +82,7 @@ describe("main event presentation", () => {
 
     expect(view).toEqual({
       title: "도서관 서가를 정리한다",
-      description: "Jiho Park · Story House",
+      description: "Jiho Park · 스토리하우스 도서관",
       progressPercent: 50,
       progressLabel: "일정 진행 · 50%",
     });
@@ -93,7 +93,7 @@ describe("main event presentation", () => {
       active_minute: {
         start_time: "2026-08-24T10:00:00+09:00",
         end_time: "2026-08-24T10:10:00+09:00",
-        location: "Briar Cove > Story House",
+        location: "브라이어 코브 > 스토리하우스 도서관",
         action_content: "책을 정리한다",
       },
     });
@@ -102,7 +102,7 @@ describe("main event presentation", () => {
       buildMainEventView(scheduledAgent, "2026-08-24T11:00:00+09:00"),
     ).toEqual({
       title: "Jiho Park의 현재 활동",
-      description: "대기 중 · Story House",
+      description: "대기 중 · 스토리하우스 도서관",
       progressPercent: 0,
       progressLabel: "새 일정 동기화 중",
     });

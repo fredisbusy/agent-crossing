@@ -17,7 +17,7 @@ interface InteriorData {
 
 export class InteriorScene extends Phaser.Scene {
   private interior: InteriorData = {
-    name: "Briar Cove Home",
+    name: "브라이어 코브의 집",
     kind: "home",
     color: "#d58c68",
   };

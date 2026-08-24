@@ -154,7 +154,7 @@ function App() {
           <span className="pixel-leaf">✦</span>
           <div>
             <strong>AGENT CROSSING</strong>
-            <small>{getMapProperty("name", "Briar Cove")}</small>
+            <small>{getMapProperty("name", "브라이어 코브")}</small>
           </div>
         </div>
         <div className="clock-chip">

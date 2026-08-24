@@ -126,7 +126,7 @@ async def test_spatial_state_and_step_endpoints_advance_planned_route() -> None:
 
     assert initial.revision == 0
     assert stepped.revision == 1
-    assert stepped.agents[0].destination == "Briar Cove > The Honey Cup"
+    assert stepped.agents[0].destination == "브라이어 코브 > 허니컵 카페"
     assert stepped.agents[0].position != initial.agents[0].position
 
 

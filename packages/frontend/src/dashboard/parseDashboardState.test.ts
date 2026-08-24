@@ -17,8 +17,8 @@ const fixture = {
     {
       agent_id: "Jiho",
       name: "Jiho Park",
-      current_action: "at:The Honey Cup",
-      destination: "Briar Cove > The Honey Cup",
+      current_action: "at:허니컵 카페",
+      destination: "브라이어 코브 > 허니컵 카페",
       tile_position: { x: 3, y: 5 },
       route_remaining: 0,
       bubble_kind: "thought",

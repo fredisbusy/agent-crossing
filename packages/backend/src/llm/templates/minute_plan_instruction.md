@@ -25,6 +25,7 @@ Generate an executable minute plan for the current phase.
 - Break the near-term activity into consecutive concrete 5-15 minute actions for roughly the next 60-90 minutes.
 - Do not simply copy hourly-plan summaries or emit one item per hourly block.
 - Focus on concrete actions that can be executed immediately.
+- Copy the complete `location` value from the active hourly-plan context exactly. Do not shorten, translate, or generalize the location path.
 - Do not add numbering, bullets, markdown, explanatory text, or additional keys.
 
 ## Output Contract

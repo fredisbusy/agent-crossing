@@ -241,6 +241,8 @@
     - [x] tick loop에서 perceive-plan-act 순서가 유지된다
     - [x] 06:00부터 5분 단위로 가속된 하루를 자동 시작한다
     - [x] active minute plan을 canonical 공간 이동과 WebSocket UI에 연결한다
+    - [x] 마을 지도와 계획의 canonical 건물 이름을 한국어로 통일한다
+    - [x] hourly/minute plan에서 축약된 비-canonical 장소를 거부한다
     - [x] 같은 장소에 실제로 인접한 두 agent만 대화를 시작한다
     - [x] cognitive action 실패를 tick scheduler에서 격리해 world clock과 이동을 계속 진행한다
     - [x] 생성된 day/hourly/minute 계층을 완료 시점의 world clock에 맞춰 설치한다

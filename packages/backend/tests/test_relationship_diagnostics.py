@@ -32,7 +32,7 @@ def test_relationship_summary_preserves_private_asymmetric_perspectives() -> Non
 
 def test_relationship_summary_does_not_invent_unknown_relationships() -> None:
     relationship = build_relationship_snapshot(
-        identity_stable_set=["Jiho는 Story House의 사서다."],
+        identity_stable_set=["Jiho는 스토리하우스 도서관의 사서다."],
         memories=[],
         target_agent_id="newcomer",
         target_name="New Comer",

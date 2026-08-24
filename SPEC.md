@@ -193,6 +193,8 @@ Backend 레이어 책임:
 - 로컬 Qwen의 structured JSON 생성은 thinking을 끄고 출력 토큰을 최종 JSON 본문에 사용한다.
 - day plan은 날짜가 바뀔 때 한 번 선택하고, hourly/minute plan은 active parent가 바뀔 때 JIT 생성한다.
 - active minute plan의 canonical `location`과 `action_content`가 공간 runtime의 목적지와 현재 행동에 직접 반영된다.
+- canonical 마을·건물·장소 경로와 사용자 노출 지도 라벨은 한국어 이름을 사용한다.
+- hourly/minute plan은 canonical 한국어 장소 경로를 축약하거나 일반화하지 않고 그대로 유지한다.
 - 두 agent가 같은 canonical 목적지에서 인접했을 때만 대화 세션을 열고, 종료 뒤 30분 동안 재조우 대화를 억제한다.
 - Jiho의 Sujin에 대한 호감은 Jiho만 가진 private seed memory다. Sujin은 이를 선험적으로 알지 못하며 독립된 일정, 판단, 경계를 유지한다.
 

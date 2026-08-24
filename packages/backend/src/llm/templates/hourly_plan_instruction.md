@@ -25,6 +25,7 @@ Decompose the active day-plan block into a chronological hourly plan for the nea
 - Do not restate or regenerate the entire day plan.
 - Keep items ordered from earlier to later time.
 - Keep each item aligned with the given active day-plan context.
+- Copy the complete `location` value from the active day-plan context exactly. Do not shorten, translate, or generalize the location path.
 - Do not add numbering, bullets, markdown, explanatory text, or additional keys.
 
 ## Output Contract

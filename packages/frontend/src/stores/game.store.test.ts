@@ -19,7 +19,7 @@ describe("game store UI commands", () => {
   it("tracks the active scene and dismisses interaction feedback", () => {
     useGameStore.getState().setSceneContext({
       kind: "interior",
-      name: "Story House",
+      name: "스토리하우스 도서관",
     });
     useGameStore.getState().showInteractionNotice({
       title: "Community Board",
@@ -28,7 +28,7 @@ describe("game store UI commands", () => {
 
     expect(useGameStore.getState().sceneContext).toEqual({
       kind: "interior",
-      name: "Story House",
+      name: "스토리하우스 도서관",
     });
     expect(useGameStore.getState().interactionNotice?.title).toBe(
       "Community Board",
@@ -40,8 +40,8 @@ describe("game store UI commands", () => {
 
   it("only clears text overlays owned by the active scene", () => {
     const label = {
-      id: "location:Story House",
-      text: "Story House",
+      id: "location:스토리하우스 도서관",
+      text: "스토리하우스 도서관",
       left: 120,
       top: 80,
       tone: "location" as const,
@@ -49,7 +49,7 @@ describe("game store UI commands", () => {
     };
 
     useGameStore.getState().setGameTextOverlay("world", [label]);
-    useGameStore.getState().clearGameTextOverlay("interior:Story House");
+    useGameStore.getState().clearGameTextOverlay("interior:스토리하우스 도서관");
     expect(useGameStore.getState().gameTextOverlay.labels).toEqual([label]);
 
     useGameStore.getState().clearGameTextOverlay("world");

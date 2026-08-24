@@ -22,7 +22,7 @@ def test_load_world_map_parses_semantic_layers() -> None:
     assert [spawn.agent_id for spawn in world_map.spawns] == ["Jiho", "Sujin"]
     location = world_map.location_at(MapPoint(640, 464))
     assert location is not None
-    assert location.name == "Town Square"
+    assert location.name == "마을 광장"
 
 
 def test_world_map_pathfinding_avoids_collision_bounds() -> None:
@@ -44,7 +44,7 @@ def test_world_map_pathfinding_rejects_blocked_goal() -> None:
 def test_world_map_routes_buildings_through_authored_door() -> None:
     world_map = load_world_map()
     cafe = next(
-        location for location in world_map.locations if location.name == "The Honey Cup"
+        location for location in world_map.locations if location.name == "허니컵 카페"
     )
 
     assert cafe.entrance == MapPoint(8, 8)
@@ -73,9 +73,9 @@ def test_world_map_avoids_dynamic_occupancy_and_prefers_authored_paths() -> None
 async def test_world_map_api_exposes_render_and_agent_data() -> None:
     response = await get_world_map()
 
-    assert response.name == "Briar Cove"
+    assert response.name == "브라이어 코브"
     assert response.tile_width == 32
-    assert response.locations[0].location_path.startswith("Briar Cove")
+    assert response.locations[0].location_path.startswith("브라이어 코브")
     assert "plan_event" in response.interactables[0].affordances
 
 
@@ -85,10 +85,10 @@ async def test_world_observation_returns_location_and_nearby_affordances() -> No
         WorldObserveRequest(position=WorldMapPointResponse(x=640, y=464), radius=144)
     )
 
-    assert response.location_path == "Briar Cove > Town Square"
+    assert response.location_path == "브라이어 코브 > 마을 광장"
     assert {item.name for item in response.nearby_interactables} == {
-        "Community Board",
-        "Fountain",
+        "마을 게시판",
+        "분수",
     }
 
 

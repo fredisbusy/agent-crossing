@@ -15,13 +15,13 @@ from .models import (
 )
 
 CANONICAL_LOCATIONS: tuple[str, ...] = (
-    "Briar Cove > Rose Cottage",
-    "Briar Cove > Sage Cottage",
-    "Briar Cove > The Honey Cup",
-    "Briar Cove > Story House",
-    "Briar Cove > Willow Market",
-    "Briar Cove > Moonflower Park",
-    "Briar Cove > Town Square",
+    "브라이어 코브 > 지호의 집",
+    "브라이어 코브 > 수진의 집",
+    "브라이어 코브 > 허니컵 카페",
+    "브라이어 코브 > 스토리하우스 도서관",
+    "브라이어 코브 > 버드나무 시장",
+    "브라이어 코브 > 달맞이꽃 공원",
+    "브라이어 코브 > 마을 광장",
 )
 
 
@@ -171,14 +171,15 @@ class PlanningCoordinator:
         active_day = _require_active(
             day_items, now, agent_name=agent.name, plan_level="day"
         )
-        hourly_items = _children_within(
-            planner.generate_hourly_plan(
-                agent_name=agent.name,
-                current_time=now,
-                day_plan_item=active_day,
-            ),
-            active_day,
+        generated_hourly = planner.generate_hourly_plan(
+            agent_name=agent.name,
+            current_time=now,
+            day_plan_item=active_day,
         )
+        _require_canonical_locations(
+            generated_hourly, agent_name=agent.name, plan_level="hourly"
+        )
+        hourly_items = _children_within(generated_hourly, active_day)
         if not hourly_items:
             raise PlanningGenerationError(
                 f"{agent.name}: hourly plan is empty or outside its day-plan window"
@@ -186,14 +187,15 @@ class PlanningCoordinator:
         active_hourly = _require_active(
             hourly_items, now, agent_name=agent.name, plan_level="hourly"
         )
-        minute_items = _children_within(
-            planner.generate_minute_plan(
-                agent_name=agent.name,
-                current_time=now,
-                hourly_plan_item=active_hourly,
-            ),
-            active_hourly,
+        generated_minute = planner.generate_minute_plan(
+            agent_name=agent.name,
+            current_time=now,
+            hourly_plan_item=active_hourly,
         )
+        _require_canonical_locations(
+            generated_minute, agent_name=agent.name, plan_level="minute"
+        )
+        minute_items = _children_within(generated_minute, active_hourly)
         if not minute_items:
             raise PlanningGenerationError(
                 f"{agent.name}: minute plan is empty or outside its hourly-plan window"
@@ -263,6 +265,9 @@ class PlanningCoordinator:
                 current_time=now,
                 day_plan_item=active_day,
             )
+            _require_canonical_locations(
+                generated_hourly, agent_name=agent.name, plan_level="hourly"
+            )
             state.hourly_items = [
                 item
                 for item in _children_within(generated_hourly, active_day)
@@ -291,6 +296,9 @@ class PlanningCoordinator:
                 agent_name=agent.name,
                 current_time=now,
                 hourly_plan_item=active_hourly,
+            )
+            _require_canonical_locations(
+                generated_minute, agent_name=agent.name, plan_level="minute"
             )
             state.minute_items = _children_within(generated_minute, active_hourly)
             if not state.minute_items:
@@ -412,3 +420,16 @@ def _children_within(
         for item in items
         if item.start_time >= parent.start_time and item.end_time <= parent.end_time
     ]
+
+
+def _require_canonical_locations(
+    items: list[PlanItemT], *, agent_name: str, plan_level: str
+) -> None:
+    invalid_locations = sorted(
+        {item.location for item in items if item.location not in CANONICAL_LOCATIONS}
+    )
+    if invalid_locations:
+        raise PlanningGenerationError(
+            f"{agent_name}: {plan_level} plan contains non-canonical locations: "
+            + ", ".join(invalid_locations)
+        )
