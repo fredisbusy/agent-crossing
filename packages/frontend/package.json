@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@agent-crossing/shared": "workspace:*",
+    "grid-engine": "2.48.2",
     "lucide-react": "^0.300.0",
     "phaser": "^3.80.0",
     "react": "19.0.0",
