@@ -1,4 +1,5 @@
 import datetime
+import threading
 from typing import List, Optional
 
 import numpy as np
@@ -15,6 +16,12 @@ class MemoryStream:
 
     def __init__(self):
         self.memories: list[MemoryObject] = []
+        self._lock: threading.RLock = threading.RLock()
+
+    def snapshot(self) -> tuple[MemoryObject, ...]:
+        """Return a stable shallow copy for read-only diagnostics."""
+        with self._lock:
+            return tuple(self.memories)
 
     def add_memory(
         self,
@@ -29,17 +36,18 @@ class MemoryStream:
         새로운 관찰(Observation)이나 생각(Reflection)을 스트림에 추가한다.
         """
         validate_embedding_dimension(embedding, expected_dimension=EMBEDDING_DIMENSION)
-        new_memory = MemoryObject(
-            id=len(self.memories),
-            node_type=node_type,
-            citations=citations,
-            content=content,
-            created_at=now,
-            last_accessed_at=now,
-            importance=importance,
-            embedding=embedding,
-        )
-        self.memories.append(new_memory)
+        with self._lock:
+            new_memory = MemoryObject(
+                id=len(self.memories),
+                node_type=node_type,
+                citations=citations,
+                content=content,
+                created_at=now,
+                last_accessed_at=now,
+                importance=importance,
+                embedding=embedding,
+            )
+            self.memories.append(new_memory)
 
     def retrieve(
         self,
@@ -55,19 +63,17 @@ class MemoryStream:
         - 반환된 memory의 last_accessed_at은 current_time으로 갱신
         """
 
-        scores = self._calculate_retrieval_scores(
-            self.memories, query_embedding, current_time
-        )
-
-        sorted_scores = sorted(
-            scores, key=lambda x: (x[1], x[0].created_at), reverse=True
-        )
-        top_memories = sorted_scores[:top_k]
-
-        for memory, _ in top_memories:
-            memory.last_accessed_at = current_time
-
-        return [memory for memory, _ in top_memories]
+        with self._lock:
+            scores = self._calculate_retrieval_scores(
+                self.memories, query_embedding, current_time
+            )
+            sorted_scores = sorted(
+                scores, key=lambda x: (x[1], x[0].created_at), reverse=True
+            )
+            top_memories = sorted_scores[:top_k]
+            for memory, _ in top_memories:
+                memory.last_accessed_at = current_time
+            return [memory for memory, _ in top_memories]
 
     def _calculate_retrieval_scores(
         self,

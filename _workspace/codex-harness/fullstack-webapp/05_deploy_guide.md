@@ -16,3 +16,11 @@
 # 2026-08-24 mock-only UI remediation
 
 No deployment configuration change is required. The existing Vite development service reflects frontend changes immediately; production deployment uses the normal frontend build artifact.
+
+## 2026-08-24 cognitive observability dashboard
+
+- The existing bind-mounted Vite and reload-enabled FastAPI containers reflect source changes.
+- Vite proxies `/dashboard/state` and `/dashboard/events` to `backend:8001` inside the
+  Docker network and to `127.0.0.1:8001` for host-local development.
+- Caddy continues to proxy the frontend origin; no new public host is required.
+- Verify `https://agentcrossing.byfred.io/dashboard` and `/dashboard/state` after changes.

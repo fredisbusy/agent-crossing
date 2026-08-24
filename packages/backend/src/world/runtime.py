@@ -23,6 +23,7 @@ from .engine import (
     build_failed_step_result,
 )
 from .session import WorldConversationSession
+from .observability import DashboardEvent, DashboardEventBuffer
 from .spatial import SpatialWorldRuntime
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,7 @@ class WorldRuntime:
         self.planning_coordinator: PlanningCoordinator | None = planning_coordinator
         self.spatial_runtime: SpatialWorldRuntime | None = spatial_runtime
         self._last_dialogue_end_time: datetime.datetime | None = None
+        self._dashboard_events: DashboardEventBuffer = DashboardEventBuffer()
 
     def step(self) -> SimulationStepResult:
         with self._step_lock:
@@ -176,6 +178,7 @@ class WorldRuntime:
                 self.parse_failures += 1
             if not step_result.reply:
                 self.silent_turns += 1
+            self._record_dashboard_event(speaker=speaker, result=step_result)
             return step_result
 
     def _start_dialogue_for_real_encounter(self, now: datetime.datetime) -> None:
@@ -326,9 +329,7 @@ class WorldRuntime:
             step_result = self.engine.step(
                 turn=turn,
                 current_time=cognitive_time
-                - datetime.timedelta(
-                    seconds=self.engine.config.turn_time_step_seconds
-                ),
+                - datetime.timedelta(seconds=self.engine.config.turn_time_step_seconds),
                 speaker=speaker,
                 speaking_partner=speaking_partner,
             )
@@ -366,6 +367,30 @@ class WorldRuntime:
                 self.parse_failures += 1
             if not step_result.reply:
                 self.silent_turns += 1
+            self._record_dashboard_event(speaker=speaker, result=step_result)
+
+    def _record_dashboard_event(
+        self, *, speaker: SimAgent, result: SimulationStepResult
+    ) -> None:
+        _ = self._dashboard_events.append(
+            turn=self.turn,
+            agent_id=str(speaker.identity.id),
+            agent_name=speaker.name,
+            result=result,
+        )
+
+    def dashboard_events(
+        self, *, after_sequence: int = 0, limit: int = 100
+    ) -> tuple[DashboardEvent, ...]:
+        """Return a stable copy of recent diagnostics events."""
+        return self._dashboard_events.snapshot(
+            after_sequence=after_sequence,
+            limit=limit,
+        )
+
+    @property
+    def latest_dashboard_sequence(self) -> int:
+        return self._dashboard_events.latest_sequence
 
     async def _refresh_plans(self) -> None:
         if self.planning_coordinator is None:

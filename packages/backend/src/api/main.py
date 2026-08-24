@@ -6,6 +6,12 @@ import asyncio
 from agents.persona_loader import PersonaLoader
 from agents.planning.lifecycle import PlanItemSnapshot
 from api.schemas import (
+    DashboardAgentResponse,
+    DashboardEventResponse,
+    DashboardMemoryResponse,
+    DashboardReflectionStatusResponse,
+    DashboardStateResponse,
+    DashboardWorldResponse,
     SpatialAgentResponse,
     PlanItemResponse,
     SpatialWorldResponse,
@@ -37,6 +43,7 @@ from settings import (
     WORLD_COGNITIVE_TIME_STEP_SECONDS,
 )
 from world.runtime import WorldRuntime, WorldRuntimeConfig, build_world_runtime
+from world.observability import DashboardEvent
 from world.spatial import SpatialAgentSeed, SpatialWorldRuntime, SpatialWorldSnapshot
 from world.stream import SpatialWorldStream
 from world.world_map import MapBounds, MapPoint, WorldMap, load_world_map
@@ -238,6 +245,157 @@ def _spatial_response(snapshot: SpatialWorldSnapshot) -> SpatialWorldResponse:
         turn=snapshot.turn,
         scheduler_running=snapshot.scheduler_running,
     )
+
+
+def _dashboard_plan_item(item: PlanItemSnapshot | None) -> PlanItemResponse | None:
+    if item is None:
+        return None
+    return PlanItemResponse(
+        start_time=item.start_time.isoformat(),
+        end_time=item.end_time.isoformat(),
+        location=item.location,
+        action_content=item.action_content,
+    )
+
+
+def _public_diagnostics(value: object) -> object:
+    """Remove provider payloads and secrets from public diagnostics responses."""
+    if isinstance(value, dict):
+        mapping = cast(dict[str, object], value)
+        return {
+            key: _public_diagnostics(child)
+            for key, child in mapping.items()
+            if key not in {"raw_response", "prompt", "api_key"}
+        }
+    if isinstance(value, list):
+        items = cast(list[object], value)
+        return [_public_diagnostics(child) for child in items]
+    return value
+
+
+def _dashboard_event_response(event: DashboardEvent) -> DashboardEventResponse:
+    decision_process = _public_diagnostics(event.decision_process)
+    governance_trace = _public_diagnostics(event.governance_trace)
+    if not isinstance(decision_process, dict) or not isinstance(governance_trace, dict):
+        raise ValueError("dashboard diagnostics must remain dictionaries")
+    public_decision_process = cast(dict[str, object], decision_process)
+    public_governance_trace = cast(dict[str, object], governance_trace)
+    return DashboardEventResponse(
+        sequence=event.sequence,
+        turn=event.turn,
+        occurred_at=event.occurred_at.isoformat(),
+        agent_id=event.agent_id,
+        agent_name=event.agent_name,
+        reply=event.reply,
+        silent_reason=event.silent_reason,
+        parse_failure=event.parse_failure,
+        thought=event.thought,
+        model_thought=event.model_thought,
+        self_critique=event.self_critique,
+        decision_reason=event.decision_reason,
+        action_summary=event.action_summary,
+        decision_process=public_decision_process,
+        governance_trace=public_governance_trace,
+    )
+
+
+def _dashboard_state_response(
+    *, runtime: WorldRuntime, memory_limit: int, event_limit: int
+) -> DashboardStateResponse:
+    spatial = _require_spatial_runtime().snapshot()
+    runtime_by_id = {str(agent.identity.id): agent for agent in runtime.agents}
+    agents: list[DashboardAgentResponse] = []
+    for spatial_agent in spatial.agents:
+        runtime_agent = runtime_by_id.get(spatial_agent.agent_id)
+        if runtime_agent is None:
+            continue
+        reflection = runtime_agent.brain.reflection_graph.reflection
+        memories = runtime_agent.memory_service.get_recent_memories(limit=memory_limit)
+        agents.append(
+            DashboardAgentResponse(
+                agent_id=spatial_agent.agent_id,
+                name=spatial_agent.name,
+                current_action=spatial_agent.current_action,
+                destination=spatial_agent.destination,
+                tile_position=_map_point_response(spatial_agent.tile_position),
+                route_remaining=spatial_agent.route_remaining,
+                bubble_kind=spatial_agent.bubble_kind,
+                bubble_text=spatial_agent.bubble_text,
+                current_plan_context=list(
+                    runtime_agent.profile.extended.current_plan_context
+                ),
+                active_day=_dashboard_plan_item(spatial_agent.active_day),
+                active_hourly=_dashboard_plan_item(spatial_agent.active_hourly),
+                active_minute=_dashboard_plan_item(spatial_agent.active_minute),
+                day_plan=[
+                    cast(PlanItemResponse, _dashboard_plan_item(item))
+                    for item in spatial_agent.day_plan
+                ],
+                reflection_status=DashboardReflectionStatusResponse(
+                    accumulated_importance=reflection.accumulated_importance,
+                    threshold=reflection.config.threshold,
+                ),
+                memories=[
+                    DashboardMemoryResponse(
+                        id=memory.id,
+                        node_type=memory.node_type.value,
+                        citations=memory.citations,
+                        content=memory.content,
+                        created_at=memory.created_at.isoformat(),
+                        last_accessed_at=memory.last_accessed_at.isoformat(),
+                        importance=memory.importance,
+                    )
+                    for memory in memories
+                ],
+            )
+        )
+    state = runtime.state()
+    return DashboardStateResponse(
+        world=DashboardWorldResponse(
+            available=True,
+            revision=spatial.revision,
+            turn=state.turn,
+            current_time=state.current_time.isoformat(),
+            scheduler_running=state.scheduler_running,
+            cognitive_active=state.cognitive_active,
+            effective_time_step_seconds=state.effective_time_step_seconds,
+            cognitive_runtime_error=cast(
+                str | None, getattr(app.state, "cognitive_runtime_error", None)
+            ),
+        ),
+        agents=agents,
+        events=[
+            _dashboard_event_response(event)
+            for event in runtime.dashboard_events(limit=event_limit)
+        ],
+        latest_sequence=runtime.latest_dashboard_sequence,
+    )
+
+
+@app.get("/dashboard/state", response_model=DashboardStateResponse)
+async def get_dashboard_state(
+    memory_limit: int = 100,
+    event_limit: int = 100,
+) -> DashboardStateResponse:
+    return _dashboard_state_response(
+        runtime=_require_runtime(),
+        memory_limit=max(1, min(memory_limit, 500)),
+        event_limit=max(1, min(event_limit, 500)),
+    )
+
+
+@app.get("/dashboard/events", response_model=list[DashboardEventResponse])
+async def get_dashboard_events(
+    after: int = 0,
+    limit: int = 100,
+) -> list[DashboardEventResponse]:
+    return [
+        _dashboard_event_response(event)
+        for event in _require_runtime().dashboard_events(
+            after_sequence=max(0, after),
+            limit=max(1, min(limit, 500)),
+        )
+    ]
 
 
 @app.get("/world/spatial/state", response_model=SpatialWorldResponse)

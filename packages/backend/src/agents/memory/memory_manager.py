@@ -58,7 +58,7 @@ class MemoryManager:
         - limit이 주어지면 상위 limit개까지만 반환한다.
         """
         sorted_memories = sorted(
-            self.memory_stream.memories,
+            self.memory_stream.snapshot(),
             key=lambda x: x.created_at,
             reverse=order_by == OrderBy.DESC,
         )

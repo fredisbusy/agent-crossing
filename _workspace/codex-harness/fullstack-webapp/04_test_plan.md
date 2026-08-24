@@ -38,3 +38,12 @@
 - Verify mobile hints use pinch/tap language and resident selection still closes the panel.
 - Verify InteriorScene redraws residents on store snapshots and returns to outdoor follow on selection.
 - Verify board/fountain/bench taps expose canonical resident-affordance feedback.
+
+## Cognitive observability dashboard
+
+- Unit-test bounded event retention, sequence cursor behavior, and structured fields.
+- Unit-test strict dashboard payload parsing and malformed-memory rejection.
+- Run full backend/frontend tests and recursive workspace build.
+- Verify the public state endpoint returns current runtime facts.
+- In a browser, select Sujin, open Memory and Diagnostics tabs, confirm real rows render,
+  and confirm there are no browser console errors.

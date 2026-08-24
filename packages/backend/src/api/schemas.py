@@ -140,3 +140,72 @@ class SpatialWorldResponse(BaseModel):
     current_time: str | None
     turn: int
     scheduler_running: bool
+
+
+class DashboardMemoryResponse(BaseModel):
+    id: int
+    node_type: Literal["OBSERVATION", "REFLECTION", "PLAN"]
+    citations: list[int] | None
+    content: str
+    created_at: str
+    last_accessed_at: str
+    importance: int
+
+
+class DashboardReflectionStatusResponse(BaseModel):
+    accumulated_importance: int
+    threshold: int
+
+
+class DashboardAgentResponse(BaseModel):
+    agent_id: str
+    name: str
+    current_action: str
+    destination: str | None
+    tile_position: WorldMapPointResponse
+    route_remaining: int
+    bubble_kind: Literal["speech", "thought", "action"]
+    bubble_text: str
+    current_plan_context: list[str]
+    active_day: PlanItemResponse | None
+    active_hourly: PlanItemResponse | None
+    active_minute: PlanItemResponse | None
+    day_plan: list[PlanItemResponse]
+    reflection_status: DashboardReflectionStatusResponse
+    memories: list[DashboardMemoryResponse]
+
+
+class DashboardEventResponse(BaseModel):
+    sequence: int
+    turn: int
+    occurred_at: str
+    agent_id: str
+    agent_name: str
+    reply: str
+    silent_reason: str
+    parse_failure: bool
+    thought: str
+    model_thought: str
+    self_critique: str
+    decision_reason: str
+    action_summary: str
+    decision_process: dict[str, object]
+    governance_trace: dict[str, object]
+
+
+class DashboardWorldResponse(BaseModel):
+    available: bool
+    revision: int
+    turn: int
+    current_time: str | None
+    scheduler_running: bool
+    cognitive_active: bool
+    effective_time_step_seconds: int
+    cognitive_runtime_error: str | None
+
+
+class DashboardStateResponse(BaseModel):
+    world: DashboardWorldResponse
+    agents: list[DashboardAgentResponse]
+    events: list[DashboardEventResponse]
+    latest_sequence: int

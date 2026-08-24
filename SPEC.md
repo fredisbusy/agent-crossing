@@ -298,6 +298,19 @@ Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하�
 `model_thought`, self critique, decision trace 같은 내부 진단은 snapshot에 싣지
 않는다.
 
+### 9.1 운영 관측 대시보드 계약
+
+- `/dashboard`는 게임 렌더러와 분리된 React 관측 화면이며 Phaser runtime을 부팅하지 않는다.
+- `GET /dashboard/state`는 실제 runtime의 현재 상태, 계층 계획, memory stream,
+  reflection 임계치 진행률, 최근 cognitive diagnostics event를 반환한다.
+- cognitive diagnostics event는 자동 scheduler와 수동 step 경로 모두에서 생성하고
+  단조 증가 `sequence`와 world `turn`을 함께 보존한다.
+- diagnostics event는 별도 bounded buffer가 소유하며 Brain의 `ActionLoopResult`에
+  대시보드 전용 필드를 추가하지 않는다.
+- 공개 응답에서는 embedding, provider `raw_response`, prompt, API key를 제외한다.
+- `/ws/world`는 계속 사용자 관찰용 최신 spatial snapshot만 전달하며 내부 판단
+  trace를 포함하지 않는다.
+
 God mode 입력:
 
 - 자연어 이벤트 입력 -> perception event로 변환 -> 해당 agent loop에 주입

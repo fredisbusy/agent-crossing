@@ -51,3 +51,16 @@ The cognitive runtime logged an Ollama TLS embedding connection error during sta
 - Added scene-aware controls, live enlarged-interior residents, outdoor follow on interior selection, semantic interactable feedback, and pinch zoom.
 - Added Vitest presentation/store contracts and connected root `pnpm test` to backend plus frontend suites.
 - Verification: 124 backend tests passed, 10 skipped; 12 frontend tests passed; frontend production build and public 390x844 DOM verification passed with zero browser warnings/errors.
+
+## 2026-08-24 cognitive observability dashboard review
+
+- Added an isolated diagnostics event buffer without leaking trace fields into `/ws/world`.
+- Added actual memory, reflection-progress, plan, state, dialogue, thought summary,
+  self-critique, action summary, and governance-trace views at `/dashboard`.
+- Full verification: 130 backend tests passed, 10 skipped; 14 frontend tests passed;
+  recursive workspace build passed.
+- Public verification: `/dashboard/state` returned HTTP 200 with live turn/revision data;
+  browser showed LIVE status, two agents, actual memory rows and diagnostics, Sujin
+  selection worked, and the browser console contained no errors.
+- Known follow-up: event history and memories remain in-process and reset with the backend;
+  public dashboard authentication is not yet implemented.

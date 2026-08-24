@@ -13,3 +13,14 @@
 - Zustand owns scene context, selection commands, and semantic interactable feedback between React and Phaser.
 - Both Phaser scenes consume resident selection; InteriorScene redraws occupants from every accepted snapshot.
 - MainScene owns pan, wheel, pinch, semantic object hit zones, and outdoor follow behavior.
+
+## Cognitive observability dashboard — 2026-08-24
+
+- `WorldRuntime` records completed automatic and manual cognitive turns in a
+  thread-safe bounded `DashboardEventBuffer` owned by the diagnostics layer.
+- `GET /dashboard/state` joins spatial state, live plan hierarchy, memory stream,
+  reflection progress, and recent diagnostics without extending `ActionLoopResult`.
+- `main.tsx` lazy-loads either the Phaser game or dashboard based on pathname, so
+  visiting `/dashboard` does not boot or download the Phaser runtime chunk.
+- The dashboard uses a dedicated polling hook and strict runtime parser rather than
+  overloading the Phaser/Zustand game bridge.

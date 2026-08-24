@@ -5,6 +5,7 @@ import {
   Eye,
   MapPin,
   Radio,
+  BrainCircuit,
   Users,
   X,
 } from "lucide-react";
@@ -148,6 +149,9 @@ function App() {
               ? "연결 중"
               : "오프라인"}
         </div>
+        <a className="dashboard-link" href="/dashboard">
+          <BrainCircuit size={13} /> DASHBOARD
+        </a>
       </header>
 
       <button

@@ -91,3 +91,72 @@ export interface SpatialWorldSnapshot {
   turn: number;
   scheduler_running: boolean;
 }
+
+export interface DashboardMemory {
+  id: number;
+  node_type: "OBSERVATION" | "REFLECTION" | "PLAN";
+  citations: number[] | null;
+  content: string;
+  created_at: string;
+  last_accessed_at: string;
+  importance: number;
+}
+
+export interface DashboardReflectionStatus {
+  accumulated_importance: number;
+  threshold: number;
+}
+
+export interface DashboardAgent {
+  agent_id: AgentId;
+  name: string;
+  current_action: string;
+  destination: string | null;
+  tile_position: AgentPosition;
+  route_remaining: number;
+  bubble_kind: "speech" | "thought" | "action";
+  bubble_text: string;
+  current_plan_context: string[];
+  active_day: PlanItemState | null;
+  active_hourly: PlanItemState | null;
+  active_minute: PlanItemState | null;
+  day_plan: PlanItemState[];
+  reflection_status: DashboardReflectionStatus;
+  memories: DashboardMemory[];
+}
+
+export interface DashboardEvent {
+  sequence: number;
+  turn: number;
+  occurred_at: string;
+  agent_id: AgentId;
+  agent_name: string;
+  reply: string;
+  silent_reason: string;
+  parse_failure: boolean;
+  thought: string;
+  model_thought: string;
+  self_critique: string;
+  decision_reason: string;
+  action_summary: string;
+  decision_process: Record<string, unknown>;
+  governance_trace: Record<string, unknown>;
+}
+
+export interface DashboardWorld {
+  available: boolean;
+  revision: number;
+  turn: number;
+  current_time: string | null;
+  scheduler_running: boolean;
+  cognitive_active: boolean;
+  effective_time_step_seconds: number;
+  cognitive_runtime_error: string | null;
+}
+
+export interface DashboardState {
+  world: DashboardWorld;
+  agents: DashboardAgent[];
+  events: DashboardEvent[];
+  latest_sequence: number;
+}

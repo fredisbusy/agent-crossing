@@ -27,6 +27,14 @@ body {
 button {
   font: inherit;
 }
+.route-loading {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: #11271e;
+  color: #f5e7bf;
+  font-size: 12px;
+}
 
 .game-shell {
   position: relative;
@@ -80,6 +88,21 @@ button {
   background: #f5e7bf;
   color: #293c30;
   box-shadow: 5px 5px 0 rgba(25, 45, 33, 0.55);
+}
+.dashboard-link {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 3px solid #d9c78f;
+  outline: 2px solid #24392c;
+  background: #f5e7bf;
+  color: #293c30;
+  box-shadow: 4px 4px 0 rgba(25, 45, 33, 0.55);
+  font-size: 9px;
+  font-weight: 700;
+  text-decoration: none;
 }
 .game-brand {
   display: flex;

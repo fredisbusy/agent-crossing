@@ -329,11 +329,14 @@
     - [x] backend 회귀 테스트로 diagonal tile transition이 없음을 검증한다
     - [x] 프런트엔드 presentation/store 회귀 테스트를 `pnpm test`에 연결한다
 
-- [ ] `P2` agent inspector(memory/plan/reflection view)를 구현한다
+- [x] `P2` agent inspector(memory/plan/reflection view)를 `/dashboard`로 구현한다
   - Depends on: A\* pathfinding 적용
   - DoD:
-    - [ ] 선택한 agent의 memory/plan/reflection을 탭 또는 패널로 조회한다
-    - [ ] 최신 tick 데이터와 표시가 동기화된다
+    - [x] 선택한 agent의 memory/plan/reflection을 탭 또는 패널로 조회한다
+    - [x] 최신 tick 데이터와 표시가 동기화된다
+    - [x] 자동 cognitive turn의 thought/action/decision/governance 로그를 별도 diagnostics buffer에 남긴다
+    - [x] `/ws/world`에 내부 진단을 섞지 않고 `/dashboard/state` 읽기 전용 API로 제공한다
+    - [x] embedding, raw provider response, prompt, API key를 사용자 응답에서 제외한다
 
 - [ ] `P2` God mode 입력으로 perception event를 주입한다
   - Depends on: agent inspector 구현

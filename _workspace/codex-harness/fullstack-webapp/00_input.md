@@ -34,3 +34,11 @@
 - Expose canonical Tiled agent affordances when visible world objects are selected.
 - Add mobile pinch zoom, truthful status fallbacks, and frontend regression tests.
 - Preserve the concurrent readable-bubble contract and avoid backend/API/DB expansion.
+
+## 2026-08-24 cognitive observability dashboard
+
+- Add `agentcrossing.byfred.io/dashboard` inside the existing Vite + React architecture.
+- Show actual agent state, hierarchical plans, memory stream, reflections, decisions,
+  actions, dialogue, and governance diagnostics.
+- Keep internal diagnostics out of the public spatial WebSocket contract.
+- Preserve existing `/` Phaser behavior and avoid fabricated dashboard data.
