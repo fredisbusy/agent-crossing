@@ -40,12 +40,19 @@ def test_spatial_runtime_advances_only_through_walkable_tiles() -> None:
     visited_positions: list[MapPoint] = []
     snapshot = runtime.snapshot()
 
-    for _ in range(20):
+    for _ in range(40):
         snapshot = runtime.tick()
         visited_positions.extend(agent.tile_position for agent in snapshot.agents)
+        assert len({agent.tile_position for agent in snapshot.agents}) == len(
+            snapshot.agents
+        )
 
     assert all(runtime.world_map.is_walkable_tile(point) for point in visited_positions)
-    assert any(agent.current_action.startswith("at:") for agent in snapshot.agents)
+    assert all(agent.current_action.startswith("at:") for agent in snapshot.agents)
+    assert {agent.tile_position for agent in snapshot.agents} == {
+        MapPoint(8, 8),
+        MapPoint(8, 9),
+    }
 
 
 def test_spatial_runtime_never_moves_diagonally() -> None:

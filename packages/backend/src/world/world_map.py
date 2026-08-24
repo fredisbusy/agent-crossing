@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import heapq
 import json
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -36,6 +37,15 @@ class MapLocation:
     color: str
     aliases: tuple[str, ...]
     bounds: MapBounds
+    entrance: MapPoint | None
+    entrance_direction: MapPoint
+
+
+@dataclass(frozen=True)
+class MapPath:
+    id: str
+    name: str
+    points: tuple[MapPoint, ...]
 
 
 @dataclass(frozen=True)
@@ -65,6 +75,7 @@ class WorldMap:
     tile_width: int
     tile_height: int
     locations: tuple[MapLocation, ...]
+    paths: tuple[MapPath, ...]
     collisions: tuple[MapBounds, ...]
     interactables: tuple[MapInteractable, ...]
     spawns: tuple[MapSpawn, ...]
@@ -110,13 +121,17 @@ class WorldMap:
         return min(candidates)[2] if candidates else None
 
     def nearest_walkable_tile(
-        self, *, bounds: MapBounds, origin: MapPoint
+        self,
+        *,
+        bounds: MapBounds,
+        origin: MapPoint,
+        blocked_tiles: Collection[MapPoint] = (),
     ) -> MapPoint | None:
         candidates: list[tuple[int, int, int, MapPoint]] = []
         for tile_y in range(self.height):
             for tile_x in range(self.width):
                 tile = MapPoint(tile_x, tile_y)
-                if not self.is_walkable_tile(tile):
+                if not self.is_walkable_tile(tile, blocked_tiles=blocked_tiles):
                     continue
                 center_x = (tile_x * self.tile_width) + (self.tile_width // 2)
                 center_y = (tile_y * self.tile_height) + (self.tile_height // 2)
@@ -136,8 +151,40 @@ class WorldMap:
                 )
         return min(candidates)[3] if candidates else None
 
-    def is_walkable_tile(self, tile: MapPoint) -> bool:
+    def destination_tile(
+        self,
+        *,
+        location: MapLocation,
+        origin: MapPoint,
+        blocked_tiles: Collection[MapPoint] = (),
+    ) -> MapPoint | None:
+        """Resolve a building through its door or an open location by bounds."""
+        if location.entrance is None:
+            return self.nearest_walkable_tile(
+                bounds=location.bounds,
+                origin=origin,
+                blocked_tiles=blocked_tiles,
+            )
+
+        queue_length = max(len(self.spawns) + 1, 2)
+        for offset in range(queue_length):
+            candidate = MapPoint(
+                x=location.entrance.x + location.entrance_direction.x * offset,
+                y=location.entrance.y + location.entrance_direction.y * offset,
+            )
+            if self.is_walkable_tile(candidate, blocked_tiles=blocked_tiles):
+                return candidate
+        return None
+
+    def is_walkable_tile(
+        self,
+        tile: MapPoint,
+        *,
+        blocked_tiles: Collection[MapPoint] = (),
+    ) -> bool:
         if not 0 <= tile.x < self.width or not 0 <= tile.y < self.height:
+            return False
+        if tile in blocked_tiles:
             return False
         center = MapPoint(
             x=(tile.x * self.tile_width) + (self.tile_width // 2),
@@ -145,9 +192,33 @@ class WorldMap:
         )
         return not any(bounds.contains(center) for bounds in self.collisions)
 
-    def find_path(self, start: MapPoint, goal: MapPoint) -> list[MapPoint]:
+    def movement_cost(self, tile: MapPoint) -> int:
+        """Prefer authored paths and open public areas over traversable grass."""
+        center = MapPoint(
+            x=(tile.x * self.tile_width) + (self.tile_width // 2),
+            y=(tile.y * self.tile_height) + (self.tile_height // 2),
+        )
+        on_authored_path = any(
+            _distance_to_polyline(center, path.points) <= self.tile_width
+            for path in self.paths
+        )
+        in_public_area = any(
+            location.kind in {"plaza", "park"} and location.bounds.contains(center)
+            for location in self.locations
+        )
+        return 1 if on_authored_path or in_public_area else 4
+
+    def find_path(
+        self,
+        start: MapPoint,
+        goal: MapPoint,
+        *,
+        blocked_tiles: Collection[MapPoint] = (),
+    ) -> list[MapPoint]:
         """Return a deterministic four-direction A* path in tile coordinates."""
-        if not self.is_walkable_tile(start) or not self.is_walkable_tile(goal):
+        if not self.is_walkable_tile(
+            start, blocked_tiles=blocked_tiles
+        ) or not self.is_walkable_tile(goal, blocked_tiles=blocked_tiles):
             return []
 
         frontier: list[tuple[int, int, MapPoint]] = [(0, 0, start)]
@@ -159,8 +230,8 @@ class WorldMap:
             _, _, current = heapq.heappop(frontier)
             if current == goal:
                 break
-            for neighbor in self._neighbors(current):
-                new_cost = cost_so_far[current] + 1
+            for neighbor in self._neighbors(current, blocked_tiles=blocked_tiles):
+                new_cost = cost_so_far[current] + self.movement_cost(neighbor)
                 if neighbor in cost_so_far and new_cost >= cost_so_far[neighbor]:
                     continue
                 cost_so_far[neighbor] = new_cost
@@ -181,7 +252,12 @@ class WorldMap:
         path.reverse()
         return path
 
-    def _neighbors(self, point: MapPoint) -> tuple[MapPoint, ...]:
+    def _neighbors(
+        self,
+        point: MapPoint,
+        *,
+        blocked_tiles: Collection[MapPoint] = (),
+    ) -> tuple[MapPoint, ...]:
         candidates = (
             MapPoint(point.x, point.y - 1),
             MapPoint(point.x + 1, point.y),
@@ -189,7 +265,9 @@ class WorldMap:
             MapPoint(point.x - 1, point.y),
         )
         return tuple(
-            candidate for candidate in candidates if self.is_walkable_tile(candidate)
+            candidate
+            for candidate in candidates
+            if self.is_walkable_tile(candidate, blocked_tiles=blocked_tiles)
         )
 
 
@@ -220,8 +298,21 @@ def load_world_map(path: Path | None = None) -> WorldMap:
                 if alias.strip()
             ),
             bounds=_bounds(item),
+            entrance=_optional_entrance(item),
+            entrance_direction=MapPoint(
+                x=_integer_property(item, "entrance_dx", 0),
+                y=_integer_property(item, "entrance_dy", 1),
+            ),
         )
         for item in _objects(layers, "locations")
+    )
+    paths = tuple(
+        MapPath(
+            id=str(item.get("id", "")),
+            name=_string(item, "name"),
+            points=_polyline_points(item),
+        )
+        for item in _objects(layers, "paths")
     )
     collisions = tuple(_bounds(item) for item in _objects(layers, "collision"))
     interactables = tuple(
@@ -257,6 +348,7 @@ def load_world_map(path: Path | None = None) -> WorldMap:
         tile_width=_integer(raw, "tilewidth"),
         tile_height=_integer(raw, "tileheight"),
         locations=locations,
+        paths=paths,
         collisions=collisions,
         interactables=interactables,
         spawns=spawns,
@@ -277,6 +369,69 @@ def _properties(source: dict[str, object]) -> dict[str, object]:
         if isinstance(name, str):
             result[name] = item.get("value")
     return result
+
+
+def _integer_property(source: dict[str, object], name: str, default: int) -> int:
+    value = _property(source, name, default)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name} must be an integer")
+    return value
+
+
+def _optional_entrance(source: dict[str, object]) -> MapPoint | None:
+    properties = _properties(source)
+    x = properties.get("entrance_tile_x")
+    y = properties.get("entrance_tile_y")
+    if x is None and y is None:
+        return None
+    if (
+        isinstance(x, bool)
+        or not isinstance(x, int)
+        or isinstance(y, bool)
+        or not isinstance(y, int)
+    ):
+        raise ValueError("entrance_tile_x and entrance_tile_y must be integers")
+    return MapPoint(x=x, y=y)
+
+
+def _polyline_points(source: dict[str, object]) -> tuple[MapPoint, ...]:
+    origin_x = _integer(source, "x")
+    origin_y = _integer(source, "y")
+    raw_points = _object_list(source.get("polyline", []), "polyline")
+    points = tuple(
+        MapPoint(
+            x=origin_x + _integer(point, "x"),
+            y=origin_y + _integer(point, "y"),
+        )
+        for point in raw_points
+    )
+    if len(points) < 2:
+        raise ValueError("path polyline must contain at least two points")
+    return points
+
+
+def _distance_to_polyline(point: MapPoint, points: tuple[MapPoint, ...]) -> float:
+    return min(
+        _distance_to_segment(point, start, end)
+        for start, end in zip(points, points[1:])
+    )
+
+
+def _distance_to_segment(point: MapPoint, start: MapPoint, end: MapPoint) -> float:
+    dx = end.x - start.x
+    dy = end.y - start.y
+    if dx == 0 and dy == 0:
+        return ((point.x - start.x) ** 2 + (point.y - start.y) ** 2) ** 0.5
+    progress = max(
+        0.0,
+        min(
+            1.0,
+            ((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy),
+        ),
+    )
+    projection_x = start.x + progress * dx
+    projection_y = start.y + progress * dy
+    return ((point.x - projection_x) ** 2 + (point.y - projection_y) ** 2) ** 0.5
 
 
 def _property(source: dict[str, object], name: str, default: object) -> object:

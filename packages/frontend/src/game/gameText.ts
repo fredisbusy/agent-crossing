@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { useGameStore } from "../stores/game.store";
+import { resolveCharacterTextOverlaps } from "./gameTextLayout";
 
 export type GameTextTone =
   | "location"
@@ -89,7 +90,7 @@ export class GameTextOverlayController {
 
   sync(): void {
     const camera = this.scene.cameras.main;
-    const labels = [...this.sources.values()]
+    const projectedLabels = [...this.sources.values()]
       .filter((source) =>
         source.visible === undefined ? true : valueOf(source.visible),
       )
@@ -112,6 +113,7 @@ export class GameTextOverlayController {
               : valueOf(source.selected),
         };
       });
+    const labels = resolveCharacterTextOverlaps(projectedLabels);
     if (overlaysMatch(this.previous, labels)) return;
     this.previous = labels;
     useGameStore.getState().setGameTextOverlay(this.owner, labels);

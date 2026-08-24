@@ -15,12 +15,15 @@ import {
   type DollhouseHomeView,
   type IndoorResidentView,
 } from "./DollhouseHome";
-import { drawDollhouseBuilding } from "./DollhouseBuilding";
+import {
+  drawDollhouseBuilding,
+  type DollhouseBuildingView,
+} from "./DollhouseBuilding";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 import { ServerGridMovement } from "./gridMovement";
 import { agentBubbleLabel } from "./agentBubble";
 import { GameTextOverlayController } from "./gameText";
-import { HOME_ROOMS, isAgentAtHome, resolveHomeRoom } from "./homeInterior";
+import { HOME_ROOMS, isAgentAtLocation, resolveHomeRoom } from "./homeInterior";
 
 const WORLD_WIDTH = townMap.width * townMap.tilewidth;
 const WORLD_HEIGHT = townMap.height * townMap.tileheight;
@@ -122,6 +125,7 @@ export class MainScene extends Phaser.Scene {
 
   private readonly agentViews = new Map<string, AgentView>();
   private readonly homeViews = new Map<string, DollhouseHomeView>();
+  private readonly buildingViews = new Map<string, DollhouseBuildingView>();
   private readonly indoorAgentViews = new Map<string, IndoorResidentView>();
   private gridMovement?: ServerGridMovement;
   private unsubscribeStore?: () => void;
@@ -263,6 +267,7 @@ export class MainScene extends Phaser.Scene {
   private drawPixelBuilding(location: TiledObject, kind: string): void {
     const bodyColor = parseColor(getProperty(location, "color"), 0xd58c68);
     const building = drawDollhouseBuilding(this, location, kind, bodyColor);
+    this.buildingViews.set(location.name, building);
     let showEnterLabel = false;
     this.textOverlay.add({
       id: `enter:${location.name}`,
@@ -546,6 +551,7 @@ export class MainScene extends Phaser.Scene {
       indoorView.container.setVisible(false);
     }
     const roomOccupancy = new Map<string, number>();
+    const buildingOccupancy = new Map<string, number>();
     for (const [id, state] of Object.entries(states)) {
       const characterId = this.agentViews.has(id)
         ? id
@@ -553,10 +559,13 @@ export class MainScene extends Phaser.Scene {
       const view = this.agentViews.get(characterId);
       if (!view) continue;
       const home = [...this.homeViews.values()].find((candidate) =>
-        isAgentAtHome(state, candidate.name),
+        isAgentAtLocation(state, candidate.name),
+      );
+      const building = [...this.buildingViews.values()].find((candidate) =>
+        isAgentAtLocation(state, candidate.name),
       );
       const indoorView = this.indoorAgentViews.get(characterId);
-      view.container.setVisible(home === undefined);
+      view.container.setVisible(home === undefined && building === undefined);
       if (home && indoorView) {
         const room = resolveHomeRoom(state.current_action, state.plan);
         const occupancyKey = `${home.name}:${room}`;
@@ -571,6 +580,30 @@ export class MainScene extends Phaser.Scene {
         indoorView.name = state.name;
         if (this.followedAgentId === characterId) {
           this.cameras.main.startFollow(indoorView.container, true, 0.12, 0.12);
+        }
+      } else if (building && indoorView) {
+        const occupancy = buildingOccupancy.get(building.name) ?? 0;
+        buildingOccupancy.set(building.name, occupancy + 1);
+        const position =
+          building.activityPositions[
+            occupancy % building.activityPositions.length
+          ];
+        if (position) {
+          const row = Math.floor(occupancy / building.activityPositions.length);
+          indoorView.container
+            .setPosition(position.x + row * 18, position.y)
+            .setDepth(building.depth + 12 + occupancy)
+            .setVisible(true);
+          indoorView.bubbleText = agentBubbleLabel(state);
+          indoorView.name = state.name;
+          if (this.followedAgentId === characterId) {
+            this.cameras.main.startFollow(
+              indoorView.container,
+              true,
+              0.12,
+              0.12,
+            );
+          }
         }
       }
       const transition = this.gridMovement?.sync(

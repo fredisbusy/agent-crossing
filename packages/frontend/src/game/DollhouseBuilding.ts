@@ -10,8 +10,10 @@ interface BuildingBounds {
 }
 
 export interface DollhouseBuildingView extends BuildingBounds {
+  name: string;
   doorX: number;
   doorY: number;
+  activityPositions: readonly Phaser.Math.Vector2[];
 }
 
 export function drawDollhouseBuilding(
@@ -38,7 +40,39 @@ export function drawDollhouseBuilding(
   const doorY = bounds.y + bounds.height;
   drawDoor(graphics, doorX, doorY);
 
-  return { ...bounds, doorX, doorY };
+  return {
+    ...bounds,
+    name: location.name,
+    doorX,
+    doorY,
+    activityPositions: buildingActivityPositions(bounds, kind),
+  };
+}
+
+function buildingActivityPositions(
+  bounds: BuildingBounds,
+  kind: string,
+): readonly Phaser.Math.Vector2[] {
+  const { x, y, width, height } = bounds;
+  if (kind === "cafe") {
+    return [
+      new Phaser.Math.Vector2(x + width * 0.48, y + height * 0.6),
+      new Phaser.Math.Vector2(x + width * 0.74, y + height * 0.78),
+    ];
+  }
+  if (kind === "library") {
+    return [
+      new Phaser.Math.Vector2(x + width * 0.45, y + height * 0.35),
+      new Phaser.Math.Vector2(x + width * 0.62, y + height * 0.82),
+    ];
+  }
+  if (kind === "market") {
+    return [
+      new Phaser.Math.Vector2(x + width * 0.25, y + height * 0.78),
+      new Phaser.Math.Vector2(x + width * 0.75, y + height * 0.78),
+    ];
+  }
+  return [new Phaser.Math.Vector2(x + width / 2, y + height * 0.72)];
 }
 
 function buildingBounds(location: TiledObject): BuildingBounds {

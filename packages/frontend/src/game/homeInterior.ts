@@ -124,14 +124,14 @@ export function resolveHomeRoom(action: string, plan: string): HomeRoom {
   return "common";
 }
 
-export function isAgentAtHome(
+export function isAgentAtLocation(
   agent: SpatialAgentState,
-  homeName: string,
+  locationName: string,
 ): boolean {
   const destination = agent.destination?.toLocaleLowerCase() ?? "";
   const action = agent.current_action.toLocaleLowerCase();
   return (
-    destination.includes(homeName.toLocaleLowerCase()) &&
+    destination.includes(locationName.toLocaleLowerCase()) &&
     (action.startsWith("at:") || action.startsWith("arrived_at:"))
   );
 }

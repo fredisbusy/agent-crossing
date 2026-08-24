@@ -219,9 +219,12 @@ react 정책:
 - cafe/library/market도 지붕 없는 kind별 dollhouse interior를 메인 맵에 항상
   노출한다. 문 portal은 같은 semantic `kind`의 확대 interior scene template에
   연결하고 출구 portal로 outdoor scene에 복귀한다.
-- agent는 backend 상태가 해당 home에 도착한 경우 outdoor avatar 대신 dollhouse
-  안에 표시한다. `current_action`과 `plan`의 행동 키워드는 관찰용 실내 방 위치와
-  말풍선에만 사용하며 canonical tile/navigation 상태를 변경하지 않는다.
+- agent는 backend 상태가 해당 building/home의 문 또는 문 앞 대기 tile에 도착한
+  경우에만 outdoor avatar 대신 dollhouse의 충돌하지 않는 activity slot에 표시한다.
+  `current_action`과 `plan`의 행동 키워드는 관찰용 실내 위치와 말풍선에만 사용하며
+  canonical tile/navigation 상태를 변경하지 않는다.
+- React text overlay는 카메라 투영 후 캐릭터 말풍선/nameplate의 screen-space
+  bounds를 계산하고, 겹치는 박스를 위로 쌓아 서로 가리지 않게 한다.
 - interactable은 `location_path`와 쉼표로 구분된 `affordances`를 가져야 한다.
 - React HUD와 Phaser scene은 Zustand의 `world/interior` scene context를 공유하고,
   주민 선택 요청은 어느 scene에서도 outdoor follow camera로 연결한다.
@@ -244,8 +247,13 @@ react 정책:
 공간 실행 규칙:
 
 - live planning이 있으면 active minute plan의 canonical location을 우선하고, 초기 상태에서는 persona의 `current_plan_context`에서 canonical location 또는 alias를 찾는다.
-- 목적지 bounds에서 현재 위치와 가장 가까운 walkable tile을 선택한다.
-- backend가 계산한 4방향 A\* route를 한 tick에 한 tile씩 소비한다.
+- 건물 목적지는 Tiled에 선언한 `entrance_tile_x/y` 문으로만 진입한다. 문이 다른
+  agent에게 점유된 경우 `entrance_dx/dy` 방향의 walkable 대기 tile을 선택한다.
+- 건물·물·간판·분수·벤치·나무·가로등 collision은 통과할 수 없고, agent tile도
+  tick 동안 동적 collision으로 취급해 같은 tile 점유와 자리 맞바꾸기를 금지한다.
+- backend 4방향 A\*는 authored path/광장/공원의 이동 비용을 `1`, 그 밖의
+  walkable 지형 비용을 `4`로 계산해 가능한 경우 길을 우선하며 한 tick에 한 tile씩
+  route를 소비한다.
 - 프런트엔드 tile motion은 `grid-engine@2.48.2`에 위임하고 전역/character
   방향 수를 모두 `NumberOfDirections.FOUR`로 고정한다.
 - 연속 snapshot은 Manhattan distance 1인 경우에만 한 tile 이동으로

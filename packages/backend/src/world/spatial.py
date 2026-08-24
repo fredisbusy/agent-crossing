@@ -152,8 +152,11 @@ class SpatialWorldRuntime:
 
     def tick(self) -> SpatialWorldSnapshot:
         with self._lock:
+            occupied_tiles = {agent.tile_position for agent in self._agents.values()}
             for agent in self._agents.values():
-                self._advance(agent)
+                occupied_tiles.discard(agent.tile_position)
+                self._advance(agent, blocked_tiles=occupied_tiles)
+                occupied_tiles.add(agent.tile_position)
             self.revision += 1
             return self._snapshot_unlocked()
 
@@ -161,17 +164,36 @@ class SpatialWorldRuntime:
         with self._lock:
             return self._snapshot_unlocked()
 
-    def _advance(self, agent: _MutableAgentMovement) -> None:
+    def _advance(
+        self,
+        agent: _MutableAgentMovement,
+        *,
+        blocked_tiles: set[MapPoint],
+    ) -> None:
         resolved_destination = self.world_map.resolve_location(
             agent.explicit_location or agent.plan
         )
         destination_changed = (
             resolved_destination.id if resolved_destination else None
         ) != (agent.destination.id if agent.destination else None)
-        if destination_changed or agent.goal is None:
-            self._build_route(agent=agent, destination=resolved_destination)
+        route_exhausted_before_goal = (
+            not (agent.route or []) and agent.goal != agent.tile_position
+        )
+        if destination_changed or agent.goal is None or route_exhausted_before_goal:
+            self._build_route(
+                agent=agent,
+                destination=resolved_destination,
+                blocked_tiles=blocked_tiles,
+            )
 
         route = agent.route or []
+        if route and route[0] in blocked_tiles:
+            self._build_route(
+                agent=agent,
+                destination=resolved_destination,
+                blocked_tiles=blocked_tiles,
+            )
+            route = agent.route or []
         if route:
             agent.tile_position = route.pop(0)
             agent.current_action = (
@@ -191,27 +213,35 @@ class SpatialWorldRuntime:
             agent.current_action = "idle:no_mapped_destination"
         elif agent.goal == agent.tile_position:
             agent.current_action = f"at:{agent.destination.name}"
+        elif not agent.current_action.startswith("blocked:"):
+            agent.current_action = f"waiting_for_clear_path:{agent.destination.name}"
 
     def _build_route(
         self,
         *,
         agent: _MutableAgentMovement,
         destination: MapLocation | None,
+        blocked_tiles: set[MapPoint],
     ) -> None:
         agent.destination = destination
         agent.route = []
         if destination is None:
             agent.goal = None
             return
-        goal = self.world_map.nearest_walkable_tile(
-            bounds=destination.bounds,
+        goal = self.world_map.destination_tile(
+            location=destination,
             origin=agent.tile_position,
+            blocked_tiles=blocked_tiles,
         )
         agent.goal = goal
         if goal is None:
             agent.current_action = "blocked:no_walkable_destination"
             return
-        path = self.world_map.find_path(agent.tile_position, goal)
+        path = self.world_map.find_path(
+            agent.tile_position,
+            goal,
+            blocked_tiles=blocked_tiles,
+        )
         if not path:
             agent.current_action = "blocked:no_route"
             return

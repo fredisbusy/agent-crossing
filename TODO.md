@@ -313,12 +313,23 @@
   - DoD:
     - [x] 맵 충돌 레이어가 backend A\* 이동 후보를 제한한다
     - [x] agent 이동이 backend route만 소비해 충돌 규칙을 위반하지 않는다
+    - [x] 건물/물/간판/분수/벤치/나무/가로등을 정적 blocking object로 선언한다
 
 - [x] `P2` A\* pathfinding을 적용한다
   - Depends on: Tiled map + collision 연결
   - DoD:
     - [x] 목표 좌표까지 유효 경로를 계산한다
     - [x] 경로 불가능 시 빈 경로 fallback을 처리한다
+    - [x] authored path/광장/공원을 낮은 비용으로 계산해 길을 우선한다
+
+- [x] `P2` 문 출입과 동적 점유 collision을 적용한다
+  - Depends on: A\* pathfinding 적용
+  - DoD:
+    - [x] 건물은 선언된 문 tile을 통해서만 도착할 수 있다
+    - [x] agent끼리 같은 tile을 점유하거나 서로 통과하지 않는다
+    - [x] 문이 점유되면 문 앞 walkable 대기 tile로 재탐색한다
+    - [x] 도착 agent는 외벽이 아니라 건물 내부 activity slot에 표시한다
+    - [x] 캐릭터 말풍선과 nameplate의 화면상 겹침을 자동으로 해소한다
 
 - [x] `P2` Phaser Grid Engine 기반 4방향 이동을 적용한다
   - Depends on: A\* pathfinding 적용
