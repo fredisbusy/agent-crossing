@@ -12,3 +12,7 @@
 2. The scheduler starts automatically at 06:00 and advances five game minutes per configured tick.
 3. The spatial stream remains independent so movement/UI continue to publish while an LLM call is running.
 4. Restart `com.fredly.agent-crossing-backend` after deployment and verify `/world/state` plus `/world/spatial/state`.
+
+# 2026-08-24 mock-only UI remediation
+
+No deployment configuration change is required. The existing Vite development service reflects frontend changes immediately; production deployment uses the normal frontend build artifact.

@@ -29,3 +29,12 @@
 - Tap Sujin: selection changes and the observer panel closes.
 - Reopen panel: Sujin remains selected; tap Jiho and verify the same behavior.
 - Repeat-select the same resident after dragging to verify the camera re-centers.
+
+## Mock-only UI remediation
+
+- Run `pnpm test` so backend pytest and frontend Vitest both execute.
+- Run `pnpm --filter @agent-crossing/frontend build` and recursive workspace build.
+- Verify event title/progress derives from the selected resident and expired plans show synchronization state.
+- Verify mobile hints use pinch/tap language and resident selection still closes the panel.
+- Verify InteriorScene redraws residents on store snapshots and returns to outdoor follow on selection.
+- Verify board/fountain/bench taps expose canonical resident-affordance feedback.

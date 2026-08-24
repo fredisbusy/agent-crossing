@@ -276,6 +276,10 @@
     - [x] 전체 지도 축소 대신 agent 추적/드래그/줌 카메라를 제공한다
     - [x] 관찰자 패널의 주민 선택을 카메라 추적과 모바일 패널 닫기에 연결한다
     - [x] 관찰자 패널의 대표 사건을 `오늘의 메인이벤트`로 표시한다
+    - [x] 메인이벤트를 선택 주민의 실제 minute plan과 게임 시각 진행률로 계산한다
+    - [x] idle/blocked/offline/목적지 없음 상태를 거짓 fallback 없이 표시한다
+    - [x] 모바일 두 손가락 확대·축소와 장면별 조작 안내를 제공한다
+    - [x] 게시판·분수·벤치 선택 시 canonical agent affordance를 안내한다
     - [x] WebSocket spatial snapshot이 agent 이동과 HUD 상태에 반영된다
 
 - [x] `P2` 건물별 pixel interior와 출입 portal을 구현한다
@@ -285,6 +289,7 @@
     - [x] 건물 문 hover/click으로 확대 interior scene에 진입한다
     - [x] cafe/library/market/home kind별 가구와 바닥 템플릿을 제공한다
     - [x] `ESC`, `E`, 출구 클릭으로 outdoor scene에 복귀한다
+    - [x] 확대 interior 주민을 live snapshot으로 갱신하고 선택 시 outdoor follow로 연결한다
     - [x] 새 building object는 kind 기반 interior template을 재사용할 수 있다
 
 - [x] `P2` Smallville형 상시 노출 주택 interior를 구현한다
@@ -315,6 +320,7 @@
     - [x] 연속 server snapshot은 한 번에 한 cardinal tile만 애니메이션한다
     - [x] 누락 snapshot은 client pathfinding 없이 authoritative tile로 재동기화한다
     - [x] backend 회귀 테스트로 diagonal tile transition이 없음을 검증한다
+    - [x] 프런트엔드 presentation/store 회귀 테스트를 `pnpm test`에 연결한다
 
 - [ ] `P2` agent inspector(memory/plan/reflection view)를 구현한다
   - Depends on: A\* pathfinding 적용

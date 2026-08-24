@@ -221,6 +221,13 @@ react 정책:
   안에 표시한다. `current_action`과 `plan`의 행동 키워드는 관찰용 실내 방 위치와
   말풍선에만 사용하며 canonical tile/navigation 상태를 변경하지 않는다.
 - interactable은 `location_path`와 쉼표로 구분된 `affordances`를 가져야 한다.
+- React HUD와 Phaser scene은 Zustand의 `world/interior` scene context를 공유하고,
+  주민 선택 요청은 어느 scene에서도 outdoor follow camera로 연결한다.
+- `오늘의 메인이벤트`는 선택 주민의 authoritative active minute와 게임 시각으로
+  계산하며, 구현되지 않은 정보 확산률을 임의 수치로 표시하지 않는다.
+- 사용자에게 노출하는 interactable 안내는 Tiled의 agent affordance를 설명할 뿐,
+  canonical world mutation이나 God mode 입력으로 취급하지 않는다.
+- touch 환경은 한 손가락 pan과 두 손가락 pinch zoom을 제공한다.
 
 월드 API:
 

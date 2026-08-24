@@ -15,6 +15,12 @@ import { MainScene } from "./game/MainScene";
 import { useWorldStream } from "./hooks/useWorldStream";
 import { getLayer, getMapProperty, getProperty } from "./map/tiled";
 import { useGameStore } from "./stores/game.store";
+import {
+  buildMainEventView,
+  residentDestinationLabel,
+  residentPlanLabel,
+  residentStatusLabel,
+} from "./ui/observer";
 
 const mapSpawns = getLayer("spawns");
 
@@ -29,6 +35,11 @@ function App() {
   const schedulerRunning = useGameStore((state) => state.schedulerRunning);
   const selectedAgentId = useGameStore((state) => state.selectedAgentId);
   const selectAgent = useGameStore((state) => state.selectAgent);
+  const sceneContext = useGameStore((state) => state.sceneContext);
+  const interactionNotice = useGameStore((state) => state.interactionNotice);
+  const dismissInteractionNotice = useGameStore(
+    (state) => state.dismissInteractionNotice,
+  );
   useWorldStream();
 
   useEffect(() => {
@@ -66,7 +77,8 @@ function App() {
   const displayedAgents = mapSpawns.map((spawn) => {
     const id = getProperty(spawn, "agent_id", spawn.name);
     return (
-      liveAgents[id] ?? liveAgents[id.toLocaleLowerCase()] ?? {
+      liveAgents[id] ??
+      liveAgents[id.toLocaleLowerCase()] ?? {
         agent_id: id,
         name: spawn.name,
         tile_position: { x: spawn.x / 32, y: spawn.y / 32 },
@@ -84,6 +96,13 @@ function App() {
       }
     );
   });
+  const selectedAgent =
+    displayedAgents.find(
+      (agent) =>
+        agent.agent_id.toLocaleLowerCase() ===
+        selectedAgentId.toLocaleLowerCase(),
+    ) ?? displayedAgents[0];
+  const mainEvent = buildMainEventView(selectedAgent, currentTime);
 
   function handleResidentSelect(agentId: string): void {
     selectAgent(agentId);
@@ -115,7 +134,11 @@ function App() {
                 }).format(new Date(currentTime))
               : "--:--"}
           </strong>
-          <span>{currentTime ? new Date(currentTime).toLocaleDateString("ko-KR") : "DAY --"}</span>
+          <span>
+            {currentTime
+              ? new Date(currentTime).toLocaleDateString("ko-KR")
+              : "DAY --"}
+          </span>
         </div>
         <div className={`connection-chip ${connectionStatus}`}>
           <Radio size={13} />{" "}
@@ -135,7 +158,11 @@ function App() {
         {inspectorOpen ? <X size={18} /> : <Users size={18} />}
       </button>
 
-      <aside className={`game-inspector ${inspectorOpen ? "open" : ""}`}>
+      <aside
+        className={`game-inspector ${inspectorOpen ? "open" : ""}`}
+        aria-hidden={!inspectorOpen}
+        inert={inspectorOpen ? undefined : true}
+      >
         <div className="inspector-title">
           <div>
             <span className="pixel-kicker">
@@ -171,15 +198,16 @@ function App() {
                 <div className="resident-name">
                   <strong>{agent.name}</strong>
                   <i>
-                    {agent.current_action.includes("moving")
-                      ? "이동 중"
-                      : "활동 중"}
+                    {residentStatusLabel(
+                      agent.current_action,
+                      connectionStatus,
+                    )}
                   </i>
                 </div>
-                <p>{agent.active_minute?.action_content ?? agent.plan.split("|")[0]}</p>
+                <p>{residentPlanLabel(agent)}</p>
                 <div className="destination">
                   <MapPin size={11} />{" "}
-                  {agent.destination?.split(" > ").at(-1) ?? "마을 광장"}
+                  {residentDestinationLabel(agent, connectionStatus)}
                 </div>
               </div>
               <ChevronRight size={16} className="card-chevron" />
@@ -189,21 +217,53 @@ function App() {
 
         <section className="seed-event">
           <span className="pixel-kicker">오늘의 메인이벤트</span>
-          <h3>달맞이꽃 소풍</h3>
-          <p>
-            광장 게시판에서 시작된 소식이 주민들의 기억과 계획을 어떻게 바꾸는지
-            관찰합니다.
-          </p>
+          <h3>{mainEvent.title}</h3>
+          <p>{mainEvent.description}</p>
           <div className="event-progress">
-            <span />
+            <span style={{ width: `${mainEvent.progressPercent}%` }} />
           </div>
-          <small>정보 확산 · 1 / 2</small>
+          <small>{mainEvent.progressLabel}</small>
         </section>
       </aside>
 
+      {interactionNotice ? (
+        <section className="interaction-notice" role="status">
+          <div>
+            <strong>{interactionNotice.title}</strong>
+            <p>{interactionNotice.description}</p>
+          </div>
+          <button
+            type="button"
+            onClick={dismissInteractionNotice}
+            aria-label="상호작용 안내 닫기"
+          >
+            <X size={14} />
+          </button>
+        </section>
+      ) : null}
+
       <footer className="control-hint">
-        <kbd>DRAG</kbd> 카메라 이동 <span /> <kbd>WHEEL</kbd> 확대·축소 <span />{" "}
-        <kbd>CLICK NPC</kbd> 따라가기
+        {sceneContext.kind === "world" ? (
+          <>
+            <span className="desktop-control-hint">
+              <kbd>DRAG</kbd> 카메라 이동 <i /> <kbd>WHEEL</kbd> 확대·축소 <i />
+              <kbd>CLICK NPC</kbd> 따라가기
+            </span>
+            <span className="mobile-control-hint">
+              <kbd>DRAG</kbd> 카메라 이동 <i /> <kbd>PINCH</kbd> 확대·축소 <i />
+              <kbd>TAP NPC</kbd> 따라가기
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="desktop-control-hint">
+              <kbd>CLICK NPC</kbd> 따라가기 <i /> <kbd>ESC / E</kbd> 나가기
+            </span>
+            <span className="mobile-control-hint">
+              <kbd>TAP NPC</kbd> 따라가기 <i /> <kbd>TAP EXIT</kbd> 나가기
+            </span>
+          </>
+        )}
       </footer>
     </main>
   );

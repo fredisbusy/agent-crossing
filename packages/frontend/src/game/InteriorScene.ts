@@ -21,6 +21,8 @@ export class InteriorScene extends Phaser.Scene {
     kind: "home",
     color: "#d58c68",
   };
+  private residentLayer?: Phaser.GameObjects.Container;
+  private unsubscribeStore?: () => void;
 
   constructor() {
     super("InteriorScene");
@@ -32,6 +34,10 @@ export class InteriorScene extends Phaser.Scene {
 
   create(): void {
     createPixelTextures(this);
+    useGameStore.getState().setSceneContext({
+      kind: "interior",
+      name: this.interior.name,
+    });
     this.cameras.main.setBackgroundColor("#13271e");
     this.drawRoomShell();
     this.drawInteriorByKind();
@@ -40,11 +46,27 @@ export class InteriorScene extends Phaser.Scene {
     this.drawRoomHud();
     this.fitCamera();
 
+    const unsubscribeStore = useGameStore.subscribe((state, previousState) => {
+      if (state.agents !== previousState.agents) {
+        this.drawResidents();
+      }
+      if (state.followRequestId !== previousState.followRequestId) {
+        this.scene.start("MainScene");
+      }
+    });
+    this.unsubscribeStore = unsubscribeStore;
+
     const handleResize = () => this.fitCamera();
     this.scale.on("resize", handleResize);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    const cleanup = () => {
       this.scale.off("resize", handleResize);
-    });
+      unsubscribeStore();
+      if (this.unsubscribeStore === unsubscribeStore) {
+        this.unsubscribeStore = undefined;
+      }
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
     this.input.keyboard?.on("keydown-ESC", () => this.exitInterior());
     this.input.keyboard?.on("keydown-E", () => this.exitInterior());
   }
@@ -263,26 +285,39 @@ export class InteriorScene extends Phaser.Scene {
   }
 
   private drawResidents(): void {
+    this.residentLayer?.destroy(true);
+    const residentLayer = this.add.container(0, 0);
+    this.residentLayer = residentLayer;
     const residents = Object.values(useGameStore.getState().agents).filter(
       (agent) =>
-        agent.destination?.includes(this.interior.name) &&
+        agent.destination?.split(" > ").at(-1) === this.interior.name &&
         (agent.current_action.startsWith("at:") ||
           agent.current_action.startsWith("arrived_at:")),
     );
     residents.forEach((agent, index) => {
       const x = 285 + index * 88;
       const y = 178 + (index % 2) * 90;
-      const graphics = this.add.graphics().setDepth(y + 30);
+      const resident = this.add
+        .container(x, y)
+        .setSize(56, 72)
+        .setDepth(y + 30)
+        .setInteractive({ useHandCursor: true });
+      const graphics = this.add.graphics();
       graphics.fillStyle(0x183328, 0.3);
-      graphics.fillRect(x - 12, y + 20, 24, 6);
-      graphics.fillStyle(index % 2 === 0 ? 0x587cd0 : 0xc95f7e, 1);
-      graphics.fillRect(x - 10, y, 20, 21);
+      graphics.fillRect(-12, 20, 24, 6);
+      graphics.fillStyle(
+        agent.agent_id.toLocaleLowerCase().includes("sujin")
+          ? 0xc95f7e
+          : 0x587cd0,
+        1,
+      );
+      graphics.fillRect(-10, 0, 20, 21);
       graphics.fillStyle(0xefc59e, 1);
-      graphics.fillRect(x - 8, y - 15, 16, 15);
+      graphics.fillRect(-8, -15, 16, 15);
       graphics.fillStyle(0x3e322e, 1);
-      graphics.fillRect(x - 9, y - 20, 18, 7);
-      this.add
-        .text(x, y - 34, agentBubbleLabel(agent), {
+      graphics.fillRect(-9, -20, 18, 7);
+      const bubble = this.add
+        .text(0, -34, agentBubbleLabel(agent), {
           fontFamily: PIXEL_FONT,
           fontSize: "9px",
           color: "#2d3028",
@@ -291,10 +326,9 @@ export class InteriorScene extends Phaser.Scene {
           wordWrap: { width: 220 },
         })
         .setOrigin(0.5, 1)
-        .setDepth(y + 32)
         .setResolution(1);
-      this.add
-        .text(x, y + 31, agent.name, {
+      const nameplate = this.add
+        .text(0, 31, agent.name, {
           fontFamily: PIXEL_FONT,
           fontSize: "8px",
           fontStyle: "bold",
@@ -303,8 +337,12 @@ export class InteriorScene extends Phaser.Scene {
           padding: { x: 4, y: 2 },
         })
         .setOrigin(0.5)
-        .setDepth(y + 31)
         .setResolution(1);
+      resident.add([graphics, bubble, nameplate]);
+      resident.on("pointerdown", () =>
+        useGameStore.getState().selectAgent(agent.agent_id),
+      );
+      residentLayer.add(resident);
     });
   }
 

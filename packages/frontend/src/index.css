@@ -32,6 +32,7 @@ button {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: #173b2b;
   image-rendering: pixelated;
@@ -45,6 +46,7 @@ button {
 .game-viewport canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  touch-action: none;
 }
 .game-shell::after {
   content: "";
@@ -340,7 +342,6 @@ button {
 }
 .event-progress span {
   display: block;
-  width: 50%;
   height: 100%;
   background: #6b9b58;
 }
@@ -365,6 +366,15 @@ button {
   font-size: 8px;
   white-space: nowrap;
 }
+.desktop-control-hint,
+.mobile-control-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-control-hint {
+  display: none;
+}
 .control-hint kbd {
   padding: 3px 5px;
   background: #f3e5bd;
@@ -373,15 +383,51 @@ button {
   font-size: 7px;
   font-weight: 700;
 }
-.control-hint > span {
+.control-hint i {
   width: 2px;
   height: 12px;
   background: #68806e;
 }
+.interaction-notice {
+  position: absolute;
+  z-index: 12;
+  left: 18px;
+  bottom: 58px;
+  max-width: min(360px, calc(100vw - 36px));
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 3px solid #dcc98f;
+  outline: 2px solid #243a2c;
+  background: #f5e8c2;
+  color: #2a3e30;
+  box-shadow: 5px 5px 0 rgba(15, 33, 23, 0.55);
+}
+.interaction-notice strong {
+  font-size: 11px;
+}
+.interaction-notice p {
+  margin: 4px 0 0;
+  font-family: "Apple SD Gothic Neo", sans-serif;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.interaction-notice button {
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  min-height: 30px;
+  margin-left: auto;
+  border: 2px solid #9c875f;
+  background: #fff4d4;
+  color: #2a3e30;
+  cursor: pointer;
+}
 
 @media (max-width: 720px) {
   .top-hud {
-    top: 10px;
+    top: calc(10px + env(safe-area-inset-top));
     left: 10px;
     right: 10px;
   }
@@ -390,8 +436,7 @@ button {
     padding: 7px;
   }
   .game-brand small,
-  .clock-chip span,
-  .connection-chip {
+  .clock-chip span {
     display: none;
   }
   .game-brand strong {
@@ -400,9 +445,19 @@ button {
   .clock-chip {
     margin-left: auto;
   }
+  .connection-chip {
+    position: absolute;
+    top: 44px;
+    right: 0;
+    max-width: 150px;
+    padding: 5px 7px;
+    font-size: 7px;
+  }
   .inspector-toggle {
-    top: 76px;
+    top: calc(80px + env(safe-area-inset-top));
     right: 10px;
+    width: 44px;
+    height: 44px;
   }
   .game-inspector {
     top: 124px;
@@ -411,8 +466,19 @@ button {
     max-height: calc(100vh - 180px);
   }
   .control-hint {
-    bottom: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
     max-width: calc(100vw - 20px);
     overflow: hidden;
+  }
+  .desktop-control-hint {
+    display: none;
+  }
+  .mobile-control-hint {
+    display: flex;
+  }
+  .interaction-notice {
+    left: 10px;
+    bottom: calc(55px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 20px);
   }
 }

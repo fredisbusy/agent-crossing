@@ -145,7 +145,7 @@ export function createIndoorResidentView(
 ): IndoorResidentView {
   const container = scene.add
     .container(0, 0)
-    .setSize(20, 30)
+    .setSize(44, 44)
     .setInteractive({ useHandCursor: true })
     .setVisible(false);
   const shadow = scene.add.rectangle(0, 9, 17, 5, 0x183328, 0.3);

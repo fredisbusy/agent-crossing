@@ -26,3 +26,11 @@
 - Expected behavior: selecting a resident follows that NPC with the existing Phaser camera behavior.
 - Mobile acceptance: close the observer panel after selection so the followed resident is visible immediately.
 - Constraint: keep React-to-Phaser state sharing in the Zustand bridge and do not implement the unfinished memory/plan/reflection inspector.
+
+## 2026-08-24 mock-only UI remediation
+
+- Replace fabricated main-event copy/progress with selected-resident active-minute state.
+- Keep resident follow, controls, and live updates correct across world/interior scenes.
+- Expose canonical Tiled agent affordances when visible world objects are selected.
+- Add mobile pinch zoom, truthful status fallbacks, and frontend regression tests.
+- Preserve the concurrent readable-bubble contract and avoid backend/API/DB expansion.

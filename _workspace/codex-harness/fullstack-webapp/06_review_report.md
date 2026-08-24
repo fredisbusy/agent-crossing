@@ -43,3 +43,11 @@ The cognitive runtime logged an Ollama TLS embedding connection error during sta
 - Fix: native buttons now dispatch selection through Zustand to `MainScene`, with a request counter for same-agent re-centering.
 - Accessibility: button names, pressed state, focus outline, and touch manipulation are present.
 - Verification: frontend production build passed; the public site at a `390x844` viewport changed selection, closed the panel, and preserved selection after reopening.
+
+## 2026-08-24 mock-only UI remediation review
+
+- Removed fabricated Moonflower diffusion copy, `1 / 2`, and fixed 50% progress.
+- Added truthful current/expired active-minute presentation and accurate resident status/destination fallbacks.
+- Added scene-aware controls, live enlarged-interior residents, outdoor follow on interior selection, semantic interactable feedback, and pinch zoom.
+- Added Vitest presentation/store contracts and connected root `pnpm test` to backend plus frontend suites.
+- Verification: 124 backend tests passed, 10 skipped; 12 frontend tests passed; frontend production build and public 390x844 DOM verification passed with zero browser warnings/errors.

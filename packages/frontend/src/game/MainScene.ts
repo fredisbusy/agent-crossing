@@ -19,14 +19,21 @@ import { drawDollhouseBuilding } from "./DollhouseBuilding";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 import { ServerGridMovement } from "./gridMovement";
 import { agentBubbleLabel } from "./agentBubble";
-import {
-  isAgentAtHome,
-  resolveHomeRoom,
-} from "./homeInterior";
+import { isAgentAtHome, resolveHomeRoom } from "./homeInterior";
 
 const WORLD_WIDTH = townMap.width * townMap.tilewidth;
 const WORLD_HEIGHT = townMap.height * townMap.tileheight;
 const PIXEL_FONT = '"Courier New", monospace';
+const AFFORDANCE_LABELS: Readonly<Record<string, string>> = {
+  read_notice: "공지 읽기",
+  post_notice: "공지 쓰기",
+  plan_event: "행사 계획",
+  rest: "휴식",
+  meet: "만남",
+  observe: "관찰",
+  sit: "앉기",
+  chat: "대화",
+};
 
 interface AgentView {
   container: Phaser.GameObjects.Container;
@@ -120,6 +127,8 @@ export class MainScene extends Phaser.Scene {
   private followedAgentId = "Jiho";
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private dragOrigin?: Phaser.Math.Vector2;
+  private pinchStartDistance?: number;
+  private pinchStartZoom?: number;
 
   constructor() {
     super("MainScene");
@@ -127,6 +136,7 @@ export class MainScene extends Phaser.Scene {
 
   create(): void {
     createPixelTextures(this);
+    useGameStore.getState().setSceneContext({ kind: "world" });
     this.cameras.main
       .setBackgroundColor("#173b2b")
       .setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -241,7 +251,7 @@ export class MainScene extends Phaser.Scene {
       .setVisible(false)
       .setResolution(1);
     const portal = this.add
-      .zone(building.doorX, building.doorY - 11, 40, 34)
+      .zone(building.doorX, building.doorY - 11, 48, 48)
       .setDepth(building.depth + 22)
       .setInteractive({ useHandCursor: true });
     portal.on("pointerover", () => enterLabel.setVisible(true));
@@ -296,6 +306,7 @@ export class MainScene extends Phaser.Scene {
     graphics.fillRect(item.x - 4, item.y - 18, 8, 22);
     graphics.fillStyle(0x7acadd, 1);
     graphics.fillRect(item.x - 11, item.y - 12, 22, 5);
+    this.bindInteractable(item, 86, 58);
   }
 
   private drawNoticeBoard(item: TiledObject): void {
@@ -309,6 +320,7 @@ export class MainScene extends Phaser.Scene {
     graphics.fillStyle(0x553728, 1);
     graphics.fillRect(item.x - 15, item.y + 4, 6, 22);
     graphics.fillRect(item.x + 9, item.y + 4, 6, 22);
+    this.bindInteractable(item, 54, 62);
   }
 
   private drawBench(item: TiledObject): void {
@@ -319,6 +331,31 @@ export class MainScene extends Phaser.Scene {
     graphics.fillStyle(0x3e332a, 1);
     graphics.fillRect(item.x - 17, item.y + 11, 5, 10);
     graphics.fillRect(item.x + 12, item.y + 11, 5, 10);
+    this.bindInteractable(item, 58, 44);
+  }
+
+  private bindInteractable(
+    item: TiledObject,
+    width: number,
+    height: number,
+  ): void {
+    const affordances = getProperty(item, "affordances")
+      .split(",")
+      .map((affordance) => affordance.trim())
+      .filter((affordance) => affordance.length > 0)
+      .map((affordance) => AFFORDANCE_LABELS[affordance] ?? affordance);
+    const locationPath = getProperty(item, "location_path");
+    const location = locationPath.split(" > ").at(-1) ?? locationPath;
+    const zone = this.add
+      .zone(item.x, item.y, Math.max(width, 44), Math.max(height, 44))
+      .setDepth(item.y + 80)
+      .setInteractive({ useHandCursor: true });
+    zone.on("pointerdown", () => {
+      useGameStore.getState().showInteractionNotice({
+        title: item.name,
+        description: `${location} · 주민 행동: ${affordances.join(" · ")}`,
+      });
+    });
   }
 
   private drawAgents(): void {
@@ -328,7 +365,7 @@ export class MainScene extends Phaser.Scene {
       const container = this.add
         .container(spawn.x, spawn.y)
         .setDepth(spawn.y + 40)
-        .setSize(24, 32)
+        .setSize(44, 44)
         .setInteractive();
       const shadow = this.add.rectangle(0, 13, 22, 7, 0x183328, 0.35);
       const leftLeg = this.add.rectangle(-5, 10, 6, 9, 0x41372f);
@@ -504,9 +541,7 @@ export class MainScene extends Phaser.Scene {
       );
       view.leftLeg.y = isMoving ? 8 : 10;
       view.rightLeg.y = isMoving ? 12 : 10;
-      view.bubble
-        .setText(agentBubbleLabel(state))
-        .setVisible(true);
+      view.bubble.setText(agentBubbleLabel(state)).setVisible(true);
       view.nameplate.setText(state.name);
     }
   }
@@ -515,6 +550,7 @@ export class MainScene extends Phaser.Scene {
     const camera = this.cameras.main;
     camera.setZoom(this.scale.width < 720 ? 1.15 : 1.65).setRoundPixels(true);
     this.cursors = this.input.keyboard?.createCursorKeys();
+    this.input.addPointer(1);
     this.input.on(
       "wheel",
       (
@@ -527,9 +563,34 @@ export class MainScene extends Phaser.Scene {
       },
     );
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (this.hasTwoPointersDown()) {
+        this.beginPinch();
+        this.dragOrigin = undefined;
+        return;
+      }
       this.dragOrigin = new Phaser.Math.Vector2(pointer.x, pointer.y);
     });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (this.hasTwoPointersDown()) {
+        const distance = this.pointerDistance();
+        if (
+          this.pinchStartDistance === undefined ||
+          this.pinchStartZoom === undefined
+        ) {
+          this.beginPinch();
+          return;
+        }
+        this.stopFollowing();
+        camera.setZoom(
+          Phaser.Math.Clamp(
+            this.pinchStartZoom * (distance / this.pinchStartDistance),
+            1,
+            2.4,
+          ),
+        );
+        this.dragOrigin = undefined;
+        return;
+      }
       if (!pointer.isDown || !this.dragOrigin) return;
       const dx = pointer.x - this.dragOrigin.x;
       const dy = pointer.y - this.dragOrigin.y;
@@ -539,7 +600,30 @@ export class MainScene extends Phaser.Scene {
       camera.scrollY -= dy / camera.zoom;
       this.dragOrigin.set(pointer.x, pointer.y);
     });
+    this.input.on("pointerup", () => {
+      this.pinchStartDistance = undefined;
+      this.pinchStartZoom = undefined;
+      this.dragOrigin = undefined;
+    });
     this.followAgent(useGameStore.getState().selectedAgentId);
+  }
+
+  private hasTwoPointersDown(): boolean {
+    return this.input.pointer1.isDown && this.input.pointer2.isDown;
+  }
+
+  private pointerDistance(): number {
+    return Phaser.Math.Distance.Between(
+      this.input.pointer1.x,
+      this.input.pointer1.y,
+      this.input.pointer2.x,
+      this.input.pointer2.y,
+    );
+  }
+
+  private beginPinch(): void {
+    this.pinchStartDistance = Math.max(this.pointerDistance(), 1);
+    this.pinchStartZoom = this.cameras.main.zoom;
   }
 
   private followAgent(id: string): void {
