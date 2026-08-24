@@ -67,6 +67,7 @@ button {
 .game-map-text {
   position: absolute;
   display: block;
+  width: max-content;
   padding: 3px 6px;
   font-family:
     Pretendard,
@@ -81,7 +82,7 @@ button {
   text-align: center;
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
-  white-space: pre-wrap;
+  white-space: nowrap;
 }
 .game-map-text.anchor-center {
   transform: translate(-50%, -50%);
@@ -116,6 +117,7 @@ button {
   font-weight: 600;
 }
 .game-map-text.tone-bubble {
+  width: max-content;
   padding: 6px 9px;
   border: 1px solid rgba(98, 90, 69, 0.28);
   border-radius: 4px;
@@ -123,7 +125,8 @@ button {
   color: #2d3028;
   font-size: 12px;
   font-weight: 500;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  white-space: normal;
   box-shadow: 0 2px 5px rgba(24, 40, 29, 0.22);
 }
 .game-map-text.tone-action {
