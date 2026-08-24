@@ -241,14 +241,14 @@
 - [ ] `P2` Tiled map + collision을 연결한다
   - Depends on: WebSocket state broadcast 구현
   - DoD:
-    - [ ] 맵 충돌 레이어가 이동을 제한한다
+    - [x] 맵 충돌 레이어가 backend A\* 이동 후보를 제한한다
     - [ ] agent 이동이 충돌 규칙을 위반하지 않는다
 
 - [ ] `P2` A\* pathfinding을 적용한다
   - Depends on: Tiled map + collision 연결
   - DoD:
-    - [ ] 목표 좌표까지 유효 경로를 계산한다
-    - [ ] 경로 불가능 시 fallback 동작을 처리한다
+    - [x] 목표 좌표까지 유효 경로를 계산한다
+    - [x] 경로 불가능 시 빈 경로 fallback을 처리한다
 
 - [ ] `P2` agent inspector(memory/plan/reflection view)를 구현한다
   - Depends on: A\* pathfinding 적용

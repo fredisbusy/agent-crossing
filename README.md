@@ -96,6 +96,20 @@ uv run --project packages/backend pytest -c packages/backend/pyproject.toml pack
 - See `TODO.md` for implementation checklist aligned with the paper.
 - See `SPEC.md` for architecture and technical specification.
 
+## Briar Cove world map
+
+The first playable world is a 40×28 semantic town map stored as a Tiled-compatible
+JSON file at `packages/shared/assets/briar-cove.tmj`. It is the single source for:
+
+- named locations and hierarchical `location_path` values
+- collision bounds used by backend navigation
+- interactable objects and their agent affordances
+- agent spawn points and visual paths
+
+The FastAPI world owns observation and navigation decisions through
+`GET /world/map`, `POST /world/observe`, and `POST /world/path`. Phaser reads the
+same map to render the town; it does not decide whether a move is valid.
+
 ## Reference
 
 - Paper: [Generative Agents: Interactive Simulacra of Human Behavior](https://arxiv.org/abs/2304.03442)

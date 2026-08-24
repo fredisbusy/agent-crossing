@@ -192,6 +192,19 @@ react 정책:
 공간 컨텍스트:
 
 - 위치 표현은 `Town -> Building -> Room -> Object` 트리
+- canonical world map은 `packages/shared/assets/briar-cove.tmj`의 Tiled JSON이다.
+- `locations`, `paths`, `collision`, `interactables`, `spawns`, `decorations`를
+  독립 object layer로 관리한다.
+- 프런트엔드는 맵을 렌더링하지만 위치 유효성, 충돌, 경로 탐색 판정은
+  backend world 계층이 소유한다.
+- interactable은 `location_path`와 쉼표로 구분된 `affordances`를 가져야 한다.
+
+월드 API:
+
+- `GET /world/map`: 장소, 충돌, 상호작용 물체, 스폰의 canonical snapshot
+- `POST /world/observe`: 좌표와 반경을 입력받아 현재 위치와 주변 affordance 반환
+- `POST /world/path`: tile 좌표 입력을 받아 충돌을 우회하는 4방향 A\* 경로 반환
+- 목적지가 막혔거나 도달 불가능하면 `reachable=false`, `path=[]`를 반환
 
 대화/정보 확산:
 

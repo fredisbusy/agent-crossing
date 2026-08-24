@@ -25,3 +25,22 @@ __all__ = [
     "build_world_runtime",
     "default_persona_dir",
 ]
+from .world_map import (
+    MapBounds,
+    MapInteractable,
+    MapLocation,
+    MapPoint,
+    MapSpawn,
+    WorldMap,
+    load_world_map,
+)
+
+__all__ = [
+    "MapBounds",
+    "MapInteractable",
+    "MapLocation",
+    "MapPoint",
+    "MapSpawn",
+    "WorldMap",
+    "load_world_map",
+]

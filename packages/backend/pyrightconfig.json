@@ -6,7 +6,7 @@
     "**/.pytest_cache",
     "**/dist"
   ],
-  "venvPath": "../..",
+  "venvPath": ".",
   "venv": ".venv",
   "executionEnvironments": [
     {

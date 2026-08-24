@@ -4,7 +4,17 @@ from typing import cast
 from agents.persona_loader import PersonaLoader
 from api.schemas import (
     StatusResponse,
+    WorldMapBoundsResponse,
+    WorldMapInteractableResponse,
+    WorldMapLocationResponse,
+    WorldMapPointResponse,
+    WorldMapResponse,
     WorldSchedulerResponse,
+    WorldMapSpawnResponse,
+    WorldObservationResponse,
+    WorldObserveRequest,
+    WorldPathRequest,
+    WorldPathResponse,
     WorldStateResponse,
     WorldStepResponse,
 )
@@ -20,6 +30,7 @@ from settings import (
     WORLD_TICK_INTERVAL_SECONDS,
 )
 from world.runtime import WorldRuntime, WorldRuntimeConfig, build_world_runtime
+from world.world_map import MapBounds, MapPoint, WorldMap, load_world_map
 
 app = FastAPI(title="Agent Crossing API")
 
@@ -57,6 +68,108 @@ async def on_shutdown() -> None:
 @app.get("/", response_model=StatusResponse)
 async def get_status():
     return {"status": "online", "version": "0.1.0"}
+
+
+@app.get("/world/map", response_model=WorldMapResponse)
+async def get_world_map() -> WorldMapResponse:
+    world_map = load_world_map()
+    return _world_map_response(world_map)
+
+
+def _world_map_response(world_map: WorldMap) -> WorldMapResponse:
+    return WorldMapResponse(
+        id=world_map.id,
+        name=world_map.name,
+        width=world_map.width,
+        height=world_map.height,
+        tile_width=world_map.tile_width,
+        tile_height=world_map.tile_height,
+        locations=[
+            WorldMapLocationResponse(
+                id=location.id,
+                name=location.name,
+                kind=location.kind,
+                location_path=location.location_path,
+                color=location.color,
+                bounds=_map_bounds_response(location.bounds),
+            )
+            for location in world_map.locations
+        ],
+        collisions=[_map_bounds_response(bounds) for bounds in world_map.collisions],
+        interactables=[
+            WorldMapInteractableResponse(
+                id=item.id,
+                name=item.name,
+                kind=item.kind,
+                location_path=item.location_path,
+                affordances=list(item.affordances),
+                position=_map_point_response(item.position),
+            )
+            for item in world_map.interactables
+        ],
+        spawns=[
+            WorldMapSpawnResponse(
+                id=spawn.id,
+                agent_id=spawn.agent_id,
+                color=spawn.color,
+                position=_map_point_response(spawn.position),
+            )
+            for spawn in world_map.spawns
+        ],
+    )
+
+
+def _map_point_response(point: MapPoint) -> WorldMapPointResponse:
+    return WorldMapPointResponse(x=point.x, y=point.y)
+
+
+def _map_bounds_response(bounds: MapBounds) -> WorldMapBoundsResponse:
+    return WorldMapBoundsResponse(
+        x=bounds.x,
+        y=bounds.y,
+        width=bounds.width,
+        height=bounds.height,
+    )
+
+
+@app.post("/world/observe", response_model=WorldObservationResponse)
+async def post_world_observe(request: WorldObserveRequest) -> WorldObservationResponse:
+    world_map = load_world_map()
+    position = MapPoint(x=request.position.x, y=request.position.y)
+    location = world_map.location_at(position)
+    nearby = [
+        item
+        for item in world_map.interactables
+        if ((item.position.x - position.x) ** 2 + (item.position.y - position.y) ** 2)
+        <= request.radius**2
+    ]
+    return WorldObservationResponse(
+        location_path=location.location_path if location else world_map.name,
+        nearby_interactables=[
+            WorldMapInteractableResponse(
+                id=item.id,
+                name=item.name,
+                kind=item.kind,
+                location_path=item.location_path,
+                affordances=list(item.affordances),
+                position=_map_point_response(item.position),
+            )
+            for item in nearby
+        ],
+    )
+
+
+@app.post("/world/path", response_model=WorldPathResponse)
+async def post_world_path(request: WorldPathRequest) -> WorldPathResponse:
+    world_map = load_world_map()
+    path = world_map.find_path(
+        MapPoint(x=request.start.x, y=request.start.y),
+        MapPoint(x=request.goal.x, y=request.goal.y),
+    )
+    return WorldPathResponse(
+        reachable=bool(path),
+        path=[WorldMapPointResponse(x=point.x, y=point.y) for point in path],
+    )
 
 
 def _require_runtime() -> WorldRuntime:
