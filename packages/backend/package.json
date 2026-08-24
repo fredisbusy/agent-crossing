@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "uv run uvicorn api.main:app --reload --app-dir src",
-    "start": "uv run uvicorn api.main:app --app-dir src"
+    "dev": "uv run uvicorn api.main:app --reload --app-dir src --host 127.0.0.1 --port 8001",
+    "start": "uv run uvicorn api.main:app --app-dir src --host 127.0.0.1 --port 8001"
   }
 }

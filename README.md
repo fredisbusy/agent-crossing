@@ -114,7 +114,7 @@ same map to render the town; it does not decide whether a move is valid.
 
 At startup, the backend turns each persona's current plan into a named map
 destination, finds a collision-safe four-direction A* route, and advances the
-agent by one tile every spatial tick. `ws://localhost:8000/ws/world` broadcasts
+agent by one tile every spatial tick. `ws://localhost:8001/ws/world` broadcasts
 the latest authoritative snapshot; Zustand validates and stores it, and Phaser
 animates the pixel agents to those coordinates.
 
@@ -128,12 +128,16 @@ The spatial world starts independently of the PostgreSQL/LLM cognitive runtime.
 If the LLM is unavailable, map movement and the WebSocket remain usable while
 cognitive endpoints return `503`.
 
-If port `8000` is occupied, run the backend on another port and point Vite at it:
+The backend uses loopback port `8001` so it does not collide with other local
+services. Vite connects to it automatically during local HTTP development:
 
 ```bash
 uv run --project packages/backend uvicorn api.main:app --app-dir packages/backend/src --port 8001
-VITE_WORLD_WS_URL=ws://localhost:8001/ws/world pnpm dev:frontend
+pnpm dev:frontend
 ```
+
+For HTTPS deployment, proxy `/ws/world` to `127.0.0.1:8001`; the frontend uses
+the same public host with `wss://` automatically.
 
 To expand Briar Cove, add or move semantic objects in
 `packages/shared/assets/briar-cove.tmj`. Keep stable object IDs and add a

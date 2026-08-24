@@ -77,11 +77,13 @@ function getWorldStreamUrl(): string {
   if (typeof configuredUrl === "string" && configuredUrl.length > 0) {
     return configuredUrl;
   }
-  if (import.meta.env.DEV) {
-    return `ws://${window.location.hostname}:8000/ws/world`;
+  if (window.location.protocol === "https:") {
+    return `wss://${window.location.host}/ws/world`;
   }
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/ws/world`;
+  if (import.meta.env.DEV) {
+    return `ws://${window.location.hostname}:8001/ws/world`;
+  }
+  return `ws://${window.location.host}/ws/world`;
 }
 
 export function useWorldStream(): void {

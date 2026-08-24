@@ -237,6 +237,13 @@
     - [x] 느린 클라이언트에는 stale frame 대신 최신 snapshot을 전달한다
     - [x] shared contract 기반 runtime validation 후 클라이언트에서 파싱한다
 
+- [x] `P1` HTTPS 배포 WebSocket 경로와 로컬 포트를 분리한다
+  - Depends on: spatial WebSocket snapshot broadcast 구현
+  - DoD:
+    - [x] backend는 충돌 없는 loopback `8001` 포트를 사용한다
+    - [x] HTTPS frontend는 same-origin `wss://.../ws/world`를 사용한다
+    - [x] reverse proxy가 `/ws/world`를 backend로 전달한다
+
 - [ ] `P1` cognitive/social WebSocket overlay를 구현한다
   - Depends on: spatial WebSocket snapshot broadcast 구현
   - DoD:
