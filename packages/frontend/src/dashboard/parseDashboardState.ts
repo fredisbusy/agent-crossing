@@ -13,7 +13,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+  );
 }
 
 function parsePlan(value: unknown): PlanItemState | null {
@@ -94,7 +96,8 @@ function parseRelationship(value: unknown): DashboardRelationship | null {
   if (
     typeof value.target_agent_id !== "string" ||
     typeof value.target_name !== "string" ||
-    (value.affinity_score !== null && typeof value.affinity_score !== "number") ||
+    (value.affinity_score !== null &&
+      typeof value.affinity_score !== "number") ||
     value.measurement !== "not_modeled" ||
     (value.summary !== null && typeof value.summary !== "string") ||
     evidence === null ||
@@ -116,7 +119,8 @@ function parseRelationship(value: unknown): DashboardRelationship | null {
 
 function parseAgent(value: unknown): DashboardAgent | null {
   if (!isRecord(value) || !isRecord(value.tile_position)) return null;
-  const activeDay = value.active_day === null ? null : parsePlan(value.active_day);
+  const activeDay =
+    value.active_day === null ? null : parsePlan(value.active_day);
   const activeHourly =
     value.active_hourly === null ? null : parsePlan(value.active_hourly);
   const activeMinute =
@@ -213,8 +217,12 @@ function parseEvent(value: unknown): DashboardEvent | null {
 export function parseDashboardState(value: unknown): DashboardState | null {
   if (!isRecord(value) || !isRecord(value.world)) return null;
   const world = value.world;
-  const agents = Array.isArray(value.agents) ? value.agents.map(parseAgent) : null;
-  const events = Array.isArray(value.events) ? value.events.map(parseEvent) : null;
+  const agents = Array.isArray(value.agents)
+    ? value.agents.map(parseAgent)
+    : null;
+  const events = Array.isArray(value.events)
+    ? value.events.map(parseEvent)
+    : null;
   if (
     typeof world.available !== "boolean" ||
     typeof world.revision !== "number" ||
@@ -225,6 +233,8 @@ export function parseDashboardState(value: unknown): DashboardState | null {
     typeof world.effective_time_step_seconds !== "number" ||
     (world.cognitive_runtime_error !== null &&
       typeof world.cognitive_runtime_error !== "string") ||
+    (world.planning_error !== null &&
+      typeof world.planning_error !== "string") ||
     agents === null ||
     agents.some((agent) => agent === null) ||
     events === null ||
@@ -243,6 +253,7 @@ export function parseDashboardState(value: unknown): DashboardState | null {
       cognitive_active: world.cognitive_active,
       effective_time_step_seconds: world.effective_time_step_seconds,
       cognitive_runtime_error: world.cognitive_runtime_error as string | null,
+      planning_error: world.planning_error as string | null,
     },
     agents: agents.filter((agent): agent is DashboardAgent => agent !== null),
     events: events.filter((event): event is DashboardEvent => event !== null),

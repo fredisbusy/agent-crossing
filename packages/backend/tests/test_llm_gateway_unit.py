@@ -3,9 +3,11 @@ import json
 from typing import cast
 
 import numpy as np
+import pytest
 from agents.agent import AgentIdentity, AgentProfile, ExtendedPersona, FixedPersona
 from agents.memory.memory_object import MemoryObject, NodeType
 from agents.planning.models import DayPlanItem, HourlyPlanItem
+from agents.planning.graph import PlanningGraphError
 from agents.reaction import DialogueArc, ReactionDecisionInput
 from llm.embedding_encoder import EmbeddingEncodingContext
 from llm.guardrails.similarity import EmbeddingEncoder
@@ -401,7 +403,10 @@ def test_reaction_prompt_includes_short_dialogue_arc_guidance() -> None:
     )
 
     assert "[Short Conversation Arc]" in prompt
-    assert "Conversation goal: Ask briefly about the decaf blend and wrap up naturally." in prompt
+    assert (
+        "Conversation goal: Ask briefly about the decaf blend and wrap up naturally."
+        in prompt
+    )
     assert "phase=closing" in prompt
     assert "Do not introduce a new major topic" in prompt
     assert "set end_dialogue=true" in prompt
@@ -616,16 +621,17 @@ def test_generate_hour_plan_prompt_uses_single_day_plan_item() -> None:
     )
     service = LlmGateway(client)
 
-    _ = service.generate_hour_plan(
-        agent_name="Eddy Lin",
-        current_time=datetime.datetime(2026, 2, 13, 8, 45, 0),
-        day_plan_item=DayPlanItem(
-            start_time=datetime.datetime(2026, 2, 13, 7, 0, 0),
-            end_time=datetime.datetime(2026, 2, 13, 9, 0, 0),
-            location="Town > Home > Kitchen",
-            action_content="Morning routine",
-        ),
-    )
+    with pytest.raises(PlanningGraphError, match="hourly plan parse failed"):
+        service.generate_hour_plan(
+            agent_name="Eddy Lin",
+            current_time=datetime.datetime(2026, 2, 13, 8, 45, 0),
+            day_plan_item=DayPlanItem(
+                start_time=datetime.datetime(2026, 2, 13, 7, 0, 0),
+                end_time=datetime.datetime(2026, 2, 13, 9, 0, 0),
+                location="Town > Home > Kitchen",
+                action_content="Morning routine",
+            ),
+        )
 
     prompt = cast(str, client.call_kwargs[0]["prompt"])
     assert "Morning routine" in prompt
@@ -775,7 +781,7 @@ def test_generate_hour_plan_retries_once_on_truncated_json() -> None:
     assert client.calls == 2
 
 
-def test_generate_hour_plan_returns_empty_after_retry_exhaustion() -> None:
+def test_generate_hour_plan_raises_parse_error_after_retry_exhaustion() -> None:
     client = StubGenerationClient(
         responses=[
             "not-json",
@@ -807,18 +813,17 @@ def test_generate_hour_plan_returns_empty_after_retry_exhaustion() -> None:
     )
     service = LlmGateway(client)
 
-    items = service.generate_hour_plan(
-        agent_name="Eddy Lin",
-        current_time=datetime.datetime(2026, 2, 13, 8, 0, 0),
-        day_plan_item=DayPlanItem(
-            start_time=datetime.datetime(2026, 2, 13, 8, 0, 0),
-            end_time=datetime.datetime(2026, 2, 13, 10, 0, 0),
-            location="Town > Home > Kitchen",
-            action_content="Review composition notes and plan",
-        ),
-    )
-
-    assert items == []
+    with pytest.raises(PlanningGraphError, match="hourly plan parse failed"):
+        service.generate_hour_plan(
+            agent_name="Eddy Lin",
+            current_time=datetime.datetime(2026, 2, 13, 8, 0, 0),
+            day_plan_item=DayPlanItem(
+                start_time=datetime.datetime(2026, 2, 13, 8, 0, 0),
+                end_time=datetime.datetime(2026, 2, 13, 10, 0, 0),
+                location="Town > Home > Kitchen",
+                action_content="Review composition notes and plan",
+            ),
+        )
     assert client.calls == 3
 
 
@@ -874,16 +879,17 @@ def test_generate_minute_plan_prompt_uses_single_hourly_plan_item() -> None:
     )
     service = LlmGateway(client)
 
-    _ = service.generate_minute_plan(
-        agent_name="Eddy Lin",
-        current_time=datetime.datetime(2026, 2, 13, 12, 20, 0),
-        hourly_plan_item=HourlyPlanItem(
-            start_time=datetime.datetime(2026, 2, 13, 12, 0, 0),
-            end_time=datetime.datetime(2026, 2, 13, 13, 0, 0),
-            location="Town > Home > Study",
-            action_content="Draft project outline",
-        ),
-    )
+    with pytest.raises(PlanningGraphError, match="minute plan parse failed"):
+        service.generate_minute_plan(
+            agent_name="Eddy Lin",
+            current_time=datetime.datetime(2026, 2, 13, 12, 20, 0),
+            hourly_plan_item=HourlyPlanItem(
+                start_time=datetime.datetime(2026, 2, 13, 12, 0, 0),
+                end_time=datetime.datetime(2026, 2, 13, 13, 0, 0),
+                location="Town > Home > Study",
+                action_content="Draft project outline",
+            ),
+        )
 
     prompt = cast(str, client.call_kwargs[0]["prompt"])
     assert "Draft project outline" in prompt
@@ -1030,24 +1036,23 @@ def test_generate_day_plan_parses_json_items() -> None:
     assert items[0].start_time == datetime.datetime(2026, 2, 13, 8, 0, 0)
 
 
-def test_generate_day_plan_returns_empty_on_parse_failure() -> None:
+def test_generate_day_plan_raises_on_parse_failure() -> None:
     client = StubGenerationClient(responses=["not-json"])
     service = LlmGateway(client)
 
-    items = service.generate_day_plan(
-        agent_name="Eddy Lin",
-        age=19,
-        innate_traits=["friendly", "outgoing", "hospitable"],
-        persona_background="Music theory student focusing on composition.",
-        yesterday_date=datetime.datetime(2026, 2, 12),
-        yesterday_summary="woke up at 7:00 am and got ready to sleep around 10 pm.",
-        today_date=datetime.datetime(2026, 2, 13),
-    )
+    with pytest.raises(PlanningGraphError, match="day plan parse failed"):
+        service.generate_day_plan(
+            agent_name="Eddy Lin",
+            age=19,
+            innate_traits=["friendly", "outgoing", "hospitable"],
+            persona_background="Music theory student focusing on composition.",
+            yesterday_date=datetime.datetime(2026, 2, 12),
+            yesterday_summary="woke up at 7:00 am and got ready to sleep around 10 pm.",
+            today_date=datetime.datetime(2026, 2, 13),
+        )
 
-    assert items == []
 
-
-def test_generate_day_plan_returns_empty_if_too_few_items() -> None:
+def test_generate_day_plan_raises_if_too_few_items() -> None:
     client = StubGenerationClient(
         responses=[
             json.dumps(
@@ -1078,17 +1083,16 @@ def test_generate_day_plan_returns_empty_if_too_few_items() -> None:
     )
     service = LlmGateway(client)
 
-    items = service.generate_day_plan(
-        agent_name="Eddy Lin",
-        age=19,
-        innate_traits=["friendly", "outgoing", "hospitable"],
-        persona_background="Music theory student focusing on composition.",
-        yesterday_date=datetime.datetime(2026, 2, 12),
-        yesterday_summary="woke up at 7:00 am and got ready to sleep around 10 pm.",
-        today_date=datetime.datetime(2026, 2, 13),
-    )
-
-    assert items == []
+    with pytest.raises(PlanningGraphError, match="day plan parse failed"):
+        service.generate_day_plan(
+            agent_name="Eddy Lin",
+            age=19,
+            innate_traits=["friendly", "outgoing", "hospitable"],
+            persona_background="Music theory student focusing on composition.",
+            yesterday_date=datetime.datetime(2026, 2, 12),
+            yesterday_summary="woke up at 7:00 am and got ready to sleep around 10 pm.",
+            today_date=datetime.datetime(2026, 2, 13),
+        )
 
 
 def test_generate_day_plan_dedupes_and_truncates_to_max() -> None:
@@ -1297,7 +1301,7 @@ def test_generate_day_plan_retries_once_on_schema_validation_error() -> None:
     assert client.calls == 2
 
 
-def test_generate_day_plan_returns_empty_after_retry_exhaustion() -> None:
+def test_generate_day_plan_raises_after_retry_exhaustion() -> None:
     client = StubGenerationClient(
         responses=[
             "not-json",
@@ -1359,15 +1363,14 @@ def test_generate_day_plan_returns_empty_after_retry_exhaustion() -> None:
     )
     service = LlmGateway(client)
 
-    items = service.generate_day_plan(
-        agent_name="Eddy Lin",
-        age=19,
-        innate_traits=["friendly", "outgoing", "hospitable"],
-        persona_background="Music theory student focusing on composition.",
-        yesterday_date=datetime.datetime(2026, 2, 12),
-        yesterday_summary="woke up at 7:00 am and got ready to sleep around 10 pm.",
-        today_date=datetime.datetime(2026, 2, 13),
-    )
-
-    assert items == []
+    with pytest.raises(PlanningGraphError, match="day plan parse failed"):
+        service.generate_day_plan(
+            agent_name="Eddy Lin",
+            age=19,
+            innate_traits=["friendly", "outgoing", "hospitable"],
+            persona_background="Music theory student focusing on composition.",
+            yesterday_date=datetime.datetime(2026, 2, 12),
+            yesterday_summary="woke up at 7:00 am and got ready to sleep around 10 pm.",
+            today_date=datetime.datetime(2026, 2, 13),
+        )
     assert client.calls == 3

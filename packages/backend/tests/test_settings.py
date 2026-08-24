@@ -16,6 +16,7 @@ print(json.dumps({
     "LLM_MODEL": settings.LLM_MODEL,
     "EMBEDDING_MODEL": settings.EMBEDDING_MODEL,
     "LLM_API_KEY": settings.LLM_API_KEY,
+    "LLM_TIMEOUT_SECONDS": settings.LLM_TIMEOUT_SECONDS,
 }))
 """
     process_env = {
@@ -58,6 +59,7 @@ def test_settings_ollama_backend_uses_byfred_gateway() -> None:
         "LLM_MODEL": "ollama_chat/qwen3.8:27b-mlx",
         "EMBEDDING_MODEL": "ollama/bge-m3",
         "LLM_API_KEY": "",
+        "LLM_TIMEOUT_SECONDS": None,
     }
 
 
@@ -75,4 +77,5 @@ def test_settings_google_backend_uses_gemini_model_and_api_key() -> None:
         "LLM_MODEL": "gemini/gemini-2.5-flash-lite",
         "EMBEDDING_MODEL": "gemini/gemini-embedding-001",
         "LLM_API_KEY": "test-google-key",
+        "LLM_TIMEOUT_SECONDS": 30.0,
     }

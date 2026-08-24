@@ -91,6 +91,24 @@ def test_generate_uses_response_format_without_penalties_for_non_ollama_json(
     assert "frequency_penalty" not in captured
 
 
+def test_generate_omits_timeout_when_local_model_has_no_deadline(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"choices": [{"message": {"content": "done"}}]}
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LiteLlmClient(
+        timeout_seconds=None,
+        default_generate_model="ollama_chat/qwen3.8:27b-mlx",
+        default_embedding_model="ollama/bge-m3",
+    )
+
+    assert client.generate(prompt="Take the time needed") == "done"
+    assert "timeout" not in captured
+
+
 def test_embed_reads_litellm_embedding_vector(monkeypatch) -> None:
     captured: dict[str, Any] = {}
 

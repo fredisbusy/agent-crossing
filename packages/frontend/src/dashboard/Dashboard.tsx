@@ -364,13 +364,22 @@ export function Dashboard() {
           <span>TURN {data?.world.turn ?? "--"}</span>
           <span>REV {data?.world.revision ?? "--"}</span>
         </div>
-        <div className={`dashboard-connection ${connection}`}>
+        <div className={`dashboard-connection ${data?.world.planning_error ? "offline" : connection}`}>
           <Radio size={14} />
-          {connection === "live" ? "LIVE" : connection === "connecting" ? "CONNECTING" : "OFFLINE"}
+          {data?.world.planning_error
+            ? "PLANNING ERROR"
+            : connection === "live"
+              ? "LIVE"
+              : connection === "connecting"
+                ? "CONNECTING"
+                : "OFFLINE"}
         </div>
       </header>
 
       {error ? <div className="dashboard-error">{error} · 실제 runtime 연결을 다시 시도하고 있습니다.</div> : null}
+      {data?.world.planning_error ? (
+        <div className="dashboard-error">일정 생성 오류 · {data.world.planning_error}</div>
+      ) : null}
 
       <div className="dashboard-layout">
         <aside className="dashboard-agent-rail">

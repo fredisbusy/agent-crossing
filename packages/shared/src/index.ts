@@ -90,6 +90,7 @@ export interface SpatialWorldSnapshot {
   current_time: string | null;
   turn: number;
   scheduler_running: boolean;
+  planning_error: string | null;
 }
 
 export interface DashboardMemory {
@@ -171,6 +172,7 @@ export interface DashboardWorld {
   cognitive_active: boolean;
   effective_time_step_seconds: number;
   cognitive_runtime_error: string | null;
+  planning_error: string | null;
 }
 
 export interface DashboardState {

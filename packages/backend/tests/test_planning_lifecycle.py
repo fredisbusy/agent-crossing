@@ -1,8 +1,10 @@
 import datetime
 from dataclasses import dataclass
 
+import pytest
+
 from agents.agent import AgentIdentity, AgentProfile, ExtendedPersona, FixedPersona
-from agents.planning.lifecycle import PlanningCoordinator
+from agents.planning.lifecycle import PlanningCoordinator, PlanningGenerationError
 from agents.planning.models import DayPlanItem, HourlyPlanItem, MinutePlanItem
 
 
@@ -100,7 +102,7 @@ def test_planning_coordinator_generates_hierarchy_just_in_time_and_caches() -> N
 def test_planning_coordinator_uses_half_open_boundaries() -> None:
     planner = FakePlanner()
     agent = FakeAgent(
-        identity=AgentIdentity(id="jiho", name="Jiho Park", age=29, traits=[]),
+        identity=AgentIdentity(id="jiho", name="Jiho Park", age=29, traits=["차분함"]),
         profile=AgentProfile(
             fixed=FixedPersona(identity_stable_set=[]),
             extended=ExtendedPersona(lifestyle_and_routine=[], current_plan_context=[]),
@@ -117,27 +119,51 @@ def test_planning_coordinator_uses_half_open_boundaries() -> None:
     assert planner.hourly_calls == 1
 
 
-def test_bootstrap_schedule_covers_midnight_without_starting_morning_early() -> None:
+def test_bootstrap_uses_generated_plan_instead_of_a_fallback() -> None:
     planner = FakePlanner()
     agent = FakeAgent(
-        identity=AgentIdentity(id="jiho", name="Jiho Park", age=29, traits=[]),
+        identity=AgentIdentity(id="jiho", name="Jiho Park", age=29, traits=["차분함"]),
         profile=AgentProfile(
             fixed=FixedPersona(identity_stable_set=[]),
-            extended=ExtendedPersona(
-                lifestyle_and_routine=[], current_plan_context=[]
-            ),
+            extended=ExtendedPersona(lifestyle_and_routine=[], current_plan_context=[]),
         ),
         brain=FakeBrain(planner=planner),
     )
-    coordinator = PlanningCoordinator()
-
-    midnight = coordinator.bootstrap(
-        agent=agent, now=datetime.datetime(2026, 8, 24, 0, 5)
-    )
-    late_night = coordinator.bootstrap(
-        agent=agent, now=datetime.datetime(2026, 8, 24, 23, 55)
+    snapshot = PlanningCoordinator().bootstrap(
+        agent=agent, now=datetime.datetime(2026, 8, 24, 6, 5)
     )
 
-    assert midnight.active_day.start_time.hour == 0
-    assert midnight.active_day.action_content.startswith("집에서 잠")
-    assert late_night.active_day.end_time.date() == datetime.date(2026, 8, 25)
+    assert snapshot.active_day.action_content == "도서관 오전 업무를 한다."
+    assert snapshot.active_hourly.action_content == "현재 broad stroke를 수행한다."
+    assert snapshot.active_minute.action_content == "책 반납함을 정리한다."
+    assert (planner.day_calls, planner.hourly_calls, planner.minute_calls) == (1, 1, 1)
+
+
+def test_invalid_generated_day_plan_raises_instead_of_installing_fallback() -> None:
+    planner = FakePlanner()
+
+    def invalid_day_plan(request):
+        date = request.today_date.date()
+        return [
+            DayPlanItem(
+                start_time=datetime.datetime.combine(date, datetime.time(6)),
+                end_time=datetime.datetime.combine(date, datetime.time(12)),
+                location="Unknown Place",
+                action_content="알 수 없는 장소에서 일한다.",
+            )
+        ]
+
+    planner.generate_day_plan = invalid_day_plan
+    agent = FakeAgent(
+        identity=AgentIdentity(id="jiho", name="Jiho Park", age=29, traits=["차분함"]),
+        profile=AgentProfile(
+            fixed=FixedPersona(identity_stable_set=[]),
+            extended=ExtendedPersona(lifestyle_and_routine=[], current_plan_context=[]),
+        ),
+        brain=FakeBrain(planner=planner),
+    )
+
+    with pytest.raises(PlanningGenerationError, match="invalid location/time"):
+        PlanningCoordinator().bootstrap(
+            agent=agent, now=datetime.datetime(2026, 8, 24, 6, 5)
+        )

@@ -113,7 +113,8 @@ function parseSnapshot(value: unknown): SpatialWorldSnapshot | null {
     !Array.isArray(value.agents) ||
     (value.current_time !== null && typeof value.current_time !== "string") ||
     typeof value.turn !== "number" ||
-    typeof value.scheduler_running !== "boolean"
+    typeof value.scheduler_running !== "boolean" ||
+    (value.planning_error !== null && typeof value.planning_error !== "string")
   ) {
     return null;
   }
@@ -130,6 +131,7 @@ function parseSnapshot(value: unknown): SpatialWorldSnapshot | null {
     current_time: value.current_time,
     turn: value.turn,
     scheduler_running: value.scheduler_running,
+    planning_error: value.planning_error,
   };
 }
 

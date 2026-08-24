@@ -8,7 +8,6 @@ from typing import Literal, cast
 
 from agents.sim_agent import SimAgent
 from agents.planning.lifecycle import LifeAgent, PlanningCoordinator
-from agents.planning.models import DayPlanItem
 from llm.governance import (
     ConversationMetrics,
     build_conversation_metrics,
@@ -40,7 +39,7 @@ class WorldRuntimeConfig:
     api_key: str | None
     llm_model: str
     embedding_model: str
-    timeout_seconds: float
+    timeout_seconds: float | None
     persona_dir: str
     dialogue_turn_window: int | None = None
     dialogue_target_turns: int = 5
@@ -109,6 +108,7 @@ class WorldRuntime:
         self.spatial_runtime: SpatialWorldRuntime | None = spatial_runtime
         self._last_dialogue_end_time: datetime.datetime | None = None
         self._dashboard_events: DashboardEventBuffer = DashboardEventBuffer()
+        self.planning_error: str | None = None
 
     def step(self) -> SimulationStepResult:
         with self._step_lock:
@@ -122,7 +122,7 @@ class WorldRuntime:
                     schedule = self.planning_coordinator.ensure_current(
                         agent=_as_life_agent(agent),
                         now=planning_time,
-                        generate=False,
+                        generate=True,
                     )
                     if self.spatial_runtime is not None:
                         self.spatial_runtime.set_schedule(schedule)
@@ -239,8 +239,6 @@ class WorldRuntime:
         if self.scheduler_running:
             return False
         self._scheduler_task = asyncio.create_task(self._run_scheduler())
-        if self.planning_coordinator is not None:
-            self._plan_refresh_task = asyncio.create_task(self._refresh_plans())
         return True
 
     async def stop_scheduler(self) -> bool:
@@ -272,8 +270,20 @@ class WorldRuntime:
         return True
 
     async def _run_scheduler(self) -> None:
+        if self.planning_coordinator is not None:
+            try:
+                await self._refresh_plans()
+            except Exception as error:
+                self._set_planning_error(error)
+                logger.exception("Authoritative plan generation failed")
+                return
         while True:
-            await asyncio.to_thread(self._advance_world_tick)
+            try:
+                await asyncio.to_thread(self._advance_world_tick)
+            except Exception as error:
+                self._set_planning_error(error)
+                logger.exception("Authoritative plan transition failed")
+                return
             if self.session.is_active and (
                 self._cognitive_task is None or self._cognitive_task.done()
             ):
@@ -301,7 +311,7 @@ class WorldRuntime:
                     schedule = self.planning_coordinator.ensure_current(
                         agent=_as_life_agent(agent),
                         now=planning_time,
-                        generate=False,
+                        generate=True,
                     )
                     if self.spatial_runtime is not None:
                         self.spatial_runtime.set_schedule(schedule)
@@ -395,40 +405,33 @@ class WorldRuntime:
     async def _refresh_plans(self) -> None:
         if self.planning_coordinator is None:
             return
-        day_plans: list[list[DayPlanItem]] = []
         planning_date = self.current_time
+        schedules = []
         for agent in self.agents:
-            day_plans.append(
+            schedules.append(
                 await asyncio.to_thread(
-                    self.planning_coordinator.generate_day_plan,
+                    self.planning_coordinator.refresh_current,
                     agent=_as_life_agent(agent),
                     now=planning_date,
                 )
             )
-        apply_time = self.current_time
-        schedules = [
-            self.planning_coordinator.install_day_plan(
-                agent=_as_life_agent(agent),
-                now=apply_time,
-                day_items=day_items,
-                reason="llm_refresh",
-            )
-            for agent, day_items in zip(self.agents, day_plans, strict=True)
-        ]
+        self._set_planning_error(None)
         if self.spatial_runtime is not None:
             for schedule in schedules:
                 self.spatial_runtime.set_schedule(schedule)
 
-    def bootstrap_plans(self) -> None:
-        if self.planning_coordinator is None:
-            return
-        for agent in self.agents:
-            schedule = self.planning_coordinator.bootstrap(
-                agent=_as_life_agent(agent),
-                now=self.current_time,
+    def _set_planning_error(self, error: Exception | None) -> None:
+        self.planning_error = None if error is None else str(error)
+        if self.spatial_runtime is not None:
+            self.spatial_runtime.set_planning_error(self.planning_error)
+            self.spatial_runtime.update_world_state(
+                current_time=self.current_time,
+                turn=self.turn,
+                scheduler_running=(self.scheduler_running if error is None else False),
             )
-            if self.spatial_runtime is not None:
-                self.spatial_runtime.set_schedule(schedule)
+
+    def bootstrap_plans(self) -> None:
+        """Retained for compatibility; authoritative plans start asynchronously."""
         if self.spatial_runtime is not None:
             self.spatial_runtime.update_world_state(
                 current_time=self.current_time,
@@ -503,7 +506,6 @@ def build_world_runtime(
         planning_coordinator=PlanningCoordinator(),
         spatial_runtime=spatial_runtime,
     )
-    runtime.bootstrap_plans()
     return runtime
 
 

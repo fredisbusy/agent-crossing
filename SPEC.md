@@ -185,10 +185,11 @@ Backend 레이어 책임:
 - 시뮬레이션은 매 tick마다 5분씩 진행하며, 서비스 시작 시 당일 06:00에서 시작한다.
 - 평상시에는 real 1초당 game 5분을 진행하되, dialogue session 또는 cognitive task가 활성화되면 tick당 game 30초로 감속한다.
 - cognitive 구간에는 참여 agent의 현재 공간 계획과 목적지를 유지하고, 대화 완료 또는 실패 후 최신 game clock에 맞춰 계획 실행을 재개한다.
-- 즉시 실행 가능한 persona 기반 fallback hierarchy로 하루를 시작하고, qwen이 만든 day broad strokes는 별도 background task에서 생성한 뒤 두 agent 계획을 함께 교체한다.
-- 로컬 27B 모델이 대화와 경쟁하지 않도록 live runtime의 hourly/minute 실행 구간은 active day item을 결정론적으로 재귀 분해한다. 독립 planner API의 LLM hourly/minute 생성 기능은 연구·평가용으로 유지한다.
-- day plan은 날짜가 바뀔 때 한 번 선택하고, hourly/minute plan은 active parent가 바뀔 때만 JIT 선택한다. LLM 지연은 world clock을 멈추지 않고 cognitive time scale로 감속한다.
-- 생성 실패 또는 parent 범위를 벗어난 결과는 같은 장소와 행동을 유지하는 결정론적 하위 계획으로 대체한다.
+- day/hourly/minute 계획은 모두 planner가 생성한 authoritative 결과만 실행한다. 고정 문구나 상위 문장 복사로 계획을 대체하지 않는다.
+- 서비스 시작과 active parent 전환 시 필요한 계획 계층이 준비될 때까지 world clock을 진행하지 않는다.
+- 계획 생성·파싱·장소/시간 검증이 실패하면 scheduler를 중단하고 `planning_error`를 WebSocket과 dashboard에 노출한다.
+- 로컬 27B planner 호출은 생성 시간 제한을 두지 않고 완료될 때까지 기다린다. 연결·파싱·검증 실패는 fallback 없이 `planning_error`로 노출한다.
+- day plan은 날짜가 바뀔 때 한 번 선택하고, hourly/minute plan은 active parent가 바뀔 때 JIT 생성한다.
 - active minute plan의 canonical `location`과 `action_content`가 공간 runtime의 목적지와 현재 행동에 직접 반영된다.
 - 두 agent가 같은 canonical 목적지에서 인접했을 때만 대화 세션을 열고, 종료 뒤 30분 동안 재조우 대화를 억제한다.
 - Jiho의 Sujin에 대한 호감은 Jiho만 가진 private seed memory다. Sujin은 이를 선험적으로 알지 못하며 독립된 일정, 판단, 경계를 유지한다.

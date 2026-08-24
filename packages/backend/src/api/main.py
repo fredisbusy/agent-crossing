@@ -66,7 +66,7 @@ async def on_startup() -> None:
             SpatialAgentSeed(
                 agent_id=persona.agent.id,
                 name=persona.agent.name,
-                plan_context=tuple(persona.current_plan_context),
+                plan_context=(),
             )
             for persona in app.state.agent_personas
         ],
@@ -247,6 +247,7 @@ def _spatial_response(snapshot: SpatialWorldSnapshot) -> SpatialWorldResponse:
         ),
         turn=snapshot.turn,
         scheduler_running=snapshot.scheduler_running,
+        planning_error=snapshot.planning_error,
     )
 
 
@@ -407,6 +408,7 @@ def _dashboard_state_response(
             cognitive_runtime_error=cast(
                 str | None, getattr(app.state, "cognitive_runtime_error", None)
             ),
+            planning_error=cast(str | None, getattr(runtime, "planning_error", None)),
         ),
         agents=agents,
         events=[

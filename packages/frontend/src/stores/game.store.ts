@@ -28,6 +28,7 @@ interface GameState {
   currentTime: string | null;
   turn: number;
   schedulerRunning: boolean;
+  planningError: string | null;
   selectedAgentId: string;
   followRequestId: number;
   sceneContext: SceneContext;
@@ -54,6 +55,7 @@ export const useGameStore = create<GameState>((set) => ({
   currentTime: null,
   turn: 0,
   schedulerRunning: false,
+  planningError: null,
   selectedAgentId: "Jiho",
   followRequestId: 0,
   sceneContext: { kind: "world" },
@@ -66,6 +68,7 @@ export const useGameStore = create<GameState>((set) => ({
       currentTime: snapshot.current_time,
       turn: snapshot.turn,
       schedulerRunning: snapshot.scheduler_running,
+      planningError: snapshot.planning_error,
       agents: Object.fromEntries(
         snapshot.agents.map((agent) => [agent.agent_id, agent]),
       ),

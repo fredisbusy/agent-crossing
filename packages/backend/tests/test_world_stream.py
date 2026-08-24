@@ -69,4 +69,5 @@ async def _assert_world_websocket_sends_initial_snapshot_and_unsubscribes() -> N
     assert websocket.accepted is True
     assert websocket.payloads[0]["map_id"] == "briar-cove"
     assert websocket.payloads[0]["revision"] == 0
+    assert websocket.payloads[0]["planning_error"] is None
     assert stream.subscriber_count == 0

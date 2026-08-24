@@ -133,3 +133,16 @@ def test_spatial_runtime_does_not_publish_blank_thought_overlay() -> None:
         agent for agent in runtime.snapshot().agents if agent.agent_id == "jiho"
     )
     assert jiho.bubble_kind == "action"
+
+
+def test_planning_error_clears_non_authoritative_plan_and_stops_movement() -> None:
+    runtime = _runtime()
+
+    runtime.set_planning_error("Jiho Park: minute plan parse failed")
+    snapshot = runtime.tick()
+
+    assert snapshot.planning_error == "Jiho Park: minute plan parse failed"
+    assert all(agent.active_minute is None for agent in snapshot.agents)
+    assert all(agent.destination is None for agent in snapshot.agents)
+    assert all(agent.current_action == "planning_error" for agent in snapshot.agents)
+    assert all(agent.plan == "" for agent in snapshot.agents)

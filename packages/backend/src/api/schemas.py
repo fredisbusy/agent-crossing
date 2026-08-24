@@ -140,6 +140,7 @@ class SpatialWorldResponse(BaseModel):
     current_time: str | None
     turn: int
     scheduler_running: bool
+    planning_error: str | None
 
 
 class DashboardMemoryResponse(BaseModel):
@@ -221,6 +222,7 @@ class DashboardWorldResponse(BaseModel):
     cognitive_active: bool
     effective_time_step_seconds: int
     cognitive_runtime_error: str | None
+    planning_error: str | None
 
 
 class DashboardStateResponse(BaseModel):

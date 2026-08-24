@@ -30,15 +30,18 @@ _default_llm_model = (
     else "gemini/gemini-2.5-flash-lite"
 )
 _default_embedding_model = (
-    "ollama/bge-m3"
-    if LLM_BACKEND == "ollama"
-    else "gemini/gemini-embedding-001"
+    "ollama/bge-m3" if LLM_BACKEND == "ollama" else "gemini/gemini-embedding-001"
 )
 
 LLM_BASE_URL: Final[str] = os.getenv("LLM_BASE_URL", _default_base_url)
 LLM_MODEL: Final[str] = os.getenv("LLM_MODEL", _default_llm_model)
 EMBEDDING_MODEL: Final[str] = os.getenv("EMBEDDING_MODEL", _default_embedding_model)
-LLM_TIMEOUT_SECONDS: Final[float] = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
+_raw_timeout_seconds = os.getenv("LLM_TIMEOUT_SECONDS")
+LLM_TIMEOUT_SECONDS: Final[float | None] = (
+    None
+    if _raw_timeout_seconds is None and LLM_BACKEND == "ollama"
+    else float(_raw_timeout_seconds or "30")
+)
 GOOGLE_AI_STUDIO_API_KEY: Final[str] = os.getenv("GOOGLE_AI_STUDIO_API_KEY", "")
 LLM_API_KEY: Final[str] = os.getenv(
     "LLM_API_KEY",

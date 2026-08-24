@@ -32,7 +32,7 @@ class LoopSimulationConfig:
     """발화/추론에 사용할 LLM 모델명."""
     embedding_model: str
     """임베딩에 사용할 모델명."""
-    timeout_seconds: float
+    timeout_seconds: float | None
     """LLM 요청 타임아웃(초)."""
     persona_dir: str
     """persona JSON 파일 경로."""

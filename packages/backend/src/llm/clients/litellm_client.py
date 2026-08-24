@@ -43,7 +43,7 @@ class LiteLlmClient:
     default_embedding_model: str
     base_url: str | None = None
     api_key: str | None = None
-    timeout_seconds: float = 10.0
+    timeout_seconds: float | None = 10.0
 
     def generate(
         self,
@@ -67,9 +67,10 @@ class LiteLlmClient:
             "temperature": final_options.temperature,
             "top_p": final_options.top_p,
             "max_tokens": final_options.num_predict,
-            "timeout": self.timeout_seconds,
             "num_retries": 2,
         }
+        if self.timeout_seconds is not None:
+            kwargs["timeout"] = self.timeout_seconds
         if self.base_url:
             kwargs["api_base"] = self.base_url
         if self.api_key:
@@ -126,10 +127,11 @@ class LiteLlmClient:
         kwargs: dict[str, Any] = {
             "model": model or self.default_embedding_model,
             "input": [input],
-            "timeout": self.timeout_seconds,
             "num_retries": 2,
             "dimensions": expected_dim,
         }
+        if self.timeout_seconds is not None:
+            kwargs["timeout"] = self.timeout_seconds
         if self.base_url:
             kwargs["api_base"] = self.base_url
         if self.api_key:

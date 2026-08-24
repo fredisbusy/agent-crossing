@@ -39,6 +39,11 @@ MINUTE_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
     num_predict=3072,
 )
 
+
+class PlanningGraphError(RuntimeError):
+    """Raised after structured planning output exhausts its parse retries."""
+
+
 MAX_PARSE_RETRIES = 2
 
 
@@ -136,6 +141,10 @@ class PlanningGraphRunner:
                 )
             ),
         )
+        if not final_state["plan_items"]:
+            raise PlanningGraphError(
+                f"day plan parse failed: {final_state['parse_error'] or 'empty output'}"
+            )
         return final_state["plan_items"]
 
     def generate_hourly_plan(
@@ -161,6 +170,10 @@ class PlanningGraphRunner:
                 )
             ),
         )
+        if not final_state["plan_items"]:
+            raise PlanningGraphError(
+                f"hourly plan parse failed: {final_state['parse_error'] or 'empty output'}"
+            )
         return final_state["plan_items"]
 
     def generate_minute_plan(
@@ -186,6 +199,10 @@ class PlanningGraphRunner:
                 )
             ),
         )
+        if not final_state["plan_items"]:
+            raise PlanningGraphError(
+                f"minute plan parse failed: {final_state['parse_error'] or 'empty output'}"
+            )
         return final_state["plan_items"]
 
     def _build_day_plan_graph(self) -> PlanningGraphInvoker:

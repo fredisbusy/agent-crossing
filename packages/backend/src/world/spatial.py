@@ -43,6 +43,7 @@ class SpatialWorldSnapshot:
     current_time: datetime.datetime | None
     turn: int
     scheduler_running: bool
+    planning_error: str | None
 
 
 @dataclass
@@ -77,6 +78,7 @@ class SpatialWorldRuntime:
         self._current_time: datetime.datetime | None = None
         self._turn: int = 0
         self._scheduler_running: bool = False
+        self._planning_error: str | None = None
         for index, seed in enumerate(seeds):
             spawn = self._resolve_spawn(seed=seed, fallback_index=index)
             tile_position = MapPoint(
@@ -129,6 +131,19 @@ class SpatialWorldRuntime:
             self._turn = turn
             self._scheduler_running = scheduler_running
 
+    def set_planning_error(self, error: str | None) -> None:
+        with self._lock:
+            self._planning_error = error
+            if error is not None:
+                for agent in self._agents.values():
+                    agent.plan = ""
+                    agent.explicit_location = None
+                    agent.schedule = None
+                    agent.destination = None
+                    agent.goal = None
+                    agent.route = []
+                    agent.current_action = "planning_error"
+
     def clear_cognitive_overlays(self) -> None:
         with self._lock:
             for agent in self._agents.values():
@@ -152,11 +167,14 @@ class SpatialWorldRuntime:
 
     def tick(self) -> SpatialWorldSnapshot:
         with self._lock:
-            occupied_tiles = {agent.tile_position for agent in self._agents.values()}
-            for agent in self._agents.values():
-                occupied_tiles.discard(agent.tile_position)
-                self._advance(agent, blocked_tiles=occupied_tiles)
-                occupied_tiles.add(agent.tile_position)
+            if self._planning_error is None:
+                occupied_tiles = {
+                    agent.tile_position for agent in self._agents.values()
+                }
+                for agent in self._agents.values():
+                    occupied_tiles.discard(agent.tile_position)
+                    self._advance(agent, blocked_tiles=occupied_tiles)
+                    occupied_tiles.add(agent.tile_position)
             self.revision += 1
             return self._snapshot_unlocked()
 
@@ -259,6 +277,7 @@ class SpatialWorldRuntime:
             current_time=self._current_time,
             turn=self._turn,
             scheduler_running=self._scheduler_running,
+            planning_error=self._planning_error,
             agents=tuple(
                 SpatialAgentSnapshot(
                     agent_id=agent.agent_id,

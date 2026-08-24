@@ -27,7 +27,7 @@ class ProviderClient(Protocol):
 
 def build_provider_client(
     *,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     generation_model: str,
     embedding_model: str,
     base_url: str | None = None,

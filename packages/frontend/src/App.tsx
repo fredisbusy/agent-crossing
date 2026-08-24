@@ -58,6 +58,7 @@ function App() {
   const revision = useGameStore((state) => state.revision);
   const currentTime = useGameStore((state) => state.currentTime);
   const schedulerRunning = useGameStore((state) => state.schedulerRunning);
+  const planningError = useGameStore((state) => state.planningError);
   const selectedAgentId = useGameStore((state) => state.selectedAgentId);
   const selectAgent = useGameStore((state) => state.selectAgent);
   const sceneContext = useGameStore((state) => state.sceneContext);
@@ -127,7 +128,14 @@ function App() {
         agent.agent_id.toLocaleLowerCase() ===
         selectedAgentId.toLocaleLowerCase(),
     ) ?? displayedAgents[0];
-  const mainEvent = buildMainEventView(selectedAgent, currentTime);
+  const mainEvent = planningError
+    ? {
+        title: "일정 생성 오류",
+        description: planningError,
+        progressPercent: 0,
+        progressLabel: "계획 생성이 중단되었습니다",
+      }
+    : buildMainEventView(selectedAgent, currentTime);
 
   function handleResidentSelect(agentId: string): void {
     selectAgent(agentId);
@@ -166,13 +174,17 @@ function App() {
               : "DAY --"}
           </span>
         </div>
-        <div className={`connection-chip ${connectionStatus}`}>
+        <div
+          className={`connection-chip ${planningError ? "offline" : connectionStatus}`}
+        >
           <Radio size={13} />{" "}
-          {connectionStatus === "live"
-            ? `${schedulerRunning ? "하루 진행 중" : "일시 정지"} · 틱 ${revision}`
-            : connectionStatus === "connecting"
-              ? "연결 중"
-              : "오프라인"}
+          {planningError
+            ? "일정 오류"
+            : connectionStatus === "live"
+              ? `${schedulerRunning ? "하루 진행 중" : "일시 정지"} · 틱 ${revision}`
+              : connectionStatus === "connecting"
+                ? "연결 중"
+                : "오프라인"}
         </div>
         <a className="dashboard-link" href="/dashboard">
           <BrainCircuit size={13} /> DASHBOARD
@@ -233,7 +245,9 @@ function App() {
                     )}
                   </i>
                 </div>
-                <p>{residentPlanLabel(agent)}</p>
+                <p>
+                  {planningError ? "일정 생성 실패" : residentPlanLabel(agent)}
+                </p>
                 <div className="destination">
                   <MapPin size={11} />{" "}
                   {residentDestinationLabel(agent, connectionStatus)}

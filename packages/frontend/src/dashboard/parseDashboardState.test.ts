@@ -11,6 +11,7 @@ const fixture = {
     cognitive_active: false,
     effective_time_step_seconds: 300,
     cognitive_runtime_error: null,
+    planning_error: null,
   },
   agents: [
     {
