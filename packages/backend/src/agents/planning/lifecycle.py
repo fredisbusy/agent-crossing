@@ -299,7 +299,12 @@ class PlanningCoordinator:
                 )
             state.minute_parent_key = hourly_key
             state.last_replan_reason = "active_hour_changed"
-            active_minute = _active_or_next(state.minute_items, now)
+            active_minute = _require_active(
+                state.minute_items,
+                now,
+                agent_name=agent.name,
+                plan_level="minute",
+            )
 
         return _state_snapshot(agent=agent, state=state, now=now)
 
@@ -352,9 +357,15 @@ def _snapshot(
 def _state_snapshot(
     *, agent: LifeAgent, state: _AgentPlanState, now: datetime.datetime
 ) -> AgentPlanSnapshot:
-    active_day = _active_or_next(state.day_items, now)
-    active_hourly = _active_or_next(state.hourly_items, now)
-    active_minute = _active_or_next(state.minute_items, now)
+    active_day = _require_active(
+        state.day_items, now, agent_name=agent.name, plan_level="day"
+    )
+    active_hourly = _require_active(
+        state.hourly_items, now, agent_name=agent.name, plan_level="hourly"
+    )
+    active_minute = _require_active(
+        state.minute_items, now, agent_name=agent.name, plan_level="minute"
+    )
     agent.profile.extended.current_plan_context = [
         active_minute.action_content,
         active_hourly.action_content,
@@ -390,18 +401,6 @@ def _require_active(
             f"{agent_name}: {plan_level} plan does not cover the current world time"
         )
     return active
-
-
-def _active_or_next(items: list[PlanItemT], now: datetime.datetime) -> PlanItemT:
-    active = _active_or_none(items, now)
-    if active is not None:
-        return active
-    future = next((item for item in items if item.start_time > now), None)
-    if future is not None:
-        return future
-    if not items:
-        raise ValueError("plan items must not be empty")
-    return items[-1]
 
 
 def _children_within(

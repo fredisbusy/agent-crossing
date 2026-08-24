@@ -51,7 +51,7 @@ def test_generate_uses_litellm_completion_shape(monkeypatch) -> None:
     assert captured["temperature"] == 0.3
     assert captured["top_p"] == 0.8
     assert captured["max_tokens"] == 60
-    assert captured["reasoning_effort"] == "low"
+    assert captured["reasoning_effort"] == "none"
     assert captured["drop_params"] is True
     assert captured["repeat_penalty"] == 1.2
     assert captured["presence_penalty"] == 0.4
@@ -107,6 +107,24 @@ def test_generate_omits_timeout_when_local_model_has_no_deadline(monkeypatch) ->
 
     assert client.generate(prompt="Take the time needed") == "done"
     assert "timeout" not in captured
+
+
+def test_generate_keeps_low_reasoning_for_unstructured_qwen_output(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"choices": [{"message": {"content": "done"}}]}
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LiteLlmClient(
+        timeout_seconds=None,
+        default_generate_model="ollama_chat/qwen3.8:27b-mlx",
+        default_embedding_model="ollama/bge-m3",
+    )
+
+    assert client.generate(prompt="Think about this") == "done"
+    assert captured["reasoning_effort"] == "low"
 
 
 def test_embed_reads_litellm_embedding_vector(monkeypatch) -> None:

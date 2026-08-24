@@ -176,6 +176,7 @@ Backend 레이어 책임:
 - day/hourly/minute plan 모두 초 단위 없이 minute precision 사용
 - day/hourly plan은 exact-hour 정렬을 강제하지 않으며 `5:30 pm` 같은 자연스러운 broad-strokes 시간을 허용
 - minute plan은 `end_time - start_time`이 5~15분 범위를 만족해야 함
+- active day/hourly/minute 항목은 모두 현재 world clock을 포함해야 하며, 미래 항목을 현재 항목처럼 선택하지 않는다
 - day plan만 하루 전체를 미리 생성하고, hourly/minute plan은 near future만 just-in-time으로 재귀 분해한다
 - hourly plan은 현재 시점의 active day-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다
 - minute plan은 현재 시점의 active hourly-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다
@@ -189,6 +190,7 @@ Backend 레이어 책임:
 - 서비스 시작과 active parent 전환 시 필요한 계획 계층이 준비될 때까지 world clock을 진행하지 않는다.
 - 계획 생성·파싱·장소/시간 검증이 실패하면 scheduler를 중단하고 `planning_error`를 WebSocket과 dashboard에 노출한다.
 - 로컬 27B planner 호출은 생성 시간 제한을 두지 않고 완료될 때까지 기다린다. 연결·파싱·검증 실패는 fallback 없이 `planning_error`로 노출한다.
+- 로컬 Qwen의 structured JSON 생성은 thinking을 끄고 출력 토큰을 최종 JSON 본문에 사용한다.
 - day plan은 날짜가 바뀔 때 한 번 선택하고, hourly/minute plan은 active parent가 바뀔 때 JIT 생성한다.
 - active minute plan의 canonical `location`과 `action_content`가 공간 runtime의 목적지와 현재 행동에 직접 반영된다.
 - 두 agent가 같은 canonical 목적지에서 인접했을 때만 대화 세션을 열고, 종료 뒤 30분 동안 재조우 대화를 억제한다.

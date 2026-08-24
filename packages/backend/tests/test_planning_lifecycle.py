@@ -167,3 +167,36 @@ def test_invalid_generated_day_plan_raises_instead_of_installing_fallback() -> N
         PlanningCoordinator().bootstrap(
             agent=agent, now=datetime.datetime(2026, 8, 24, 6, 5)
         )
+
+
+def test_future_minute_plan_raises_instead_of_resetting_progress_to_zero() -> None:
+    planner = FakePlanner()
+
+    def future_minute_plan(*, agent_name, current_time, hourly_plan_item):
+        _ = agent_name, current_time
+        return [
+            MinutePlanItem(
+                start_time=hourly_plan_item.start_time + datetime.timedelta(minutes=30),
+                end_time=hourly_plan_item.start_time + datetime.timedelta(minutes=40),
+                location=hourly_plan_item.location,
+                action_content="아직 시작하지 않은 다음 일정을 수행한다.",
+            )
+        ]
+
+    planner.generate_minute_plan = future_minute_plan
+    agent = FakeAgent(
+        identity=AgentIdentity(id="jiho", name="Jiho Park", age=29, traits=["차분함"]),
+        profile=AgentProfile(
+            fixed=FixedPersona(identity_stable_set=[]),
+            extended=ExtendedPersona(lifestyle_and_routine=[], current_plan_context=[]),
+        ),
+        brain=FakeBrain(planner=planner),
+    )
+
+    with pytest.raises(
+        PlanningGenerationError,
+        match="minute plan does not cover the current world time",
+    ):
+        PlanningCoordinator().bootstrap(
+            agent=agent, now=datetime.datetime(2026, 8, 24, 6, 5)
+        )
