@@ -9,8 +9,19 @@ import {
   type TiledObject,
 } from "../map/tiled";
 import { useGameStore } from "../stores/game.store";
+import {
+  createIndoorResidentView,
+  drawDollhouseHome,
+  type DollhouseHomeView,
+  type IndoorResidentView,
+} from "./DollhouseHome";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 import { ServerGridMovement } from "./gridMovement";
+import {
+  homeActionLabel,
+  isAgentAtHome,
+  resolveHomeRoom,
+} from "./homeInterior";
 
 const WORLD_WIDTH = townMap.width * townMap.tilewidth;
 const WORLD_HEIGHT = townMap.height * townMap.tileheight;
@@ -101,6 +112,8 @@ export class MainScene extends Phaser.Scene {
   declare gridEngine: GridEngine;
 
   private readonly agentViews = new Map<string, AgentView>();
+  private readonly homeViews = new Map<string, DollhouseHomeView>();
+  private readonly indoorAgentViews = new Map<string, IndoorResidentView>();
   private gridMovement?: ServerGridMovement;
   private unsubscribeStore?: () => void;
   private followedAgentId = "Jiho";
@@ -127,13 +140,22 @@ export class MainScene extends Phaser.Scene {
     this.drawWorldTitle();
     this.configureCamera();
 
-    this.unsubscribeStore = useGameStore.subscribe((state) =>
+    const unsubscribeStore = useGameStore.subscribe((state) =>
       this.applyAgentStates(state.agents),
     );
+    this.unsubscribeStore = unsubscribeStore;
     this.applyAgentStates(useGameStore.getState().agents);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () =>
-      this.unsubscribeStore?.(),
+    const cleanupStoreSubscription = () => {
+      unsubscribeStore();
+      if (this.unsubscribeStore === unsubscribeStore) {
+        this.unsubscribeStore = undefined;
+      }
+    };
+    this.events.once(
+      Phaser.Scenes.Events.SHUTDOWN,
+      cleanupStoreSubscription,
     );
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanupStoreSubscription);
   }
 
   update(_time: number, delta: number): void {
@@ -184,6 +206,17 @@ export class MainScene extends Phaser.Scene {
     for (const location of getLayer("locations")) {
       const kind = getProperty(location, "kind", "building");
       if (kind === "plaza" || kind === "park") continue;
+      if (kind === "home") {
+        this.homeViews.set(
+          location.name,
+          drawDollhouseHome(
+            this,
+            location,
+            parseColor(getProperty(location, "color"), 0xd58c68),
+          ),
+        );
+        continue;
+      }
       this.drawPixelBuilding(location, kind);
     }
   }
@@ -428,6 +461,9 @@ export class MainScene extends Phaser.Scene {
         bubble,
         nameplate,
       });
+      const indoorView = createIndoorResidentView(this, spawn.name, color);
+      indoorView.container.on("pointerdown", () => this.followAgent(id));
+      this.indoorAgentViews.set(id, indoorView);
     }
   }
 
@@ -487,12 +523,41 @@ export class MainScene extends Phaser.Scene {
   }
 
   private applyAgentStates(states: Record<string, SpatialAgentState>): void {
+    for (const indoorView of this.indoorAgentViews.values()) {
+      indoorView.container.setVisible(false);
+    }
+    const roomOccupancy = new Map<string, number>();
     for (const [id, state] of Object.entries(states)) {
       const characterId = this.agentViews.has(id)
         ? id
         : state.name.split(" ")[0];
       const view = this.agentViews.get(characterId);
       if (!view) continue;
+      const home = [...this.homeViews.values()].find((candidate) =>
+        isAgentAtHome(state, candidate.name),
+      );
+      const indoorView = this.indoorAgentViews.get(characterId);
+      view.container.setVisible(home === undefined);
+      if (home && indoorView) {
+        const room = resolveHomeRoom(state.current_action, state.plan);
+        const occupancyKey = `${home.name}:${room}`;
+        const occupancy = roomOccupancy.get(occupancyKey) ?? 0;
+        roomOccupancy.set(occupancyKey, occupancy + 1);
+        const position = home.roomPositions[room];
+        indoorView.container
+          .setPosition(position.x + occupancy * 18, position.y)
+          .setDepth(home.depth + 12 + occupancy)
+          .setVisible(true);
+        indoorView.bubble.setText(homeActionLabel(state));
+        if (this.followedAgentId === characterId) {
+          this.cameras.main.startFollow(
+            indoorView.container,
+            true,
+            0.12,
+            0.12,
+          );
+        }
+      }
       const transition = this.gridMovement?.sync(
         characterId,
         state.tile_position,
@@ -555,7 +620,11 @@ export class MainScene extends Phaser.Scene {
     const view = this.agentViews.get(id);
     if (!view) return;
     this.followedAgentId = id;
-    this.cameras.main.startFollow(view.container, true, 0.12, 0.12);
+    const indoorView = this.indoorAgentViews.get(id);
+    const target = indoorView?.container.visible
+      ? indoorView.container
+      : view.container;
+    this.cameras.main.startFollow(target, true, 0.12, 0.12);
     for (const [agentId, candidate] of this.agentViews)
       candidate.nameplate.setBackgroundColor(
         agentId === id ? "#a24e53" : "#263e32",
