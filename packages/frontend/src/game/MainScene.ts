@@ -440,6 +440,28 @@ export class MainScene extends Phaser.Scene {
       tileWidth: TILE_SIZE,
       tileHeight: TILE_SIZE,
     });
+    const navigationTileset = navigationMap.addTilesetImage(
+      "navigation",
+      TILE.grass,
+      TILE_SIZE,
+      TILE_SIZE,
+      0,
+      0,
+      0,
+    );
+    if (!navigationTileset) {
+      throw new Error("Unable to create Grid Engine navigation tileset");
+    }
+    const navigationLayer = navigationMap.createLayer(
+      navigationMap.layers[0].name,
+      navigationTileset,
+      0,
+      0,
+    );
+    if (!navigationLayer) {
+      throw new Error("Unable to create Grid Engine navigation layer");
+    }
+    navigationLayer.setVisible(false);
     this.gridEngine.create(navigationMap, {
       numberOfDirections: NumberOfDirections.FOUR,
       characters: getLayer("spawns").flatMap((spawn) => {
