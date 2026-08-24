@@ -16,7 +16,7 @@ export interface NormalizedHomeRoom {
 export const HOME_ROOMS: readonly NormalizedHomeRoom[] = [
   {
     id: "bedroom",
-    label: "BED",
+    label: "침실",
     x: 0,
     y: 0,
     width: 0.48,
@@ -26,7 +26,7 @@ export const HOME_ROOMS: readonly NormalizedHomeRoom[] = [
   },
   {
     id: "kitchen",
-    label: "KITCHEN",
+    label: "주방",
     x: 0.48,
     y: 0,
     width: 0.52,
@@ -36,7 +36,7 @@ export const HOME_ROOMS: readonly NormalizedHomeRoom[] = [
   },
   {
     id: "common",
-    label: "COMMON",
+    label: "거실",
     x: 0,
     y: 0.52,
     width: 0.66,
@@ -46,7 +46,7 @@ export const HOME_ROOMS: readonly NormalizedHomeRoom[] = [
   },
   {
     id: "bathroom",
-    label: "BATH",
+    label: "욕실",
     x: 0.66,
     y: 0.52,
     width: 0.34,
@@ -138,6 +138,6 @@ export function isAgentAtHome(
 
 export function homeActionLabel(agent: SpatialAgentState): string {
   const movementAction = agent.current_action.replace(/^[^:]+:/, "").trim();
-  const detail = agent.plan.trim() || movementAction || "Resting at home";
+  const detail = agent.plan.trim() || movementAction || "집에서 쉬는 중";
   return detail.length > 42 ? `${detail.slice(0, 39)}...` : detail;
 }

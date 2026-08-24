@@ -62,14 +62,14 @@ function App() {
   const displayedAgents = mapSpawns.map((spawn) => {
     const id = getProperty(spawn, "agent_id", spawn.name);
     return (
-      liveAgents[id] ?? {
+      liveAgents[id] ?? liveAgents[id.toLocaleLowerCase()] ?? {
         agent_id: id,
         name: spawn.name,
         tile_position: { x: spawn.x / 32, y: spawn.y / 32 },
         position: { x: spawn.x, y: spawn.y },
         destination: null,
-        current_action: "waiting_for_world",
-        plan: "Connecting to the autonomous world…",
+        current_action: "세계를 기다리는 중",
+        plan: "자율 세계에 연결하는 중…",
         route_remaining: 0,
       }
     );
@@ -95,15 +95,17 @@ function App() {
         <div className={`connection-chip ${connectionStatus}`}>
           <Radio size={13} />{" "}
           {connectionStatus === "live"
-            ? `WORLD TICK ${revision}`
-            : connectionStatus.toUpperCase()}
+            ? `세계 틱 ${revision}`
+            : connectionStatus === "connecting"
+              ? "연결 중"
+              : "오프라인"}
         </div>
       </header>
 
       <button
         className="inspector-toggle"
         onClick={() => setInspectorOpen((open) => !open)}
-        aria-label="Toggle resident inspector"
+        aria-label="주민 관찰 패널 열기 또는 닫기"
       >
         {inspectorOpen ? <X size={18} /> : <Users size={18} />}
       </button>
@@ -112,7 +114,7 @@ function App() {
         <div className="inspector-title">
           <div>
             <span className="pixel-kicker">
-              <Eye size={12} /> LIVE RESIDENTS
+              <Eye size={12} /> 실시간 주민
             </span>
             <h2>마을 관찰자</h2>
           </div>
@@ -130,14 +132,14 @@ function App() {
                   <strong>{agent.name}</strong>
                   <i>
                     {agent.current_action.includes("moving")
-                      ? "WALKING"
-                      : "ACTIVE"}
+                      ? "이동 중"
+                      : "활동 중"}
                   </i>
                 </div>
                 <p>{agent.plan.split("|")[0]}</p>
                 <div className="destination">
                   <MapPin size={11} />{" "}
-                  {agent.destination?.split(" > ").at(-1) ?? "Town Square"}
+                  {agent.destination?.split(" > ").at(-1) ?? "마을 광장"}
                 </div>
               </div>
               <ChevronRight size={16} className="card-chevron" />
@@ -146,8 +148,8 @@ function App() {
         </div>
 
         <section className="seed-event">
-          <span className="pixel-kicker">TODAY'S SEED EVENT</span>
-          <h3>Moonflower picnic</h3>
+          <span className="pixel-kicker">오늘의 씨앗 사건</span>
+          <h3>달맞이꽃 소풍</h3>
           <p>
             광장 게시판에서 시작된 소식이 주민들의 기억과 계획을 어떻게 바꾸는지
             관찰합니다.
@@ -155,7 +157,7 @@ function App() {
           <div className="event-progress">
             <span />
           </div>
-          <small>INFORMATION SPREAD · 1 / 2</small>
+          <small>정보 확산 · 1 / 2</small>
         </section>
       </aside>
 
