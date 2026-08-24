@@ -11,6 +11,8 @@ from api.main import (
     app,
     get_world_spatial_state,
     get_world_state,
+    on_shutdown,
+    on_startup,
     post_world_spatial_step,
     post_world_step,
     post_world_tick_start,
@@ -81,6 +83,25 @@ def test_require_runtime_raises_when_unavailable() -> None:
 
     with pytest.raises(HTTPException):
         _ = _require_runtime()
+
+
+@pytest.mark.anyio
+async def test_startup_keeps_spatial_world_active_when_cognitive_runtime_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_database_startup() -> None:
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr("api.main.init_db", fail_database_startup)
+
+    await on_startup()
+    try:
+        assert app.state.world_runtime is None
+        assert app.state.cognitive_runtime_error == "database unavailable"
+        assert app.state.spatial_runtime.snapshot().agents
+        assert app.state.spatial_stream.running is True
+    finally:
+        await on_shutdown()
 
 
 @pytest.mark.anyio

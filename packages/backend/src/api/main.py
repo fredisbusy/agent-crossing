@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import cast
 
@@ -37,11 +38,11 @@ from world.stream import SpatialWorldStream
 from world.world_map import MapBounds, MapPoint, WorldMap, load_world_map
 
 app = FastAPI(title="Agent Crossing API")
+logger = logging.getLogger(__name__)
 
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    init_db()
     persona_dir = Path(__file__).resolve().parents[2] / "persona"
     app.state.persona_loader = PersonaLoader(persona_dir)
     app.state.agent_personas = app.state.persona_loader.load_all()
@@ -60,18 +61,26 @@ async def on_startup() -> None:
     await app.state.spatial_stream.start()
     persona_names = [persona.agent.id for persona in app.state.agent_personas]
     app.state.world_runtime = None
-    if len(persona_names) >= 2:
-        app.state.world_runtime = build_world_runtime(
-            config=WorldRuntimeConfig(
-                agent_persona_names=persona_names[:2],
-                base_url=LLM_BASE_URL,
-                api_key=LLM_API_KEY or GOOGLE_AI_STUDIO_API_KEY,
-                llm_model=LLM_MODEL,
-                embedding_model=EMBEDDING_MODEL,
-                timeout_seconds=LLM_TIMEOUT_SECONDS,
-                persona_dir=str(persona_dir),
-                tick_interval_seconds=WORLD_TICK_INTERVAL_SECONDS,
+    app.state.cognitive_runtime_error = None
+    try:
+        init_db()
+        if len(persona_names) >= 2:
+            app.state.world_runtime = build_world_runtime(
+                config=WorldRuntimeConfig(
+                    agent_persona_names=persona_names[:2],
+                    base_url=LLM_BASE_URL,
+                    api_key=LLM_API_KEY or GOOGLE_AI_STUDIO_API_KEY,
+                    llm_model=LLM_MODEL,
+                    embedding_model=EMBEDDING_MODEL,
+                    timeout_seconds=LLM_TIMEOUT_SECONDS,
+                    persona_dir=str(persona_dir),
+                    tick_interval_seconds=WORLD_TICK_INTERVAL_SECONDS,
+                )
             )
+    except Exception as error:
+        app.state.cognitive_runtime_error = str(error)
+        logger.exception(
+            "Cognitive runtime is unavailable; spatial world remains active"
         )
 
 
