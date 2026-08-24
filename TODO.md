@@ -238,6 +238,14 @@
 
 ### 4-B. Frontend 시각화
 
+- [x] `P2` 논문 데모 형태의 탑다운 픽셀 월드 렌더러를 구현한다
+  - Depends on: canonical Tiled semantic map
+  - DoD:
+    - [x] 32px 타일 단위의 지형/길/광장/물 타일을 렌더링한다
+    - [x] 건물, 장식, 상호작용 물체, agent를 pixel-art 규칙으로 표시한다
+    - [x] 전체 지도 축소 대신 agent 추적/드래그/줌 카메라를 제공한다
+    - [x] WebSocket spatial snapshot이 agent 이동과 HUD 상태에 반영된다
+
 - [ ] `P2` Tiled map + collision을 연결한다
   - Depends on: WebSocket state broadcast 구현
   - DoD:

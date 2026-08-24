@@ -197,6 +197,10 @@ react 정책:
   독립 object layer로 관리한다.
 - 프런트엔드는 맵을 렌더링하지만 위치 유효성, 충돌, 경로 탐색 판정은
   backend world 계층이 소유한다.
+- 프런트엔드는 semantic object layer를 32px pixel tile grid로 투영하고,
+  전체 월드 축소가 아닌 local follow camera를 기본 관찰 시점으로 사용한다.
+- pixel texture는 nearest-neighbor로 렌더링하며 terrain/building/decor/agent의
+  depth는 tile y 좌표를 기준으로 정렬한다.
 - interactable은 `location_path`와 쉼표로 구분된 `affordances`를 가져야 한다.
 
 월드 API:

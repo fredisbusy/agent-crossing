@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { SpatialAgentState } from "@agent-crossing/shared";
 import {
   getLayer,
   getProperty,
@@ -7,462 +8,490 @@ import {
   type TiledObject,
 } from "../map/tiled";
 import { useGameStore } from "../stores/game.store";
+import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 
-const FONT_FAMILY = '"Nunito", "Apple SD Gothic Neo", sans-serif';
 const WORLD_WIDTH = townMap.width * townMap.tilewidth;
 const WORLD_HEIGHT = townMap.height * townMap.tileheight;
+const PIXEL_FONT = '"Courier New", monospace';
+
+interface AgentView {
+  container: Phaser.GameObjects.Container;
+  body: Phaser.GameObjects.Rectangle;
+  leftLeg: Phaser.GameObjects.Rectangle;
+  rightLeg: Phaser.GameObjects.Rectangle;
+  bubble: Phaser.GameObjects.Text;
+  nameplate: Phaser.GameObjects.Text;
+  lastX: number;
+  lastY: number;
+}
+
+function tileKeyAt(x: number, y: number): string {
+  const centerX = x * TILE_SIZE + TILE_SIZE / 2;
+  const centerY = y * TILE_SIZE + TILE_SIZE / 2;
+  const plaza = getLayer("locations").find(
+    (location) =>
+      getProperty(location, "kind") === "plaza" &&
+      contains(location, centerX, centerY),
+  );
+  if (plaza) return TILE.plaza;
+
+  const park = getLayer("locations").find(
+    (location) =>
+      getProperty(location, "kind") === "park" &&
+      contains(location, centerX, centerY),
+  );
+  const pond = getLayer("collision").find(
+    (collision) =>
+      collision.type === "water" && contains(collision, centerX, centerY),
+  );
+  if (pond) return TILE.water;
+  if (park) return (x + y) % 5 === 0 ? TILE.grassDark : TILE.park;
+  if (isPathTile(centerX, centerY)) return TILE.path;
+  return (x * 3 + y * 5) % 7 === 0 ? TILE.grassDark : TILE.grass;
+}
+
+function contains(object: TiledObject, x: number, y: number): boolean {
+  return (
+    x >= object.x &&
+    x < object.x + (object.width ?? 0) &&
+    y >= object.y &&
+    y < object.y + (object.height ?? 0)
+  );
+}
+
+function distanceToSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  if (dx === 0 && dy === 0) return Math.hypot(px - ax, py - ay);
+  const progress = Phaser.Math.Clamp(
+    ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy),
+    0,
+    1,
+  );
+  return Math.hypot(px - (ax + progress * dx), py - (ay + progress * dy));
+}
+
+function isPathTile(x: number, y: number): boolean {
+  return getLayer("paths").some((path) => {
+    const points = path.polyline ?? [];
+    return points.slice(1).some((point, index) => {
+      const previous = points[index];
+      return (
+        distanceToSegment(
+          x,
+          y,
+          path.x + previous.x,
+          path.y + previous.y,
+          path.x + point.x,
+          path.y + point.y,
+        ) <= 25
+      );
+    });
+  });
+}
 
 export class MainScene extends Phaser.Scene {
-  private readonly agentContainers = new Map<string, Phaser.GameObjects.Container>();
-  private readonly agentBubbles = new Map<string, Phaser.GameObjects.Text>();
-  private unsubscribeFromWorld: (() => void) | null = null;
+  private readonly agentViews = new Map<string, AgentView>();
+  private unsubscribeStore?: () => void;
+  private followedAgentId = "Jiho";
+  private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
+  private dragOrigin?: Phaser.Math.Vector2;
 
   constructor() {
     super("MainScene");
   }
 
-  create() {
-    this.cameras.main.setBackgroundColor("#a9cf91");
-    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  create(): void {
+    createPixelTextures(this);
+    this.cameras.main
+      .setBackgroundColor("#173b2b")
+      .setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    this.drawGround();
-    this.drawPaths();
-    this.drawLocations();
+    this.drawTileWorld();
+    this.drawBuildings();
     this.drawDecorations();
     this.drawInteractables();
     this.drawAgents();
-    this.connectLiveAgents();
-    this.addAtmosphere();
+    this.drawWorldTitle();
+    this.configureCamera();
 
-    this.scale.on("resize", () => this.fitCamera());
-    this.fitCamera();
+    this.unsubscribeStore = useGameStore.subscribe((state) =>
+      this.applyAgentStates(state.agents),
+    );
+    this.applyAgentStates(useGameStore.getState().agents);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () =>
+      this.unsubscribeStore?.(),
+    );
   }
 
-  private fitCamera(): void {
+  update(_time: number, delta: number): void {
+    if (!this.cursors) return;
     const camera = this.cameras.main;
-    const zoom = Math.min(
-      camera.width / WORLD_WIDTH,
-      camera.height / WORLD_HEIGHT,
-    );
-    camera.setZoom(zoom);
-    camera.centerOn(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
-  }
-
-  private drawGround(): void {
-    const graphics = this.add.graphics();
-    graphics.fillStyle(0xb8d89a, 1);
-    graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-
-    for (let y = 16; y < WORLD_HEIGHT; y += 32) {
-      for (let x = 16; x < WORLD_WIDTH; x += 32) {
-        const tone = (x / 32 + y / 32) % 3 === 0 ? 0xaed08f : 0xc0dda3;
-        graphics.fillStyle(tone, 0.18);
-        graphics.fillCircle(x + ((y / 32) % 2) * 5, y, 2);
-      }
+    const speed = (delta / camera.zoom) * 0.48;
+    let moved = false;
+    if (this.cursors.left.isDown) {
+      camera.scrollX -= speed;
+      moved = true;
     }
-
-    graphics.lineStyle(3, 0x7cae79, 0.4);
-    graphics.strokeRoundedRect(18, 18, WORLD_WIDTH - 36, WORLD_HEIGHT - 36, 30);
-  }
-
-  private drawPaths(): void {
-    const graphics = this.add.graphics();
-    for (const path of getLayer("paths")) {
-      if (!path.polyline || path.polyline.length < 2) {
-        continue;
-      }
-      const points = path.polyline.map(
-        (point) => new Phaser.Math.Vector2(path.x + point.x, path.y + point.y),
-      );
-      graphics.lineStyle(50, 0x8d785f, 0.14);
-      graphics.strokePoints(points, false, false);
-      graphics.lineStyle(42, 0xead8b6, 1);
-      graphics.strokePoints(points, false, false);
-      graphics.lineStyle(2, 0xf6ead0, 0.8);
-      graphics.strokePoints(points, false, false);
+    if (this.cursors.right.isDown) {
+      camera.scrollX += speed;
+      moved = true;
     }
-  }
-
-  private drawLocations(): void {
-    for (const location of getLayer("locations")) {
-      const kind = getProperty(location, "kind", "building");
-      if (kind === "plaza") {
-        this.drawPlaza(location);
-      } else if (kind === "park") {
-        this.drawPark(location);
-      } else {
-        this.drawBuilding(location, kind);
-      }
+    if (this.cursors.up.isDown) {
+      camera.scrollY -= speed;
+      moved = true;
     }
-  }
-
-  private drawPlaza(location: TiledObject): void {
-    const width = location.width ?? 0;
-    const height = location.height ?? 0;
-    const graphics = this.add.graphics();
-    graphics.fillStyle(0x7b6d5f, 0.15);
-    graphics.fillRoundedRect(
-      location.x + 8,
-      location.y + 12,
-      width,
-      height,
-      36,
-    );
-    graphics.fillStyle(0xefd9ae, 1);
-    graphics.fillRoundedRect(location.x, location.y, width, height, 36);
-    graphics.lineStyle(3, 0xf9e8c8, 0.9);
-    graphics.strokeRoundedRect(location.x, location.y, width, height, 36);
-
-    for (let y = location.y + 26; y < location.y + height - 16; y += 26) {
-      for (let x = location.x + 25; x < location.x + width - 16; x += 28) {
-        graphics.fillStyle(0xd9bd8c, 0.42);
-        graphics.fillCircle(x + ((y / 26) % 2) * 8, y, 2.2);
-      }
+    if (this.cursors.down.isDown) {
+      camera.scrollY += speed;
+      moved = true;
     }
-    this.addLocationLabel(location, "Town Square", "the heart of Briar Cove");
+    if (moved) this.stopFollowing();
   }
 
-  private drawPark(location: TiledObject): void {
-    const width = location.width ?? 0;
-    const height = location.height ?? 0;
-    const graphics = this.add.graphics();
-    graphics.fillStyle(0x6b9f70, 0.22);
-    graphics.fillRoundedRect(location.x + 7, location.y + 9, width, height, 42);
-    graphics.fillStyle(0x9bc78d, 1);
-    graphics.fillRoundedRect(location.x, location.y, width, height, 42);
-    graphics.lineStyle(3, 0xd2e7b5, 0.75);
-    graphics.strokeRoundedRect(location.x, location.y, width, height, 42);
-
-    graphics.fillStyle(0x6facc5, 0.32);
-    graphics.fillEllipse(location.x + 238, location.y + 127, 164, 126);
-    graphics.fillStyle(0x87c8dc, 1);
-    graphics.fillEllipse(location.x + 232, location.y + 120, 154, 116);
-    graphics.lineStyle(3, 0xc6edf0, 0.85);
-    graphics.strokeEllipse(location.x + 232, location.y + 120, 140, 100);
-    this.addLocationLabel(
-      location,
-      "Moonflower Park",
-      "quiet paths & willow shade",
-    );
-  }
-
-  private drawBuilding(location: TiledObject, kind: string): void {
-    const width = location.width ?? 0;
-    const height = location.height ?? 0;
-    const baseColor = parseColor(getProperty(location, "color"), 0xd5a179);
-    const graphics = this.add.graphics();
-    const bodyX = location.x + 16;
-    const bodyY = location.y + 45;
-    const bodyWidth = width - 32;
-    const bodyHeight = height - 62;
-
-    graphics.fillStyle(0x3e5140, 0.16);
-    graphics.fillRoundedRect(bodyX + 8, bodyY + 12, bodyWidth, bodyHeight, 18);
-    graphics.fillStyle(baseColor, 1);
-    graphics.fillRoundedRect(bodyX, bodyY, bodyWidth, bodyHeight, 18);
-    graphics.fillStyle(0x6a5147, 1);
-    graphics.fillTriangle(
-      location.x + 6,
-      bodyY + 16,
-      location.x + width - 6,
-      bodyY + 16,
-      location.x + width / 2,
-      location.y + 4,
-    );
-    graphics.fillStyle(0x80645a, 1);
-    graphics.fillTriangle(
-      location.x + 18,
-      bodyY + 13,
-      location.x + width - 18,
-      bodyY + 13,
-      location.x + width / 2,
-      location.y + 16,
-    );
-
-    const doorX = location.x + width / 2 - 15;
-    graphics.fillStyle(0x5c463f, 1);
-    graphics.fillRoundedRect(doorX, location.y + height - 70, 30, 54, 8);
-    graphics.fillStyle(0xf7d98a, 1);
-    graphics.fillCircle(doorX + 23, location.y + height - 43, 2.5);
-
-    const windowY = location.y + height - 78;
-    for (const windowX of [location.x + 42, location.x + width - 66]) {
-      graphics.fillStyle(0xf6e7b6, 1);
-      graphics.fillRoundedRect(windowX, windowY, 28, 25, 6);
-      graphics.lineStyle(2, 0xffffff, 0.55);
-      graphics.lineBetween(
-        windowX + 14,
-        windowY + 2,
-        windowX + 14,
-        windowY + 23,
-      );
-    }
-
-    if (kind === "cafe" || kind === "market") {
-      graphics.fillStyle(0xf7ede0, 1);
-      graphics.fillRoundedRect(location.x + 48, bodyY + 20, width - 96, 27, 8);
-      for (let x = location.x + 52; x < location.x + width - 50; x += 28) {
-        graphics.fillStyle(kind === "cafe" ? 0xc96e6e : 0x6b9c83, 1);
-        graphics.fillTriangle(
-          x,
-          bodyY + 45,
-          x + 14,
-          bodyY + 20,
-          x + 28,
-          bodyY + 45,
+  private drawTileWorld(): void {
+    const ground = this.add.container(0, 0).setDepth(0);
+    for (let y = 0; y < townMap.height; y += 1) {
+      for (let x = 0; x < townMap.width; x += 1) {
+        ground.add(
+          this.add
+            .image(x * TILE_SIZE, y * TILE_SIZE, tileKeyAt(x, y))
+            .setOrigin(0),
         );
       }
     }
 
-    const subtitle =
-      kind === "cafe"
-        ? "coffee, gossip & warm bread"
-        : kind === "library"
-          ? "stories, study & reflection"
-          : kind === "market"
-            ? "produce, errands & exchange"
-            : "a cozy private home";
-    this.addLocationLabel(location, location.name, subtitle);
+    const border = this.add.graphics().setDepth(2);
+    border.lineStyle(8, 0x245f40, 1);
+    border.strokeRect(4, 4, WORLD_WIDTH - 8, WORLD_HEIGHT - 8);
   }
 
-  private addLocationLabel(
-    location: TiledObject,
-    title: string,
-    subtitle: string,
-  ): void {
+  private drawBuildings(): void {
+    for (const location of getLayer("locations")) {
+      const kind = getProperty(location, "kind", "building");
+      if (kind === "plaza" || kind === "park") continue;
+      this.drawPixelBuilding(location, kind);
+    }
+  }
+
+  private drawPixelBuilding(location: TiledObject, kind: string): void {
     const width = location.width ?? 0;
-    const titleText = this.add
-      .text(location.x + width / 2, location.y - 17, title, {
-        fontFamily: FONT_FAMILY,
-        fontSize: "15px",
-        fontStyle: "bold",
-        color: "#304334",
-        backgroundColor: "rgba(250, 248, 236, 0.92)",
-        padding: { x: 10, y: 5 },
-      })
-      .setOrigin(0.5)
-      .setDepth(20);
-    titleText.setShadow(0, 2, "rgba(34, 54, 37, 0.14)", 3);
-    this.add
+    const height = location.height ?? 0;
+    const bodyColor = parseColor(getProperty(location, "color"), 0xd58c68);
+    const graphics = this.add.graphics().setDepth(location.y + height - 8);
+    const left = location.x + 16;
+    const right = location.x + width - 16;
+    const roofTop = location.y + 12;
+    const bodyTop = location.y + 70;
+    const bottom = location.y + height - 12;
+
+    graphics.fillStyle(0x294c35, 0.32);
+    graphics.fillRect(left + 8, bodyTop + 12, right - left, bottom - bodyTop);
+    graphics.fillStyle(bodyColor, 1);
+    graphics.fillRect(left, bodyTop, right - left, bottom - bodyTop);
+    graphics.fillStyle(0x694337, 1);
+    for (let step = 0; step < 7; step += 1) {
+      graphics.fillRect(
+        left + step * 8,
+        roofTop + step * 8,
+        right - left - step * 16,
+        9,
+      );
+    }
+    graphics.fillStyle(0x8c5b45, 1);
+    graphics.fillRect(left + 12, bodyTop - 8, right - left - 24, 9);
+    graphics.fillStyle(0x54372f, 1);
+    graphics.fillRect(location.x + width / 2 - 13, bottom - 45, 26, 45);
+    graphics.fillStyle(0xf8cf68, 1);
+    graphics.fillRect(location.x + width / 2 + 7, bottom - 23, 4, 4);
+
+    const windowColor = kind === "library" ? 0xa9dcf0 : 0xffdfa0;
+    for (const windowX of [left + 27, right - 51]) {
+      graphics.fillStyle(0xf3efe0, 1);
+      graphics.fillRect(windowX - 3, bodyTop + 25, 30, 26);
+      graphics.fillStyle(windowColor, 1);
+      graphics.fillRect(windowX, bodyTop + 28, 24, 20);
+      graphics.fillStyle(0xd3b46e, 1);
+      graphics.fillRect(windowX + 10, bodyTop + 28, 3, 20);
+      graphics.fillRect(windowX, bodyTop + 36, 24, 3);
+    }
+
+    if (kind === "cafe" || kind === "market") {
+      graphics.fillStyle(0xf4e8c8, 1);
+      graphics.fillRect(left + 28, bodyTop + 4, right - left - 56, 18);
+      const awningColor = kind === "cafe" ? 0xb94d4d : 0x367f61;
+      for (let x = left + 30; x < right - 31; x += 16) {
+        graphics.fillStyle(awningColor, 1);
+        graphics.fillRect(x, bodyTop + 5, 8, 17);
+      }
+    }
+
+    const sign = this.add
       .text(
         location.x + width / 2,
-        location.y + (location.height ?? 0) + 15,
-        subtitle,
+        location.y - 4,
+        location.name.toUpperCase(),
         {
-          fontFamily: FONT_FAMILY,
+          fontFamily: PIXEL_FONT,
           fontSize: "10px",
-          color: "#546555",
+          fontStyle: "bold",
+          color: "#fff8d9",
+          backgroundColor: "#253e31",
+          padding: { x: 6, y: 3 },
         },
       )
       .setOrigin(0.5)
-      .setDepth(20);
+      .setDepth(location.y + height + 1)
+      .setResolution(1);
+    sign.setShadow(2, 2, "#15271f", 0, false, true);
   }
 
   private drawDecorations(): void {
     for (const decoration of getLayer("decorations")) {
       if (decoration.type === "tree") {
-        this.drawTree(decoration.x, decoration.y);
+        this.add
+          .image(decoration.x, decoration.y, "tree")
+          .setOrigin(0.5, 0.72)
+          .setDepth(decoration.y + 28);
       } else if (decoration.type === "flowers") {
-        this.drawFlowers(decoration.x, decoration.y);
+        this.add
+          .image(decoration.x - 16, decoration.y - 16, TILE.flowers)
+          .setOrigin(0)
+          .setDepth(4);
       } else if (decoration.type === "lamp") {
-        this.drawLamp(decoration.x, decoration.y);
+        this.add
+          .image(decoration.x, decoration.y, "lamp")
+          .setOrigin(0.5, 0.85)
+          .setDepth(decoration.y + 18);
       }
     }
-  }
-
-  private drawTree(x: number, y: number): void {
-    const graphics = this.add.graphics();
-    graphics.fillStyle(0x345c48, 0.14);
-    graphics.fillEllipse(x + 4, y + 28, 50, 16);
-    graphics.fillStyle(0x806047, 1);
-    graphics.fillRoundedRect(x - 5, y + 7, 10, 28, 5);
-    graphics.fillStyle(0x5c9667, 1);
-    graphics.fillCircle(x - 11, y, 20);
-    graphics.fillStyle(0x77ac76, 1);
-    graphics.fillCircle(x + 10, y - 5, 23);
-    graphics.fillStyle(0x94c486, 0.95);
-    graphics.fillCircle(x + 1, y - 19, 19);
-  }
-
-  private drawFlowers(x: number, y: number): void {
-    const graphics = this.add.graphics();
-    const colors = [0xf0a3b6, 0xf5d06f, 0xa693cf, 0xf6f0dc];
-    for (let index = 0; index < 8; index += 1) {
-      const angle = (Math.PI * 2 * index) / 8;
-      const flowerX = x + Math.cos(angle) * (10 + (index % 2) * 7);
-      const flowerY = y + Math.sin(angle) * 8;
-      graphics.fillStyle(colors[index % colors.length], 1);
-      graphics.fillCircle(flowerX, flowerY, 3.5);
-      graphics.fillStyle(0xfff0a8, 1);
-      graphics.fillCircle(flowerX, flowerY, 1.2);
-    }
-  }
-
-  private drawLamp(x: number, y: number): void {
-    const graphics = this.add.graphics();
-    graphics.fillStyle(0x435149, 1);
-    graphics.fillRoundedRect(x - 2, y - 4, 4, 27, 2);
-    graphics.fillStyle(0xffe89a, 0.22);
-    graphics.fillCircle(x, y - 6, 14);
-    graphics.fillStyle(0xffe59a, 1);
-    graphics.fillCircle(x, y - 7, 5);
   }
 
   private drawInteractables(): void {
     for (const item of getLayer("interactables")) {
-      if (item.type === "fountain") {
-        const graphics = this.add.graphics();
-        graphics.fillStyle(0x6f8e91, 0.22);
-        graphics.fillEllipse(item.x + 3, item.y + 9, 68, 35);
-        graphics.fillStyle(0xb9d8d5, 1);
-        graphics.fillEllipse(item.x, item.y, 66, 34);
-        graphics.fillStyle(0x78b8c8, 1);
-        graphics.fillEllipse(item.x, item.y - 2, 52, 23);
-        graphics.fillStyle(0xe3f4ed, 0.85);
-        graphics.fillCircle(item.x, item.y - 9, 7);
-      } else if (item.type === "notice_board") {
-        const graphics = this.add.graphics();
-        graphics.fillStyle(0x70503f, 1);
-        graphics.fillRoundedRect(item.x - 17, item.y - 21, 34, 27, 4);
-        graphics.fillStyle(0xf3deaa, 1);
-        graphics.fillRoundedRect(item.x - 12, item.y - 16, 24, 17, 2);
-        graphics.fillStyle(0x70503f, 1);
-        graphics.fillRect(item.x - 10, item.y + 5, 4, 16);
-        graphics.fillRect(item.x + 6, item.y + 5, 4, 16);
-      } else if (item.type === "bench") {
-        const graphics = this.add.graphics();
-        graphics.fillStyle(0x725545, 1);
-        graphics.fillRoundedRect(item.x - 20, item.y - 7, 40, 8, 3);
-        graphics.fillRoundedRect(item.x - 20, item.y + 4, 40, 7, 3);
-        graphics.fillRect(item.x - 15, item.y + 10, 4, 9);
-        graphics.fillRect(item.x + 11, item.y + 10, 4, 9);
-      }
+      if (item.type === "fountain") this.drawFountain(item);
+      if (item.type === "notice_board") this.drawNoticeBoard(item);
+      if (item.type === "bench") this.drawBench(item);
     }
+  }
+
+  private drawFountain(item: TiledObject): void {
+    const graphics = this.add.graphics().setDepth(item.y + 28);
+    graphics.fillStyle(0x315f68, 1);
+    graphics.fillRect(item.x - 39, item.y + 8, 78, 18);
+    graphics.fillStyle(0xa8d7d2, 1);
+    graphics.fillRect(item.x - 34, item.y, 68, 20);
+    graphics.fillStyle(0x4ca6c3, 1);
+    graphics.fillRect(item.x - 28, item.y + 3, 56, 12);
+    graphics.fillStyle(0xe0f7ea, 1);
+    graphics.fillRect(item.x - 4, item.y - 18, 8, 22);
+    graphics.fillStyle(0x7acadd, 1);
+    graphics.fillRect(item.x - 11, item.y - 12, 22, 5);
+  }
+
+  private drawNoticeBoard(item: TiledObject): void {
+    const graphics = this.add.graphics().setDepth(item.y + 24);
+    graphics.fillStyle(0x553728, 1);
+    graphics.fillRect(item.x - 21, item.y - 25, 42, 31);
+    graphics.fillStyle(0xdeb874, 1);
+    graphics.fillRect(item.x - 17, item.y - 21, 34, 23);
+    graphics.fillStyle(0xf3e5bd, 1);
+    graphics.fillRect(item.x - 10, item.y - 16, 14, 11);
+    graphics.fillStyle(0x553728, 1);
+    graphics.fillRect(item.x - 15, item.y + 4, 6, 22);
+    graphics.fillRect(item.x + 9, item.y + 4, 6, 22);
+  }
+
+  private drawBench(item: TiledObject): void {
+    const graphics = this.add.graphics().setDepth(item.y + 18);
+    graphics.fillStyle(0x66412f, 1);
+    graphics.fillRect(item.x - 24, item.y - 8, 48, 8);
+    graphics.fillRect(item.x - 24, item.y + 5, 48, 7);
+    graphics.fillStyle(0x3e332a, 1);
+    graphics.fillRect(item.x - 17, item.y + 11, 5, 10);
+    graphics.fillRect(item.x + 12, item.y + 11, 5, 10);
   }
 
   private drawAgents(): void {
     for (const spawn of getLayer("spawns")) {
-      const agentId = normalizeAgentId(
-        getProperty(spawn, "agent_id", spawn.name),
-      );
-      const color = parseColor(getProperty(spawn, "color"), 0x6b8fd6);
+      const id = getProperty(spawn, "agent_id", spawn.name);
+      const color = parseColor(getProperty(spawn, "color"), 0x6487d6);
       const container = this.add
         .container(spawn.x, spawn.y)
-        .setDepth(50 + spawn.y);
-      const shadow = this.add.ellipse(0, 15, 34, 13, 0x263d32, 0.18);
-      const body = this.add.circle(0, 0, 16, color);
-      body.setStrokeStyle(3, 0xf9f3df, 1);
-      const face = this.add.circle(0, -5, 9, 0xf4d4b2);
-      const hair = this.add.arc(0, -8, 9, 185, 355, false, 0x4d3d3a);
-      const eyeLeft = this.add.circle(-3, -4, 1.2, 0x343238);
-      const eyeRight = this.add.circle(3, -4, 1.2, 0x343238);
-      const name = this.add
-        .text(0, 29, spawn.name, {
-          fontFamily: FONT_FAMILY,
-          fontSize: "12px",
-          fontStyle: "bold",
-          color: "#34493a",
-          backgroundColor: "rgba(255,255,245,0.9)",
-          padding: { x: 7, y: 3 },
-        })
-        .setOrigin(0.5);
+        .setDepth(spawn.y + 40)
+        .setSize(24, 32)
+        .setInteractive();
+      const shadow = this.add.rectangle(0, 13, 22, 7, 0x183328, 0.35);
+      const leftLeg = this.add.rectangle(-5, 10, 6, 9, 0x41372f);
+      const rightLeg = this.add.rectangle(5, 10, 6, 9, 0x41372f);
+      const body = this.add.rectangle(0, 1, 20, 20, color);
+      const neck = this.add.rectangle(0, -9, 8, 5, 0xe8ba91);
+      const head = this.add.rectangle(0, -17, 17, 15, 0xf1c9a1);
+      const hair = this.add.rectangle(
+        0,
+        -23,
+        19,
+        7,
+        id === "Sujin" ? 0x4b2f2c : 0x34302d,
+      );
+      const fringe = this.add.rectangle(
+        -6,
+        -19,
+        5,
+        6,
+        id === "Sujin" ? 0x4b2f2c : 0x34302d,
+      );
+      const eyes = this.add.rectangle(0, -16, 10, 2, 0x3d3835);
       const bubble = this.add
-        .text(17, -25, spawn.name === "Jiho" ? "☕" : "📚", {
-          fontFamily: FONT_FAMILY,
-          fontSize: "14px",
-          backgroundColor: "rgba(255,255,255,0.94)",
-          padding: { x: 6, y: 4 },
+        .text(13, -38, id === "Jiho" ? "☕" : "📚", {
+          fontFamily: PIXEL_FONT,
+          fontSize: "12px",
+          backgroundColor: "#fffbed",
+          padding: { x: 4, y: 3 },
         })
-        .setOrigin(0.5);
+        .setOrigin(0.5)
+        .setVisible(false)
+        .setResolution(1);
+      const nameplate = this.add
+        .text(0, 28, spawn.name, {
+          fontFamily: PIXEL_FONT,
+          fontSize: "9px",
+          fontStyle: "bold",
+          color: "#fffbe8",
+          backgroundColor: "#263e32",
+          padding: { x: 4, y: 2 },
+        })
+        .setOrigin(0.5)
+        .setResolution(1);
       container.add([
         shadow,
+        leftLeg,
+        rightLeg,
         body,
-        face,
+        neck,
+        head,
         hair,
-        eyeLeft,
-        eyeRight,
-        name,
+        fringe,
+        eyes,
         bubble,
+        nameplate,
       ]);
-      this.agentContainers.set(agentId, container);
-      this.agentBubbles.set(agentId, bubble);
-    }
-  }
-
-  private connectLiveAgents(): void {
-    const renderSnapshot = (): void => {
-      const agents = useGameStore.getState().agents;
-      for (const [agentId, agent] of Object.entries(agents)) {
-        const container = this.agentContainers.get(normalizeAgentId(agentId));
-        if (!container) {
-          continue;
-        }
-        this.tweens.killTweensOf(container);
-        this.tweens.add({
-          targets: container,
-          x: agent.position.x,
-          y: agent.position.y,
-          duration: 580,
-          ease: "Sine.inOut",
-          onUpdate: () => container.setDepth(50 + container.y),
-        });
-        this.agentBubbles
-          .get(normalizeAgentId(agentId))
-          ?.setText(actionEmoji(agent.current_action));
-      }
-    };
-
-    renderSnapshot();
-    this.unsubscribeFromWorld = useGameStore.subscribe(
-      (state, previousState) => {
-        if (state.revision !== previousState.revision) {
-          renderSnapshot();
-        }
-      },
-    );
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.unsubscribeFromWorld?.();
-      this.unsubscribeFromWorld = null;
-    });
-  }
-
-  private addAtmosphere(): void {
-    for (let index = 0; index < 8; index += 1) {
-      const mote = this.add.circle(
-        120 + index * 143,
-        90 + (index % 4) * 180,
-        2 + (index % 2),
-        index % 3 === 0 ? 0xfff4bd : 0xffffff,
-        0.65,
-      );
-      this.tweens.add({
-        targets: mote,
-        x: mote.x + 28,
-        y: mote.y - 18,
-        alpha: 0.15,
-        duration: 2600 + index * 220,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.inOut",
+      container.on("pointerdown", () => this.followAgent(id));
+      this.agentViews.set(id, {
+        container,
+        body,
+        leftLeg,
+        rightLeg,
+        bubble,
+        nameplate,
+        lastX: spawn.x,
+        lastY: spawn.y,
       });
     }
   }
-}
 
-function normalizeAgentId(value: string): string {
-  return value.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
-}
+  private applyAgentStates(states: Record<string, SpatialAgentState>): void {
+    for (const [id, state] of Object.entries(states)) {
+      const view =
+        this.agentViews.get(id) ??
+        this.agentViews.get(state.name.split(" ")[0]);
+      if (!view) continue;
+      const dx = state.position.x - view.lastX;
+      const dy = state.position.y - view.lastY;
+      view.lastX = state.position.x;
+      view.lastY = state.position.y;
+      view.body.setScale(Math.abs(dx) > Math.abs(dy) ? 0.9 : 1, 1);
+      view.leftLeg.y = dx + dy === 0 ? 10 : 8;
+      view.rightLeg.y = dx + dy === 0 ? 10 : 12;
+      view.bubble
+        .setText(this.actionEmoji(state.current_action))
+        .setVisible(true);
+      view.nameplate.setText(state.name);
+      view.container.setDepth(state.position.y + 40);
+      this.tweens.killTweensOf(view.container);
+      this.tweens.add({
+        targets: view.container,
+        x: state.position.x,
+        y: state.position.y,
+        duration: 780,
+        ease: "Linear",
+      });
+    }
+  }
 
-function actionEmoji(action: string): string {
-  if (action.startsWith("moving_to:")) {
-    return "🚶";
+  private actionEmoji(action: string): string {
+    if (action.includes("cafe") || action.includes("Honey")) return "☕";
+    if (action.includes("library") || action.includes("Story")) return "📚";
+    if (action.includes("market") || action.includes("Willow")) return "🧺";
+    if (action.includes("park") || action.includes("Moonflower")) return "🌿";
+    if (action.includes("moving")) return "…";
+    return "💭";
   }
-  if (action.startsWith("arrived_at:") || action.startsWith("at:")) {
-    return "✨";
+
+  private configureCamera(): void {
+    const camera = this.cameras.main;
+    camera.setZoom(this.scale.width < 720 ? 1.15 : 1.65).setRoundPixels(true);
+    this.cursors = this.input.keyboard?.createCursorKeys();
+    this.input.on(
+      "wheel",
+      (
+        _pointer: Phaser.Input.Pointer,
+        _objects: Phaser.GameObjects.GameObject[],
+        _dx: number,
+        dy: number,
+      ) => {
+        camera.setZoom(Phaser.Math.Clamp(camera.zoom - dy * 0.001, 1, 2.4));
+      },
+    );
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      this.dragOrigin = new Phaser.Math.Vector2(pointer.x, pointer.y);
+    });
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (!pointer.isDown || !this.dragOrigin) return;
+      const dx = pointer.x - this.dragOrigin.x;
+      const dy = pointer.y - this.dragOrigin.y;
+      if (Math.abs(dx) + Math.abs(dy) < 3) return;
+      this.stopFollowing();
+      camera.scrollX -= dx / camera.zoom;
+      camera.scrollY -= dy / camera.zoom;
+      this.dragOrigin.set(pointer.x, pointer.y);
+    });
+    this.followAgent(this.followedAgentId);
   }
-  if (action.startsWith("blocked:")) {
-    return "🧭";
+
+  private followAgent(id: string): void {
+    const view = this.agentViews.get(id);
+    if (!view) return;
+    this.followedAgentId = id;
+    this.cameras.main.startFollow(view.container, true, 0.12, 0.12);
+    for (const [agentId, candidate] of this.agentViews)
+      candidate.nameplate.setBackgroundColor(
+        agentId === id ? "#a24e53" : "#263e32",
+      );
   }
-  return "💭";
+
+  private stopFollowing(): void {
+    this.cameras.main.stopFollow();
+  }
+
+  private drawWorldTitle(): void {
+    this.add
+      .text(34, 36, "BRIAR COVE", {
+        fontFamily: PIXEL_FONT,
+        fontSize: "14px",
+        fontStyle: "bold",
+        color: "#fff7d1",
+        backgroundColor: "#1d3b2c",
+        padding: { x: 9, y: 6 },
+      })
+      .setDepth(2000)
+      .setResolution(1);
+  }
 }
