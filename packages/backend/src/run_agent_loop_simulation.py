@@ -40,8 +40,8 @@ class LoopSimulationConfig:
     """대화 이력 컨텍스트 윈도우(턴). None이면 전체 이력 사용."""
     dialogue_target_turns: int = 5
     """짧은 대화 아크에서 선호하는 목표 턴 수."""
-    language: Literal["ko", "en"] = "ko"
-    """시뮬레이션 언어."""
+    language: Literal["ko"] = "ko"
+    """시뮬레이션 언어. Agent Crossing은 한국어만 사용한다."""
     fallback_on_empty_reply: bool = False
     """최종 발화가 비었을 때 fallback 문장을 주입할지 여부."""
     suppress_repeated_replies: bool = True

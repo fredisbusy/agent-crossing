@@ -97,8 +97,8 @@ def test_build_turn_world_context_rotates_locations() -> None:
         turn=5,
     )
 
-    assert context["location"] == "town square near Sujin"
-    assert context["focus"] == "Jiho is facing Sujin"
+    assert context["location"] == "Sujin 근처의 마을 광장"
+    assert context["focus"] == "Jiho가 Sujin 쪽을 바라보고 있다"
 
 
 def test_build_turn_observed_events_uses_partner_utterance_when_available() -> None:

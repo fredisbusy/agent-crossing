@@ -26,10 +26,10 @@ def build_action_diagnostics(
         self_critique=reaction_decision.critique,
         decision_reason=reaction_decision.reason,
         action_summary=(
-            f"speak_decision={speak_decision}, "
-            f"action_intent={action_intent}, "
-            f"should_react={reaction_decision.should_react}, "
-            f"reason={reaction_decision.reason or 'n/a'}"
+            f"발화 결정={speak_decision}, "
+            f"행동 의도={action_intent}, "
+            f"반응 여부={reaction_decision.should_react}, "
+            f"이유={reaction_decision.reason or '없음'}"
         ),
         decision_process={
             "llm_decision": {

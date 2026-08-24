@@ -11,33 +11,33 @@ DEFAULT_DIALOGUE_TARGET_TURNS = 5
 def infer_dialogue_goal(*, speaker: SimAgent) -> str:
     profile = getattr(speaker, "profile", None)
     if profile is None:
-        return "Have a short, friendly exchange and return to the current plan."
+        return "짧고 친근하게 대화한 뒤 현재 계획으로 돌아간다."
 
     extended = getattr(profile, "extended", None)
     if extended is None:
-        return "Have a short, friendly exchange and return to the current plan."
+        return "짧고 친근하게 대화한 뒤 현재 계획으로 돌아간다."
 
     current_plan_context = getattr(extended, "current_plan_context", [])
     if len(current_plan_context) >= 2 and current_plan_context[1].strip():
         return current_plan_context[1].strip()
     if current_plan_context and current_plan_context[0].strip():
         return current_plan_context[0].strip()
-    return "Have a short, friendly exchange and return to the current plan."
+    return "짧고 친근하게 대화한 뒤 현재 계획으로 돌아간다."
 
 
 def build_turn_world_context(
     *, speaker_name: str, partner_name: str, turn: int
 ) -> dict[str, str]:
     locations = [
-        "town square",
-        "cafe entrance",
-        "library walkway",
-        "park bench",
+        "마을 광장",
+        "카페 입구",
+        "도서관 산책로",
+        "공원 벤치",
     ]
     location = locations[(turn - 1) % len(locations)]
     return {
-        "location": f"{location} near {partner_name}",
-        "focus": f"{speaker_name} is facing {partner_name}",
+        "location": f"{partner_name} 근처의 {location}",
+        "focus": f"{speaker_name}가 {partner_name} 쪽을 바라보고 있다",
     }
 
 

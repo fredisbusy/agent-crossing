@@ -199,7 +199,7 @@ class AgentBrainGraphRunner:
 
         persona_background = " | ".join(input.profile.extended.lifestyle_and_routine)
         if not persona_background.strip():
-            persona_background = "No background summary available."
+            persona_background = "사용 가능한 배경 요약이 없다."
 
         day_plan_items = self.planner.generate_day_plan(
             DayPlanBroadStrokesRequest(
@@ -208,7 +208,7 @@ class AgentBrainGraphRunner:
                 innate_traits=list(self.agent_identity.traits),
                 persona_background=persona_background,
                 yesterday_date=input.current_time - datetime.timedelta(days=1),
-                yesterday_summary="No recorded activity summary.",
+                yesterday_summary="기록된 활동 요약이 없다.",
                 today_date=input.current_time,
             )
         )
@@ -230,21 +230,21 @@ class AgentBrainGraphRunner:
         context = input.world_context or {}
 
         lines: list[str] = []
-        lines.append(f"time={input.current_time.isoformat()}")
-        lines.append(f"agent={self.agent_identity.name}")
-        lines.append(f"current_plan={current_plan or 'none'}")
-        lines.append(f"traits={', '.join(self.agent_identity.traits)}")
-        lines.append(f"location={context.get('location', 'unknown')}")
+        lines.append(f"시간={input.current_time.isoformat()}")
+        lines.append(f"에이전트={self.agent_identity.name}")
+        lines.append(f"현재 계획={current_plan or '없음'}")
+        lines.append(f"성격={', '.join(self.agent_identity.traits)}")
+        lines.append(f"위치={context.get('location', '알 수 없음')}")
 
         entity_text = (
-            ", ".join(input.observed_entities) if input.observed_entities else "none"
+            ", ".join(input.observed_entities) if input.observed_entities else "없음"
         )
-        lines.append(f"entities={entity_text}")
+        lines.append(f"주변 존재={entity_text}")
 
         if input.observed_events:
-            lines.append("events=" + "; ".join(input.observed_events))
+            lines.append("관찰 사건=" + "; ".join(input.observed_events))
         else:
-            lines.append("events=none")
+            lines.append("관찰 사건=없음")
 
         content = "\n".join(lines)
         embedding = self.embedding_encoder.encode(
@@ -368,7 +368,7 @@ class AgentBrainGraphRunner:
 
         if should_speak and talk is not None:
             self.observation_writer(
-                content=f"I decided to react: {talk}",
+                content=f"나는 이렇게 반응하기로 결정했다: {talk}",
                 now=input.current_time,
                 profile=input.profile,
             )

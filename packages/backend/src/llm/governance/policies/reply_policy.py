@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from llm.language_policy import contains_korean_text
+
 
 _KO_DISALLOWED_SCRIPT_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff]")
 _META_LEAK_PATTERNS = (
@@ -71,6 +73,8 @@ def _sanitize_reply(
             return "", "invalid_reply_content"
 
     if language == "ko" and _KO_DISALLOWED_SCRIPT_RE.search(reply):
+        return "", "language_policy_violation"
+    if language == "ko" and not contains_korean_text(reply):
         return "", "language_policy_violation"
 
     return reply, ""

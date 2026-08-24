@@ -61,7 +61,7 @@ def test_reaction_graph_runner_finishes_without_utterance_when_intent_rejects() 
     decision = runner.decide_reaction(_input())
 
     assert decision.should_react is False
-    assert decision.reason == "stay_silent"
+    assert decision.reason == "반응 여부를 한국어로 판단함"
     assert decision.trace.partner_retry_count == 0
 
 

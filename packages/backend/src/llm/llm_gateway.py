@@ -21,6 +21,7 @@ from llm.clients.types import JsonObject, LlmGenerateOptions
 from llm.guardrails.similarity import EmbeddingEncoder
 
 from . import prompt_builders
+from .language_policy import contains_korean_text
 
 DAY_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
     temperature=0.0,
@@ -74,7 +75,11 @@ class LlmGateway:
             agent_name=agent_name,
             memories=memories,
         )
-        response_text = self.generation_client.generate(prompt=prompt, format_json=True)
+        response_text = self.generation_client.generate(
+            prompt=prompt,
+            system=prompt_builders.language_system_prompt("ko"),
+            format_json=True,
+        )
 
         try:
             parsed_data = cast(object, json.loads(response_text))
@@ -88,7 +93,11 @@ class LlmGateway:
 
             parsed_questions: list[str] = []
             for question in cast(list[object], questions):
-                if isinstance(question, str) and question.strip():
+                if (
+                    isinstance(question, str)
+                    and question.strip()
+                    and contains_korean_text(question)
+                ):
                     parsed_questions.append(question)
 
             return parsed_questions
@@ -108,7 +117,11 @@ class LlmGateway:
             agent_name=agent_name,
             memories=memories,
         )
-        response_text = self.generation_client.generate(prompt=prompt, format_json=True)
+        response_text = self.generation_client.generate(
+            prompt=prompt,
+            system=prompt_builders.language_system_prompt("ko"),
+            format_json=True,
+        )
 
         try:
             parsed_data = cast(object, json.loads(response_text))
@@ -128,7 +141,11 @@ class LlmGateway:
                 insight_payload = cast(JsonObject, raw_insight)
                 insight_text = insight_payload.get("insight")
                 citation_numbers = insight_payload.get("citation_statement_numbers")
-                if not isinstance(insight_text, str) or not insight_text.strip():
+                if (
+                    not isinstance(insight_text, str)
+                    or not insight_text.strip()
+                    or not contains_korean_text(insight_text)
+                ):
                     continue
 
                 citation_memory_ids: list[int] = []
@@ -209,6 +226,7 @@ class LlmGateway:
     ) -> str:
         return self.generation_client.generate(
             prompt=prompt,
+            system=prompt_builders.language_system_prompt("ko"),
             format_json=True,
             options=options,
         )

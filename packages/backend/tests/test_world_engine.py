@@ -224,6 +224,55 @@ def test_step_suppresses_meta_leak_reply() -> None:
     assert session.history == []
 
 
+def test_step_suppresses_english_only_reply_in_korean_runtime() -> None:
+    speaker = DummyAgent(
+        name="Jiho",
+        profile=object(),
+        brain=DummyBrain(
+            next_result=ActionLoopResult(
+                current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+                talk="Hello, how are you today?",
+                utterance="Hello, how are you today?",
+                diagnostics=_diagnostics(),
+                reaction_trace=ReactionDecisionTrace(
+                    raw_response="",
+                    parse_success=True,
+                ),
+            ),
+            queued=[],
+            last_input=None,
+        ),
+    )
+    partner = DummyAgent(
+        name="Sujin",
+        profile=object(),
+        brain=DummyBrain(
+            next_result=ActionLoopResult(
+                current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+                talk=None,
+            ),
+            queued=[],
+            last_input=None,
+        ),
+    )
+    session = WorldConversationSession(
+        agents=cast(list[SimAgent], [speaker, partner]),
+        dialogue_turn_window=None,
+    )
+    engine = SimulationEngine(session=session, config=_engine_config())
+
+    result = engine.step(
+        turn=1,
+        current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+        speaker=cast(SimAgent, cast(object, speaker)),
+        speaking_partner=cast(SimAgent, cast(object, partner)),
+    )
+
+    assert result.reply == ""
+    assert "language_policy_violation" in result.silent_reason
+    assert session.history == []
+
+
 def test_step_fallbacks_when_meta_leak_reply_and_fallback_enabled() -> None:
     speaker = DummyAgent(
         name="Jiho",

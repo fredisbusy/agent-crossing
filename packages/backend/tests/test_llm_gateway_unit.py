@@ -510,9 +510,9 @@ def test_generate_salient_questions_requests_json_format() -> None:
             json.dumps(
                 {
                     "questions": [
-                        "What should Eddy focus on first today?",
-                        "Who can help Eddy improve the composition?",
-                        "Which task gives the highest progress today?",
+                        "Eddy가 오늘 가장 먼저 집중할 일은 무엇인가?",
+                        "누가 Eddy의 작곡 개선을 도울 수 있는가?",
+                        "오늘 가장 큰 진전을 만드는 일은 무엇인가?",
                     ]
                 }
             )
@@ -537,6 +537,31 @@ def test_generate_salient_questions_requests_json_format() -> None:
 
     assert len(questions) == 3
     assert client.call_kwargs[0].get("format_json") is True
+    assert "must be in Korean" in cast(str, client.call_kwargs[0].get("system"))
+
+
+def test_korean_reflection_filters_english_only_questions() -> None:
+    client = StubGenerationClient(
+        responses=[json.dumps({"questions": ["English only question"]})]
+    )
+    service = LlmGateway(client)
+    memory = MemoryObject(
+        id=3,
+        node_type=NodeType.OBSERVATION,
+        citations=None,
+        content="Eddy는 작곡 연습을 했다.",
+        created_at=datetime.datetime(2026, 2, 27, 10, 0, 0),
+        last_accessed_at=datetime.datetime(2026, 2, 27, 10, 0, 0),
+        importance=5,
+        embedding=np.asarray([0.2, 0.3], dtype=np.float32),
+    )
+
+    questions = service.generate_salient_high_level_questions(
+        agent_name="Eddy Lin",
+        memories=[memory],
+    )
+
+    assert questions == []
 
 
 def test_generate_hour_plan_parses_json_items() -> None:

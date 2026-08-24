@@ -19,6 +19,7 @@ from llm.guardrails.similarity import (
     semantic_overlap_check,
 )
 from llm.governance.parsing import parse_reaction_intent, parse_reaction_utterance
+from llm.language_policy import korean_text_or_fallback
 
 from ..graph_support import GRAPH_END, GRAPH_START, GRAPH_STATE_FACTORY
 from .contracts import (
@@ -210,7 +211,24 @@ class ReactionGraphRunner:
             options=REACTION_GENERATE_OPTIONS,
             format_json=True,
         )
-        return {"intent": parse_reaction_intent(response)}
+        intent = parse_reaction_intent(response)
+        if state["input"].language == "ko":
+            intent = replace(
+                intent,
+                reason=korean_text_or_fallback(
+                    intent.reason,
+                    fallback="반응 여부를 한국어로 판단함",
+                ),
+                thought=korean_text_or_fallback(
+                    intent.thought,
+                    fallback="상황과 대화 맥락을 한국어로 판단함",
+                ),
+                critique=korean_text_or_fallback(
+                    intent.critique,
+                    fallback="응답의 자연스러움을 한국어로 점검함",
+                ),
+            )
+        return {"intent": intent}
 
     def _route_after_intent(
         self,
@@ -290,6 +308,26 @@ class ReactionGraphRunner:
             format_json=True,
         )
         utterance_result = parse_reaction_utterance(response)
+        if state["input"].language == "ko":
+            utterance_result = replace(
+                utterance_result,
+                utterance=korean_text_or_fallback(
+                    utterance_result.utterance,
+                    fallback="",
+                ),
+                reason=korean_text_or_fallback(
+                    utterance_result.reason,
+                    fallback="한국어 발화를 생성함",
+                ),
+                thought=korean_text_or_fallback(
+                    utterance_result.thought,
+                    fallback="상대의 말과 현재 계획을 한국어로 고려함",
+                ),
+                critique=korean_text_or_fallback(
+                    utterance_result.critique,
+                    fallback="발화가 자연스러운지 한국어로 점검함",
+                ),
+            )
         return {
             "utterance_result": utterance_result,
             "decision": self._build_reaction_decision(

@@ -28,7 +28,7 @@ class WorldRuntimeConfig:
     persona_dir: str
     dialogue_turn_window: int | None = None
     dialogue_target_turns: int = 5
-    language: Literal["ko", "en"] = "ko"
+    language: Literal["ko"] = "ko"
     fallback_on_empty_reply: bool = False
     suppress_repeated_replies: bool = True
     repetition_window: int = 4
