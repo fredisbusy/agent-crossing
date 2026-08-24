@@ -21,7 +21,7 @@ from api.schemas import (
     WorldStepResponse,
 )
 from db import init_db
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from settings import (
     EMBEDDING_MODEL,
     GOOGLE_AI_STUDIO_API_KEY,
@@ -33,13 +33,14 @@ from settings import (
 )
 from world.runtime import WorldRuntime, WorldRuntimeConfig, build_world_runtime
 from world.spatial import SpatialAgentSeed, SpatialWorldRuntime, SpatialWorldSnapshot
+from world.stream import SpatialWorldStream
 from world.world_map import MapBounds, MapPoint, WorldMap, load_world_map
 
 app = FastAPI(title="Agent Crossing API")
 
 
 @app.on_event("startup")
-def on_startup() -> None:
+async def on_startup() -> None:
     init_db()
     persona_dir = Path(__file__).resolve().parents[2] / "persona"
     app.state.persona_loader = PersonaLoader(persona_dir)
@@ -55,6 +56,8 @@ def on_startup() -> None:
             for persona in app.state.agent_personas
         ],
     )
+    app.state.spatial_stream = SpatialWorldStream(runtime=app.state.spatial_runtime)
+    await app.state.spatial_stream.start()
     persona_names = [persona.agent.id for persona in app.state.agent_personas]
     app.state.world_runtime = None
     if len(persona_names) >= 2:
@@ -74,6 +77,12 @@ def on_startup() -> None:
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
+    spatial_stream = cast(
+        SpatialWorldStream | None,
+        getattr(app.state, "spatial_stream", None),
+    )
+    if spatial_stream is not None:
+        await spatial_stream.stop()
     runtime = cast(WorldRuntime | None, getattr(app.state, "world_runtime", None))
     if runtime is not None:
         await runtime.stop_scheduler()
@@ -158,6 +167,16 @@ def _require_spatial_runtime() -> SpatialWorldRuntime:
     return runtime
 
 
+def _require_spatial_stream() -> SpatialWorldStream:
+    stream = cast(
+        SpatialWorldStream | None,
+        getattr(app.state, "spatial_stream", None),
+    )
+    if stream is None:
+        raise HTTPException(status_code=503, detail="spatial stream is not initialized")
+    return stream
+
+
 def _spatial_response(snapshot: SpatialWorldSnapshot) -> SpatialWorldResponse:
     return SpatialWorldResponse(
         revision=snapshot.revision,
@@ -186,6 +205,21 @@ async def get_world_spatial_state() -> SpatialWorldResponse:
 @app.post("/world/spatial/step", response_model=SpatialWorldResponse)
 async def post_world_spatial_step() -> SpatialWorldResponse:
     return _spatial_response(_require_spatial_runtime().tick())
+
+
+@app.websocket("/ws/world")
+async def world_websocket(websocket: WebSocket) -> None:
+    stream = _require_spatial_stream()
+    await websocket.accept()
+    queue = stream.subscribe()
+    try:
+        while True:
+            snapshot = await queue.get()
+            await websocket.send_json(_spatial_response(snapshot).model_dump())
+    except WebSocketDisconnect:
+        pass
+    finally:
+        stream.unsubscribe(queue)
 
 
 @app.post("/world/observe", response_model=WorldObservationResponse)

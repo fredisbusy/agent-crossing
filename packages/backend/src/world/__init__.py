@@ -12,6 +12,7 @@ from .spatial import (
     SpatialWorldRuntime,
     SpatialWorldSnapshot,
 )
+from .stream import SpatialWorldStream
 from .session import (
     WorldConversationSession,
     build_turn_observed_events,
@@ -48,6 +49,7 @@ __all__ = [
     "SpatialAgentSnapshot",
     "SpatialWorldRuntime",
     "SpatialWorldSnapshot",
+    "SpatialWorldStream",
     "WorldMap",
     "load_world_map",
 ]
