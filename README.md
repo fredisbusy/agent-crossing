@@ -10,6 +10,8 @@ Built with **React 19 + Phaser 3** (frontend) and **FastAPI** (backend).
 ## What this project aims to do
 
 - NPCs plan their day, remember experiences, and react to unexpected events.
+- Agent thoughts, plans, reflections, memories, and dialogue are generated and
+  presented in Korean; English-only utterances are rejected before broadcast.
 - Memories are retrieved by recency/importance/relevance scoring.
 - Reflection generates higher-level insights from recent experiences.
 - Multiple agents interact, exchange information, and form social dynamics.

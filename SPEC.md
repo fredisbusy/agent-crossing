@@ -277,6 +277,18 @@ God mode 입력:
 
 - 자연어 이벤트 입력 -> perception event로 변환 -> 해당 agent loop에 주입
 
+한국어 출력 정책:
+
+- 제품 runtime의 언어는 `ko`로 고정하며 영어 모드를 노출하지 않는다.
+- dialogue뿐 아니라 `thought`, `reason`, `critique`, plan action, reflection,
+  salient question, insight, summary의 모든 자연어 값은 한국어로 생성한다.
+- JSON key, enum, canonical agent/location 이름은 계약과 맵 매칭을 위해 유지할 수
+  있지만 사람이 읽는 문장은 한국어를 포함해야 한다.
+- 중국어/일본어 문자가 섞이거나 한글이 전혀 없는 최종 발화는 저장 또는 다른
+  agent에게 전파하기 전에 `language_policy_violation`으로 차단한다.
+- 영어로 생성된 생각/이유/비평은 UI와 로그에 노출하지 않고 한국어 진단 문구로
+  대체한다.
+
 ---
 
 ## 10. 검증 기준 (Definition of Done)

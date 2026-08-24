@@ -215,6 +215,15 @@
     - [x] 관련 단위 테스트로 session 상태와 prompt 반영을 검증한다
     - [x] closing 결정이 `end_dialogue` 구조화 신호를 통해 세션 종료로 연결된다
 
+- [x] `P1` 모든 인지·계획·반성·대화 출력을 한국어로 고정한다
+  - Depends on: reaction 생성 파이프라인 안정화
+  - DoD:
+    - [x] 제품 runtime 언어를 `ko`로 고정한다
+    - [x] reaction/planning/reflection LLM 호출에 공통 한국어 system policy를 적용한다
+    - [x] 영어-only 최종 발화를 저장/브로드캐스트 전에 차단한다
+    - [x] persona 성격/습관/현재 계획/seed memory를 한국어로 제공한다
+    - [x] 프런트엔드 계획 fallback과 주민 상태를 한국어로 표시한다
+
 ### 4-A. Backend 실시간 파이프라인
 
 - [x] `P1` API runtime에서 world engine step 경로를 재사용한다
