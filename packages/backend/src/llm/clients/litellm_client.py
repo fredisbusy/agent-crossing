@@ -74,6 +74,8 @@ class LiteLlmClient:
             kwargs["api_base"] = self.base_url
         if self.api_key:
             kwargs["api_key"] = self.api_key
+        if "qwen" in selected_model.lower():
+            kwargs["reasoning_effort"] = "low"
         if selected_model.startswith(("ollama/", "ollama_chat/")):
             kwargs["drop_params"] = True
             if final_options.repeat_penalty is not None:

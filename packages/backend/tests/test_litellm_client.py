@@ -51,6 +51,7 @@ def test_generate_uses_litellm_completion_shape(monkeypatch) -> None:
     assert captured["temperature"] == 0.3
     assert captured["top_p"] == 0.8
     assert captured["max_tokens"] == 60
+    assert captured["reasoning_effort"] == "low"
     assert captured["drop_params"] is True
     assert captured["repeat_penalty"] == 1.2
     assert captured["presence_penalty"] == 0.4
@@ -84,6 +85,7 @@ def test_generate_uses_response_format_without_penalties_for_non_ollama_json(
     )
 
     assert captured["response_format"] == {"type": "json_object"}
+    assert "reasoning_effort" not in captured
     assert "repeat_penalty" not in captured
     assert "presence_penalty" not in captured
     assert "frequency_penalty" not in captured
