@@ -466,6 +466,7 @@ def test_hourly_plan_prompt_contains_context_and_json_shape() -> None:
     assert "'items': [" not in prompt
     assert '"items": [' in prompt
     assert '"end_time": "<ISO-8601 datetime later than start_time>"' in prompt
+    assert "Do not output `location`" in prompt
 
 
 def test_minute_plan_prompt_contains_context_and_json_shape() -> None:
@@ -480,16 +481,17 @@ def test_minute_plan_prompt_contains_context_and_json_shape() -> None:
         ),
     )
 
-    assert "Generate an executable minute plan for the current phase." in prompt
+    assert "Decompose the active hourly task into concrete subtasks" in prompt
     assert "Friday February 13 2026 at 12:20 PM" in prompt
     assert "Planning date (must stay consistent): 2026-02-13" in prompt
     assert "Do not simply copy hourly-plan summaries" in prompt
     assert "Draft project outline" in prompt
     assert "Take lunch break" not in prompt
     assert "Resume focused writing" not in prompt
-    assert "end_time" in prompt
+    assert "Total duration: `40` minutes" in prompt
+    assert "Do not output `start_time`, `end_time`, or `location`" in prompt
     assert "Return strict JSON only with this exact shape and no extra text:" in prompt
-    assert '"end_time": "<ISO-8601 datetime 5-15 minutes after start_time>"' in prompt
+    assert '"duration_minutes": <5, 10, or 15>' in prompt
 
 
 def test_salient_prompt_uses_strict_json_contract_line() -> None:
@@ -579,14 +581,7 @@ def test_generate_hour_plan_parses_json_items() -> None:
                             {
                                 "start_time": "2026-02-13T08:00:00",
                                 "end_time": "2026-02-13T10:00:00",
-                                "location": "Town > Home > Kitchen",
                                 "action_content": "Review composition notes over breakfast.",
-                            },
-                            {
-                                "start_time": "2026-02-13T10:00:00",
-                                "end_time": "2026-02-13T11:00:00",
-                                "location": "Town > College > Theory Room",
-                                "action_content": "Attend morning music theory class.",
                             },
                         ]
                     }
@@ -606,9 +601,10 @@ def test_generate_hour_plan_parses_json_items() -> None:
         ),
     )
 
-    assert len(items) == 2
+    assert len(items) == 1
     assert items[0].duration_minutes == 120
     assert items[0].start_time == datetime.datetime(2026, 2, 13, 8, 0, 0)
+    assert items[0].location == "Town > Home > Kitchen"
 
 
 def test_generate_hour_plan_prompt_uses_single_day_plan_item() -> None:
@@ -711,12 +707,6 @@ def test_generate_hour_plan_coerces_year_to_current_date_when_month_day_match() 
                                 "location": "Town > Home > Kitchen",
                                 "action_content": "Review composition notes over breakfast.",
                             },
-                            {
-                                "start_time": "2023-02-13T10:00:00",
-                                "end_time": "2023-02-13T11:00:00",
-                                "location": "Town > College > Theory Room",
-                                "action_content": "Attend morning music theory class.",
-                            },
                         ]
                     }
                 )
@@ -735,7 +725,7 @@ def test_generate_hour_plan_coerces_year_to_current_date_when_month_day_match() 
         ),
     )
 
-    assert len(items) == 2
+    assert len(items) == 1
     assert all(item.start_time.year == 2026 for item in items)
     assert all(item.end_time.year == 2026 for item in items)
 
@@ -752,12 +742,6 @@ def test_generate_hour_plan_retries_once_on_truncated_json() -> None:
                             "end_time": "2026-02-13T10:00:00",
                             "location": "Town > Home > Kitchen",
                             "action_content": "Review composition notes over breakfast.",
-                        },
-                        {
-                            "start_time": "2026-02-13T10:00:00",
-                            "end_time": "2026-02-13T11:00:00",
-                            "location": "Town > College > Theory Room",
-                            "action_content": "Attend morning music theory class.",
                         },
                     ]
                 }
@@ -777,7 +761,7 @@ def test_generate_hour_plan_retries_once_on_truncated_json() -> None:
         ),
     )
 
-    assert len(items) == 2
+    assert len(items) == 1
     assert client.calls == 2
 
 
@@ -835,16 +819,20 @@ def test_generate_minute_plan_parses_json_items() -> None:
                     {
                         "items": [
                             {
-                                "start_time": "2026-02-13T12:00:00",
-                                "end_time": "2026-02-13T12:10:00",
-                                "location": "Town > Home > Study",
+                                "duration_minutes": 15,
                                 "action_content": "Review motif variations.",
                             },
                             {
-                                "start_time": "2026-02-13T12:10:00",
-                                "end_time": "2026-02-13T12:15:00",
-                                "location": "Town > Home > Study",
+                                "duration_minutes": 15,
                                 "action_content": "Write transition phrase.",
+                            },
+                            {
+                                "duration_minutes": 15,
+                                "action_content": "Revise the bridge.",
+                            },
+                            {
+                                "duration_minutes": 15,
+                                "action_content": "Review the completed outline.",
                             },
                         ]
                     }
@@ -864,9 +852,12 @@ def test_generate_minute_plan_parses_json_items() -> None:
         ),
     )
 
-    assert len(items) == 2
-    assert items[1].duration_minutes == 5
+    assert len(items) == 4
+    assert items[1].duration_minutes == 15
     assert items[0].action_content == "Review motif variations."
+    assert items[0].start_time == datetime.datetime(2026, 2, 13, 12, 0)
+    assert items[-1].end_time == datetime.datetime(2026, 2, 13, 13, 0)
+    assert all(item.location == "Town > Home > Study" for item in items)
 
 
 def test_generate_minute_plan_prompt_uses_single_hourly_plan_item() -> None:
@@ -897,9 +888,7 @@ def test_generate_minute_plan_prompt_uses_single_hourly_plan_item() -> None:
     assert "Resume focused writing" not in prompt
 
 
-def test_generate_minute_plan_coerces_year_to_current_date_when_month_day_match() -> (
-    None
-):
+def test_generate_minute_plan_builds_authoritative_times_from_durations() -> None:
     service = LlmGateway(
         StubGenerationClient(
             responses=[
@@ -907,16 +896,20 @@ def test_generate_minute_plan_coerces_year_to_current_date_when_month_day_match(
                     {
                         "items": [
                             {
-                                "start_time": "2023-02-13T12:00:00",
-                                "end_time": "2023-02-13T12:10:00",
-                                "location": "Town > Home > Study",
+                                "duration_minutes": 15,
                                 "action_content": "Review motif variations.",
                             },
                             {
-                                "start_time": "2023-02-13T12:10:00",
-                                "end_time": "2023-02-13T12:15:00",
-                                "location": "Town > Home > Study",
+                                "duration_minutes": 15,
                                 "action_content": "Write transition phrase.",
+                            },
+                            {
+                                "duration_minutes": 15,
+                                "action_content": "Revise the bridge.",
+                            },
+                            {
+                                "duration_minutes": 15,
+                                "action_content": "Review the completed outline.",
                             },
                         ]
                     }
@@ -936,7 +929,7 @@ def test_generate_minute_plan_coerces_year_to_current_date_when_month_day_match(
         ),
     )
 
-    assert len(items) == 2
+    assert len(items) == 4
     assert all(item.start_time.year == 2026 for item in items)
     assert all(item.end_time.year == 2026 for item in items)
 
@@ -949,11 +942,12 @@ def test_generate_minute_plan_retries_once_on_schema_validation_error() -> None:
                 {
                     "items": [
                         {
-                            "start_time": "2026-02-13T12:00:00",
-                            "end_time": "2026-02-13T12:12:00",
-                            "location": "Town > Home > Study",
+                            "duration_minutes": 15,
                             "action_content": "Review motif variations.",
-                        }
+                        },
+                        {"duration_minutes": 15, "action_content": "Draft."},
+                        {"duration_minutes": 15, "action_content": "Revise."},
+                        {"duration_minutes": 15, "action_content": "Review."},
                     ]
                 }
             ),
@@ -972,9 +966,55 @@ def test_generate_minute_plan_retries_once_on_schema_validation_error() -> None:
         ),
     )
 
-    assert len(items) == 1
-    assert items[0].duration_minutes == 12
+    assert len(items) == 4
+    assert items[0].duration_minutes == 15
     assert client.calls == 2
+
+
+def test_generate_minute_plan_retries_when_duration_exceeds_parent_window() -> None:
+    client = StubGenerationClient(
+        responses=[
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "duration_minutes": 15,
+                            "action_content": "Prepare the next hour.",
+                        }
+                    ]
+                }
+            ),
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "duration_minutes": 5,
+                            "action_content": "Finish the current task.",
+                        }
+                    ]
+                }
+            ),
+        ]
+    )
+    service = LlmGateway(client)
+
+    items = service.generate_minute_plan(
+        agent_name="Eddy Lin",
+        current_time=datetime.datetime(2026, 2, 13, 13, 55),
+        hourly_plan_item=HourlyPlanItem(
+            start_time=datetime.datetime(2026, 2, 13, 13, 0),
+            end_time=datetime.datetime(2026, 2, 13, 14, 0),
+            location="Town > Home > Study",
+            action_content="Draft project outline",
+        ),
+    )
+
+    assert client.calls == 2
+    assert len(items) == 1
+    assert items[0].start_time == datetime.datetime(2026, 2, 13, 13, 55)
+    assert items[0].end_time == datetime.datetime(2026, 2, 13, 14, 0)
+    retry_prompt = cast(str, client.call_kwargs[1]["prompt"])
+    assert "duration_total_mismatch_expected_5_got_15" in retry_prompt
 
 
 def test_generate_day_plan_parses_json_items() -> None:

@@ -44,14 +44,13 @@ DAY_PLAN_JSON_SHAPE = (
 HOURLY_PLAN_JSON_SHAPE = (
     '{"items": ['
     '{"start_time": "<ISO-8601 datetime>", "end_time": "<ISO-8601 datetime later than start_time>", '
-    '"location": "<location>", "action_content": "<action text>"}'
+    '"action_content": "<action text>"}'
     "]}"
 )
 
 MINUTE_PLAN_JSON_SHAPE = (
     '{"items": ['
-    '{"start_time": "<ISO-8601 datetime to minute precision>", "end_time": "<ISO-8601 datetime 5-15 minutes after start_time>", '
-    '"location": "<location>", "action_content": "<action text>"}'
+    '{"duration_minutes": <5, 10, or 15>, "action_content": "<action text>"}'
     "]}"
 )
 
@@ -158,6 +157,9 @@ def build_day_plan_prompt(
 ) -> str:
     """Build a persona-grounded prompt for daily structured plan generation."""
     traits_text = ", ".join(trait.strip() for trait in innate_traits if trait.strip())
+    planning_window_end = datetime.datetime.combine(
+        today_date.date() + datetime.timedelta(days=1), datetime.time.min
+    )
     return render_template(
         "day_plan_broad_strokes_instruction.md",
         agent_name=agent_name,
@@ -167,6 +169,8 @@ def build_day_plan_prompt(
         yesterday_date_text=_format_date_text(yesterday_date),
         yesterday_summary=yesterday_summary.strip(),
         today_date_text=_format_date_text(today_date),
+        planning_window_start=today_date.isoformat(timespec="minutes"),
+        planning_window_end=planning_window_end.isoformat(timespec="minutes"),
         json_shape=DAY_PLAN_JSON_SHAPE,
     )
 
@@ -177,6 +181,8 @@ def build_hourly_plan_prompt(
     current_time: datetime.datetime,
     day_plan_item: DayPlanItem,
 ) -> str:
+    planning_window_start = max(current_time, day_plan_item.start_time)
+    planning_window_end = day_plan_item.end_time
     day_plan_lines = _format_plan_line(
         start_time=day_plan_item.start_time,
         end_time=day_plan_item.end_time,
@@ -189,6 +195,8 @@ def build_hourly_plan_prompt(
         agent_name=agent_name,
         current_time=_format_datetime_text(current_time),
         planning_date=current_time.date().isoformat(),
+        planning_window_start=planning_window_start.isoformat(timespec="minutes"),
+        planning_window_end=planning_window_end.isoformat(timespec="minutes"),
         day_plan_lines=day_plan_lines,
         json_shape=HOURLY_PLAN_JSON_SHAPE,
     )
@@ -200,6 +208,11 @@ def build_minute_plan_prompt(
     current_time: datetime.datetime,
     hourly_plan_item: HourlyPlanItem,
 ) -> str:
+    planning_window_start = max(current_time, hourly_plan_item.start_time)
+    planning_window_end = hourly_plan_item.end_time
+    total_duration_minutes = int(
+        (planning_window_end - planning_window_start).total_seconds() // 60
+    )
     hourly_plan_lines = _format_plan_line(
         start_time=hourly_plan_item.start_time,
         end_time=hourly_plan_item.end_time,
@@ -212,6 +225,10 @@ def build_minute_plan_prompt(
         agent_name=agent_name,
         current_time=_format_datetime_text(current_time),
         planning_date=current_time.date().isoformat(),
+        planning_window_start=planning_window_start.isoformat(timespec="minutes"),
+        planning_window_end=planning_window_end.isoformat(timespec="minutes"),
+        total_duration_minutes=str(total_duration_minutes),
+        canonical_location=hourly_plan_item.location,
         hourly_plan_lines=hourly_plan_lines,
         json_shape=MINUTE_PLAN_JSON_SHAPE,
     )

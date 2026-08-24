@@ -52,6 +52,17 @@ class MinutePlanParseError(ValueError):
         self.reason = reason
 
 
+@dataclass(frozen=True)
+class MinuteTaskDecompositionItem:
+    action_content: str
+    duration_minutes: int
+
+
+@dataclass(frozen=True)
+class MinuteTaskDecompositionParseResult:
+    items: list[MinuteTaskDecompositionItem]
+
+
 def try_parse_day_plan(
     response_text: str,
     *,
@@ -118,6 +129,45 @@ def try_parse_hour_plan(
     return HourPlanParseResult(items=normalized)
 
 
+def try_parse_hour_plan_decomposition(
+    response_text: str,
+    *,
+    authoritative_location: str,
+    reference_date: datetime.date | None = None,
+) -> HourPlanParseResult:
+    """Parse hourly timing/actions while inheriting location from the day parent."""
+    payload = parse_json_object(response_text)
+    if payload is None:
+        payload = attempt_json_repair_once(response_text)
+    if payload is None:
+        raise HourPlanParseError("json_parse_error_or_non_object")
+
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list):
+        raise HourPlanParseError("missing_or_invalid_items")
+
+    authoritative_items: list[object] = []
+    for raw_item in cast(list[object], raw_items):
+        if not isinstance(raw_item, dict):
+            authoritative_items.append(raw_item)
+            continue
+        item = dict(cast(JsonObject, raw_item))
+        item["location"] = authoritative_location
+        authoritative_items.append(item)
+
+    normalized = _normalize_plan_items(
+        raw_items=authoritative_items,
+        item_factory=HourlyPlanItem,
+        min_duration=1,
+        require_exact_minute=True,
+        reference_date=reference_date,
+    )
+    if not normalized:
+        raise HourPlanParseError("insufficient_hour_plan_items")
+    normalized.sort(key=lambda item: item.start_time)
+    return HourPlanParseResult(items=normalized)
+
+
 def try_parse_minute_plan(
     response_text: str,
     *,
@@ -150,6 +200,55 @@ def try_parse_minute_plan(
 
     normalized.sort(key=lambda item: item.start_time)
     return MinutePlanParseResult(items=normalized)
+
+
+def try_parse_minute_task_decomposition(
+    response_text: str,
+    *,
+    expected_duration_minutes: int,
+) -> MinuteTaskDecompositionParseResult:
+    """Parse paper-style task decomposition with a fixed total duration."""
+    payload = parse_json_object(response_text)
+    if payload is None:
+        payload = attempt_json_repair_once(response_text)
+    if payload is None:
+        raise MinutePlanParseError("json_parse_error_or_non_object")
+
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        raise MinutePlanParseError("missing_or_invalid_items")
+
+    items: list[MinuteTaskDecompositionItem] = []
+    for raw_item in cast(list[object], raw_items):
+        if not isinstance(raw_item, dict):
+            raise MinutePlanParseError("invalid_task_decomposition_item")
+        item = cast(JsonObject, raw_item)
+        duration_minutes = item.get("duration_minutes")
+        if (
+            not isinstance(duration_minutes, int)
+            or isinstance(duration_minutes, bool)
+            or duration_minutes < 5
+            or duration_minutes > 15
+            or duration_minutes % 5 != 0
+        ):
+            raise MinutePlanParseError("invalid_duration_minutes")
+        action_content = item.get("action_content")
+        if not isinstance(action_content, str) or not action_content.strip():
+            raise MinutePlanParseError("missing_or_invalid_action_content")
+        items.append(
+            MinuteTaskDecompositionItem(
+                action_content=action_content.strip(),
+                duration_minutes=duration_minutes,
+            )
+        )
+
+    actual_duration_minutes = sum(item.duration_minutes for item in items)
+    if actual_duration_minutes != expected_duration_minutes:
+        raise MinutePlanParseError(
+            "duration_total_mismatch_"
+            f"expected_{expected_duration_minutes}_got_{actual_duration_minutes}"
+        )
+    return MinuteTaskDecompositionParseResult(items=items)
 
 
 def _parse_iso_datetime(raw_value: object) -> datetime.datetime | None:

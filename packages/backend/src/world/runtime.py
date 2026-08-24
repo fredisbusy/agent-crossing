@@ -307,13 +307,17 @@ class WorldRuntime:
                 )
             )
             if self.planning_coordinator is not None and not cognitive_active:
+                schedules = []
                 for agent in self.agents:
-                    schedule = self.planning_coordinator.ensure_current(
-                        agent=_as_life_agent(agent),
-                        now=planning_time,
-                        generate=True,
+                    schedules.append(
+                        self.planning_coordinator.ensure_current(
+                            agent=_as_life_agent(agent),
+                            now=planning_time,
+                            generate=True,
+                        )
                     )
-                    if self.spatial_runtime is not None:
+                if self.spatial_runtime is not None:
+                    for schedule in schedules:
                         self.spatial_runtime.set_schedule(schedule)
             self._start_dialogue_for_real_encounter(planning_time)
             self.current_time = planning_time

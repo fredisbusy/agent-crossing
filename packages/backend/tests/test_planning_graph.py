@@ -4,6 +4,7 @@ import json
 from agents.planning.graph import PlanningGraphRunner
 from agents.planning.models import (
     DayPlanBroadStrokesRequest,
+    DayPlanItem,
 )
 from agents.planning.planner import Planner
 from llm.clients.types import LlmGenerateOptions
@@ -70,11 +71,13 @@ class StubPlanningClient:
                     {
                         "items": [
                             {
-                                "start_time": "2026-02-13T08:00:00",
-                                "end_time": "2026-02-13T08:10:00",
-                                "location": "Town > Home > Desk",
+                                "duration_minutes": 10,
                                 "action_content": "Sketch the first phrase.",
-                            }
+                            },
+                            {"duration_minutes": 10, "action_content": "Revise."},
+                            {"duration_minutes": 10, "action_content": "Compare."},
+                            {"duration_minutes": 10, "action_content": "Polish."},
+                            {"duration_minutes": 10, "action_content": "Review."},
                         ]
                     }
                 )
@@ -130,7 +133,7 @@ def test_planning_graph_runner_parses_day_hour_and_minute_plans() -> None:
 
     assert len(day_items) == 5
     assert len(hourly_items) == 1
-    assert len(minute_items) == 1
+    assert len(minute_items) == 5
     assert client.call_labels == ["day", "hour", "minute"]
 
 
@@ -146,6 +149,116 @@ def test_planning_graph_runner_retries_invalid_day_plan_once() -> None:
 
     assert len(items) == 5
     assert client.call_labels == ["day", "day"]
+
+
+def test_day_plan_retries_until_it_covers_the_authoritative_window() -> None:
+    client = StubPlanningClient()
+
+    def day_response(start: str) -> str:
+        return json.dumps(
+            {
+                "items": [
+                    {
+                        "start_time": start,
+                        "end_time": "2026-02-13T09:00:00",
+                        "location": "Town > Home > Desk",
+                        "action_content": "아침 준비를 한다.",
+                    },
+                    {
+                        "start_time": "2026-02-13T09:00:00",
+                        "end_time": "2026-02-13T12:00:00",
+                        "location": "Town > College > Studio",
+                        "action_content": "오전 작업을 한다.",
+                    },
+                    {
+                        "start_time": "2026-02-13T12:00:00",
+                        "end_time": "2026-02-13T17:00:00",
+                        "location": "Town > Cafe > Patio",
+                        "action_content": "점심과 오후 일정을 보낸다.",
+                    },
+                    {
+                        "start_time": "2026-02-13T17:00:00",
+                        "end_time": "2026-02-13T22:00:00",
+                        "location": "Town > Home > Desk",
+                        "action_content": "저녁 활동을 한다.",
+                    },
+                    {
+                        "start_time": "2026-02-13T22:00:00",
+                        "end_time": "2026-02-14T00:00:00",
+                        "location": "Town > Home > Desk",
+                        "action_content": "하루를 정리하고 쉰다.",
+                    },
+                ]
+            }
+        )
+
+    client.responses_by_label["day"] = [
+        day_response("2026-02-13T06:30:00"),
+        day_response("2026-02-13T06:25:00"),
+    ]
+    request = _day_plan_request()
+    request = DayPlanBroadStrokesRequest(
+        agent_name=request.agent_name,
+        age=request.age,
+        innate_traits=request.innate_traits,
+        persona_background=request.persona_background,
+        yesterday_date=request.yesterday_date,
+        yesterday_summary=request.yesterday_summary,
+        today_date=datetime.datetime(2026, 2, 13, 6, 25),
+        planning_window_end=datetime.datetime(2026, 2, 14),
+    )
+
+    items = PlanningGraphRunner(planning_client=client).generate_day_plan(request)
+
+    assert client.call_labels == ["day", "day"]
+    assert items[0].start_time == datetime.datetime(2026, 2, 13, 6, 25)
+    assert items[-1].end_time == datetime.datetime(2026, 2, 14)
+
+
+def test_hourly_plan_retries_when_it_misses_the_current_world_time() -> None:
+    client = StubPlanningClient()
+    client.responses_by_label["hour"] = [
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "start_time": "2026-02-13T09:00:00",
+                        "end_time": "2026-02-13T10:00:00",
+                        "location": "Town > Home > Desk",
+                        "action_content": "늦게 시작한다.",
+                    }
+                ]
+            }
+        ),
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "start_time": "2026-02-13T08:00:00",
+                        "end_time": "2026-02-13T10:00:00",
+                        "location": "Town > Home > Desk",
+                        "action_content": "현재 작업을 이어간다.",
+                    }
+                ]
+            }
+        ),
+    ]
+    parent = DayPlanItem(
+        start_time=datetime.datetime(2026, 2, 13, 8),
+        end_time=datetime.datetime(2026, 2, 13, 10),
+        location="Town > Home > Desk",
+        action_content="오전 작업",
+    )
+
+    items = PlanningGraphRunner(planning_client=client).generate_hourly_plan(
+        agent_name="Eddy Lin",
+        current_time=datetime.datetime(2026, 2, 13, 8, 45),
+        day_plan_item=parent,
+    )
+
+    assert client.call_labels == ["hour", "hour"]
+    assert items[0].start_time <= datetime.datetime(2026, 2, 13, 8, 45)
+    assert items[-1].end_time == parent.end_time
 
 
 def test_planner_uses_planning_graph_for_existing_entrypoints() -> None:
@@ -166,5 +279,5 @@ def test_planner_uses_planning_graph_for_existing_entrypoints() -> None:
 
     assert len(day_items) == 5
     assert len(hourly_items) == 1
-    assert len(minute_items) == 1
+    assert len(minute_items) == 5
     assert client.call_labels == ["day", "hour", "minute"]

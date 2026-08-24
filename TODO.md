@@ -155,6 +155,10 @@
     - [x] active hourly plan 항목 입력을 기준으로 near-future minute plan을 생성한다
     - [x] 현재 시점 기준 active hourly plan 항목을 선택한다
     - [x] 현재 시점 기준 다음 실행 항목을 즉시 찾을 수 있다
+    - [x] 논문식 fixed-duration task decomposition으로 minute plan의 시간·장소를 runtime이 조립한다
+    - [x] minute duration 총합 불일치를 semantic retry로 처리하고 시간 경계 월경을 차단한다
+    - [x] day/hourly 고정 시간창의 시작·끝·연속성을 semantic retry로 검증한다
+    - [x] hourly/minute 위치를 authoritative parent plan에서 상속한다
 
 ### 3-B. Tick react 판정과 부분 재계획
 
@@ -246,6 +250,7 @@
     - [x] 같은 장소에 실제로 인접한 두 agent만 대화를 시작한다
     - [x] cognitive action 실패를 tick scheduler에서 격리해 world clock과 이동을 계속 진행한다
     - [x] 생성된 day/hourly/minute 계층을 완료 시점의 world clock에 맞춰 설치한다
+    - [x] 같은 tick의 다중 agent 계획을 모두 검증한 뒤 schedule과 world clock을 원자적으로 갱신한다
     - [x] local LLM cognitive 구간에는 clock을 감속하고 현재 공간 계획을 유지한다
     - [x] planning fallback을 제거하고 생성·검증 실패를 UI와 dashboard에 명시적으로 노출한다
     - [x] 로컬 planner의 생성 timeout을 제거하고 structured JSON 요청에서 Qwen thinking을 끈다

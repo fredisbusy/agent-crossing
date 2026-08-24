@@ -12,7 +12,9 @@ from .parsing import (
     parse_reaction_utterance,
     try_parse_day_plan,
     try_parse_hour_plan,
+    try_parse_hour_plan_decomposition,
     try_parse_minute_plan,
+    try_parse_minute_task_decomposition,
 )
 from .trace_payload import (
     is_reaction_parse_failure,
@@ -65,5 +67,7 @@ __all__ = [
     "topic_progress_rate",
     "try_parse_day_plan",
     "try_parse_hour_plan",
+    "try_parse_hour_plan_decomposition",
     "try_parse_minute_plan",
+    "try_parse_minute_task_decomposition",
 ]

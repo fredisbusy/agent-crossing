@@ -178,6 +178,9 @@ class DayPlanBroadStrokesRequest:
     """오늘 날짜를 나타내는 텍스트."""
     today_date: datetime.datetime
 
+    """전체 연속 커버리지를 강제할 authoritative planning-window 종료 시각."""
+    planning_window_end: datetime.datetime | None = None
+
     def __post_init__(self) -> None:
         if not self.agent_name.strip():
             raise ValueError("agent_name must not be blank")
@@ -193,6 +196,11 @@ class DayPlanBroadStrokesRequest:
             raise ValueError("yesterday_summary must not be blank")
         if not self.today_date:
             raise ValueError("today_date must not be blank")
+        if (
+            self.planning_window_end is not None
+            and self.planning_window_end <= self.today_date
+        ):
+            raise ValueError("planning_window_end must be later than today_date")
 
 
 @dataclass(frozen=True)

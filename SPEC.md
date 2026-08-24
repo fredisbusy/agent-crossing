@@ -161,6 +161,17 @@ Backend 레이어 책임:
 2. Hourly plan: **현재 시점이 속한 day plan 항목**을 시간 단위로 세분화한 근미래 계획
 3. Minute plan: **현재 시점이 속한 hourly plan 항목**을 5~15분 단위로 세분화한 실행 액션
 
+Minute decomposition은 Park et al.의 Generative Agents 구현처럼 상위 task의
+고정 duration을 5분 단위 하위 행동으로 분해한다. LLM은
+`duration_minutes`와 `action_content`만 생성하고, authoritative
+`start_time`, `end_time`, `location`은 runtime이 연속적으로 조립한다.
+
+제품 runtime의 day plan은 생성 시점부터 다음 자정까지를 고정 planning window로
+사용하며 5~8개 항목이 빈틈·겹침 없이 전체 구간을 덮어야 한다. hourly plan도
+active day-plan 종료까지 연속으로 덮어야 하며, 위치는 모델이 재작성하지 않고
+authoritative day-plan 위치를 상속한다. 시간창 불일치는 parsing governance의
+semantic error로 재시도하고, retry 소진 시 명시적 planning error로 중단한다.
+
 각 액션 필수 필드:
 
 - `start_time`
@@ -176,6 +187,10 @@ Backend 레이어 책임:
 - day/hourly/minute plan 모두 초 단위 없이 minute precision 사용
 - day/hourly plan은 exact-hour 정렬을 강제하지 않으며 `5:30 pm` 같은 자연스러운 broad-strokes 시간을 허용
 - minute plan은 `end_time - start_time`이 5~15분 범위를 만족해야 함
+- minute decomposition의 duration 합계는 현재 시각부터 active hourly 종료까지의 남은 시간과 정확히 같아야 함
+- day/hourly plan은 고정 planning window의 시작과 끝을 모두 덮고 항목 사이에 gap/overlap이 없어야 함
+- hourly location은 active day-plan의 canonical location을 runtime이 상속함
+- duration 합계 불일치는 semantic parse error로 재시도하며 임의 연장·반복·fallback으로 보정하지 않음
 - active day/hourly/minute 항목은 모두 현재 world clock을 포함해야 하며, 미래 항목을 현재 항목처럼 선택하지 않는다
 - day plan만 하루 전체를 미리 생성하고, hourly/minute plan은 near future만 just-in-time으로 재귀 분해한다
 - hourly plan은 현재 시점의 active day-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다
@@ -188,6 +203,7 @@ Backend 레이어 책임:
 - cognitive 구간에는 참여 agent의 현재 공간 계획과 목적지를 유지하고, 대화 완료 또는 실패 후 최신 game clock에 맞춰 계획 실행을 재개한다.
 - day/hourly/minute 계획은 모두 planner가 생성한 authoritative 결과만 실행한다. 고정 문구나 상위 문장 복사로 계획을 대체하지 않는다.
 - 서비스 시작과 active parent 전환 시 필요한 계획 계층이 준비될 때까지 world clock을 진행하지 않는다.
+- 같은 tick에서 필요한 모든 agent 계획을 먼저 검증한 뒤 spatial schedule과 world clock을 원자적으로 갱신한다.
 - 계획 생성·파싱·장소/시간 검증이 실패하면 scheduler를 중단하고 `planning_error`를 WebSocket과 dashboard에 노출한다.
 - 로컬 27B planner 호출은 생성 시간 제한을 두지 않고 완료될 때까지 기다린다. 연결·파싱·검증 실패는 fallback 없이 `planning_error`로 노출한다.
 - 로컬 Qwen의 structured JSON 생성은 thinking을 끄고 출력 토큰을 최종 JSON 본문에 사용한다.
@@ -195,6 +211,7 @@ Backend 레이어 책임:
 - active minute plan의 canonical `location`과 `action_content`가 공간 runtime의 목적지와 현재 행동에 직접 반영된다.
 - canonical 마을·건물·장소 경로와 사용자 노출 지도 라벨은 한국어 이름을 사용한다.
 - hourly/minute plan은 canonical 한국어 장소 경로를 축약하거나 일반화하지 않고 그대로 유지한다.
+- minute plan의 시각과 장소는 모델 출력에서 받지 않고 검증된 hourly window와 canonical location에서 파생한다.
 - 두 agent가 같은 canonical 목적지에서 인접했을 때만 대화 세션을 열고, 종료 뒤 30분 동안 재조우 대화를 억제한다.
 - Jiho의 Sujin에 대한 호감은 Jiho만 가진 private seed memory다. Sujin은 이를 선험적으로 알지 못하며 독립된 일정, 판단, 경계를 유지한다.
 

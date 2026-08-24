@@ -14,6 +14,11 @@ On $yesterday_date_text, $agent_name did the following:
 
 Today is $today_date_text. Draft $agent_name's structured day plan.
 
+## Fixed Planning Window
+
+- Start: `$planning_window_start`
+- End: `$planning_window_end`
+
 ## Framing Reference
 
 Framing reference (for style, not output format):
@@ -29,9 +34,12 @@ Framing reference (for style, not output format):
 - Each item must include all required fields: `start_time`, `end_time`, `location`, `action_content`.
 - `start_time` and `end_time` must be ISO 8601 datetime strings with minute precision (`seconds=00`).
 - `end_time` must be later than `start_time`.
-- Use the same calendar date as `Today is ...` for every plan item unless an item clearly crosses past midnight.
+- Use the same calendar date as `Today is ...`; only the final `end_time` may be midnight on the next date.
 - This is a broad-strokes day plan. Use natural human time spans and allow non-hour boundaries like `5:30 pm` when they fit the routine.
 - Keep chronological flow from morning to night.
+- The first item must start exactly at the fixed planning-window start.
+- Every item must start exactly when the previous item ends; gaps and overlaps are invalid.
+- The final item must end exactly at the fixed planning-window end.
 - Keep `location` and `action_content` behavior-oriented and non-empty.
 - Do not add numbering, bullets, markdown, explanatory text, or additional keys.
 

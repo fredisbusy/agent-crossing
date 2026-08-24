@@ -339,6 +339,9 @@ class PlanningCoordinator:
                 yesterday_date=now - datetime.timedelta(days=1),
                 yesterday_summary="평소 일과를 지키며 마을 사람들과 자연스럽게 교류했다.",
                 today_date=now,
+                planning_window_end=datetime.datetime.combine(
+                    now.date() + datetime.timedelta(days=1), datetime.time.min
+                ),
             )
         )
         if generated and all(

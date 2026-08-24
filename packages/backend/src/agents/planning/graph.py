@@ -9,8 +9,8 @@ from llm.governance import (
     HourPlanParseError,
     MinutePlanParseError,
     try_parse_day_plan,
-    try_parse_hour_plan,
-    try_parse_minute_plan,
+    try_parse_hour_plan_decomposition,
+    try_parse_minute_task_decomposition,
 )
 from typing_extensions import TypedDict
 
@@ -183,6 +183,14 @@ class PlanningGraphRunner:
         current_time: datetime.datetime,
         hourly_plan_item: HourlyPlanItem,
     ) -> list[MinutePlanItem]:
+        window_start = max(current_time, hourly_plan_item.start_time)
+        window_duration_minutes = int(
+            (hourly_plan_item.end_time - window_start).total_seconds() // 60
+        )
+        if window_duration_minutes < 5 or window_duration_minutes % 5 != 0:
+            raise PlanningGraphError(
+                "minute planning window must contain a positive multiple of 5 minutes"
+            )
         final_state = cast(
             MinutePlanningGraphState,
             self.minute_plan_graph.invoke(
@@ -301,6 +309,15 @@ class PlanningGraphRunner:
                 state["response_text"],
                 reference_date=state["request"].today_date.date(),
             )
+            planning_end = state["request"].planning_window_end
+            if planning_end is not None:
+                window_error = _continuous_window_error(
+                    parsed.items,
+                    window_start=state["request"].today_date,
+                    window_end=planning_end,
+                )
+                if window_error:
+                    raise DayPlanParseError(window_error)
             return {"plan_items": parsed.items, "parse_error": ""}
         except DayPlanParseError as exc:
             return {"plan_items": [], "parse_error": exc.reason}
@@ -357,10 +374,21 @@ class PlanningGraphRunner:
         state: HourlyPlanningGraphState,
     ) -> dict[str, object]:
         try:
-            parsed = try_parse_hour_plan(
+            parsed = try_parse_hour_plan_decomposition(
                 state["response_text"],
+                authoritative_location=state["day_plan_item"].location,
                 reference_date=state["current_time"].date(),
             )
+            window_error = _continuous_window_error(
+                parsed.items,
+                window_start=max(
+                    state["current_time"], state["day_plan_item"].start_time
+                ),
+                window_end=state["day_plan_item"].end_time,
+                containing_start=state["day_plan_item"].start_time,
+            )
+            if window_error:
+                raise HourPlanParseError(window_error)
             return {"plan_items": parsed.items, "parse_error": ""}
         except HourPlanParseError as exc:
             return {"plan_items": [], "parse_error": exc.reason}
@@ -416,12 +444,29 @@ class PlanningGraphRunner:
         self,
         state: MinutePlanningGraphState,
     ) -> dict[str, object]:
+        window_start = max(state["current_time"], state["hourly_plan_item"].start_time)
+        expected_duration_minutes = int(
+            (state["hourly_plan_item"].end_time - window_start).total_seconds() // 60
+        )
         try:
-            parsed = try_parse_minute_plan(
+            parsed = try_parse_minute_task_decomposition(
                 state["response_text"],
-                reference_date=state["current_time"].date(),
+                expected_duration_minutes=expected_duration_minutes,
             )
-            return {"plan_items": parsed.items, "parse_error": ""}
+            cursor = window_start
+            plan_items: list[MinutePlanItem] = []
+            for item in parsed.items:
+                end_time = cursor + datetime.timedelta(minutes=item.duration_minutes)
+                plan_items.append(
+                    MinutePlanItem(
+                        start_time=cursor,
+                        end_time=end_time,
+                        location=state["hourly_plan_item"].location,
+                        action_content=item.action_content,
+                    )
+                )
+                cursor = end_time
+            return {"plan_items": plan_items, "parse_error": ""}
         except MinutePlanParseError as exc:
             return {"plan_items": [], "parse_error": exc.reason}
 
@@ -466,3 +511,41 @@ def _build_plan_retry_prompt(
         f"Return strict JSON only with this exact shape and no extra text: {json_shape}\n"
         f"Do not repeat this invalid output: {previous_response[:180]!r}"
     )
+
+
+def _continuous_window_error(
+    items: list[DayPlanItem] | list[HourlyPlanItem],
+    *,
+    window_start: datetime.datetime,
+    window_end: datetime.datetime,
+    containing_start: datetime.datetime | None = None,
+) -> str:
+    """Return a semantic error unless items continuously cover a fixed window."""
+    if window_end <= window_start:
+        return "invalid_planning_window"
+
+    lower_bound = containing_start or window_start
+    relevant = [item for item in items if item.end_time > window_start]
+    if not relevant:
+        return "plan_does_not_cover_window_start"
+    if relevant[0].start_time < lower_bound or relevant[0].start_time > window_start:
+        return "plan_does_not_cover_window_start"
+
+    cursor = relevant[0].end_time
+    if cursor <= window_start:
+        return "plan_does_not_cover_window_start"
+    if cursor > window_end:
+        return "plan_exceeds_fixed_window"
+
+    for item in relevant[1:]:
+        if cursor == window_end:
+            return "plan_exceeds_fixed_window"
+        if item.start_time != cursor:
+            return "plan_contains_gap_or_overlap"
+        if item.end_time > window_end:
+            return "plan_exceeds_fixed_window"
+        cursor = item.end_time
+
+    if cursor != window_end:
+        return "plan_does_not_cover_window_end"
+    return ""

@@ -120,6 +120,26 @@ class CountingPlanningCoordinator:
         return object()
 
 
+class FailingSecondPlanningCoordinator:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def ensure_current(self, **kwargs: object) -> object:
+        _ = kwargs
+        self.calls += 1
+        if self.calls == 2:
+            raise RuntimeError("second agent plan failed")
+        return object()
+
+
+class RecordingSpatialRuntime:
+    def __init__(self) -> None:
+        self.schedules: list[object] = []
+
+    def set_schedule(self, schedule: object) -> None:
+        self.schedules.append(schedule)
+
+
 def test_world_runtime_updates_counters_on_step() -> None:
     agents = cast(list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")])
     session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
@@ -324,6 +344,56 @@ def test_cognitive_tick_slows_clock_and_holds_current_plan() -> None:
     assert runtime.current_time == initial_time + datetime.timedelta(seconds=30)
     assert runtime.effective_time_step_seconds == 30
     assert coordinator.ensure_calls == 0
+
+
+def test_world_tick_installs_agent_schedules_atomically() -> None:
+    agents = cast(list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")])
+    session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+    session.finish_dialogue()
+    coordinator = FailingSecondPlanningCoordinator()
+    spatial = RecordingSpatialRuntime()
+    initial_time = datetime.datetime(2026, 8, 24, 6, 25)
+    runtime = WorldRuntime(
+        agents=agents,
+        session=session,
+        engine=cast(
+            SimulationEngine,
+            cast(
+                object,
+                DummyEngine(
+                    result=SimulationStepResult(
+                        now=initial_time,
+                        speaker_name="Jiho",
+                        trace={},
+                        reply="",
+                        silent_reason="",
+                        parse_failure=False,
+                        observability=SimulationStepObservability(
+                            thought="",
+                            model_thought="",
+                            self_critique="",
+                            decision_reason="",
+                            action_summary="",
+                            decision_process={},
+                        ),
+                    )
+                ),
+            ),
+        ),
+        current_time=initial_time,
+        planning_coordinator=cast(PlanningCoordinator, cast(object, coordinator)),
+        spatial_runtime=cast(SpatialWorldRuntime, cast(object, spatial)),
+    )
+
+    try:
+        runtime._advance_world_tick()
+    except RuntimeError as error:
+        assert str(error) == "second agent plan failed"
+    else:
+        raise AssertionError("expected the second plan generation to fail")
+
+    assert spatial.schedules == []
+    assert runtime.current_time == initial_time
 
 
 def test_world_runtime_scheduler_starts_and_stops() -> None:
