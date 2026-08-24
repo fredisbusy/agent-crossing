@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { SpatialAgentState } from "@agent-crossing/shared";
+import { GridEngine, NumberOfDirections } from "grid-engine";
 import {
   getLayer,
   getProperty,
@@ -9,6 +10,7 @@ import {
 } from "../map/tiled";
 import { useGameStore } from "../stores/game.store";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
+import { ServerGridMovement } from "./gridMovement";
 
 const WORLD_WIDTH = townMap.width * townMap.tilewidth;
 const WORLD_HEIGHT = townMap.height * townMap.tileheight;
@@ -21,8 +23,6 @@ interface AgentView {
   rightLeg: Phaser.GameObjects.Rectangle;
   bubble: Phaser.GameObjects.Text;
   nameplate: Phaser.GameObjects.Text;
-  lastX: number;
-  lastY: number;
 }
 
 function tileKeyAt(x: number, y: number): string {
@@ -98,7 +98,10 @@ function isPathTile(x: number, y: number): boolean {
 }
 
 export class MainScene extends Phaser.Scene {
+  declare gridEngine: GridEngine;
+
   private readonly agentViews = new Map<string, AgentView>();
+  private gridMovement?: ServerGridMovement;
   private unsubscribeStore?: () => void;
   private followedAgentId = "Jiho";
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -120,6 +123,7 @@ export class MainScene extends Phaser.Scene {
     this.drawDecorations();
     this.drawInteractables();
     this.drawAgents();
+    this.initializeGridMovement();
     this.drawWorldTitle();
     this.configureCamera();
 
@@ -133,6 +137,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    for (const view of this.agentViews.values()) {
+      view.container.setDepth(view.container.y + 40);
+    }
     if (!this.cursors) return;
     const camera = this.cameras.main;
     const speed = (delta / camera.zoom) * 0.48;
@@ -420,38 +427,65 @@ export class MainScene extends Phaser.Scene {
         rightLeg,
         bubble,
         nameplate,
-        lastX: spawn.x,
-        lastY: spawn.y,
       });
     }
   }
 
+  private initializeGridMovement(): void {
+    const navigationTiles = Array.from({ length: townMap.height }, () =>
+      Array.from({ length: townMap.width }, () => 0),
+    );
+    const navigationMap = this.make.tilemap({
+      data: navigationTiles,
+      tileWidth: TILE_SIZE,
+      tileHeight: TILE_SIZE,
+    });
+    this.gridEngine.create(navigationMap, {
+      numberOfDirections: NumberOfDirections.FOUR,
+      characters: getLayer("spawns").flatMap((spawn) => {
+        const id = getProperty(spawn, "agent_id", spawn.name);
+        const view = this.agentViews.get(id);
+        if (!view) return [];
+        return [
+          {
+            id,
+            container: view.container,
+            startPosition: {
+              x: Math.floor(spawn.x / TILE_SIZE),
+              y: Math.floor(spawn.y / TILE_SIZE),
+            },
+            speed: 2,
+            collides: false,
+            numberOfDirections: NumberOfDirections.FOUR,
+          },
+        ];
+      }),
+    });
+    this.gridMovement = new ServerGridMovement(this.gridEngine);
+  }
+
   private applyAgentStates(states: Record<string, SpatialAgentState>): void {
     for (const [id, state] of Object.entries(states)) {
-      const view =
-        this.agentViews.get(id) ??
-        this.agentViews.get(state.name.split(" ")[0]);
+      const characterId = this.agentViews.has(id)
+        ? id
+        : state.name.split(" ")[0];
+      const view = this.agentViews.get(characterId);
       if (!view) continue;
-      const dx = state.position.x - view.lastX;
-      const dy = state.position.y - view.lastY;
-      view.lastX = state.position.x;
-      view.lastY = state.position.y;
-      view.body.setScale(Math.abs(dx) > Math.abs(dy) ? 0.9 : 1, 1);
-      view.leftLeg.y = dx + dy === 0 ? 10 : 8;
-      view.rightLeg.y = dx + dy === 0 ? 10 : 12;
+      const transition = this.gridMovement?.sync(
+        characterId,
+        state.tile_position,
+      );
+      const isMoving = transition?.kind === "cardinal-step";
+      view.body.setScale(
+        isMoving && Math.abs(transition.deltaX) > 0 ? 0.9 : 1,
+        1,
+      );
+      view.leftLeg.y = isMoving ? 8 : 10;
+      view.rightLeg.y = isMoving ? 12 : 10;
       view.bubble
         .setText(this.actionEmoji(state.current_action))
         .setVisible(true);
       view.nameplate.setText(state.name);
-      view.container.setDepth(state.position.y + 40);
-      this.tweens.killTweensOf(view.container);
-      this.tweens.add({
-        targets: view.container,
-        x: state.position.x,
-        y: state.position.y,
-        duration: 780,
-        ease: "Linear",
-      });
     }
   }
 

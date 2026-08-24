@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import Phaser from "phaser";
+import { GridEngine } from "grid-engine";
 import { InteriorScene } from "./game/InteriorScene";
 import { MainScene } from "./game/MainScene";
 import { useWorldStream } from "./hooks/useWorldStream";
@@ -40,6 +41,15 @@ function App() {
           autoCenter: Phaser.Scale.CENTER_BOTH,
         },
         render: { antialias: false, pixelArt: true, roundPixels: true },
+        plugins: {
+          scene: [
+            {
+              key: "gridEngine",
+              plugin: GridEngine,
+              mapping: "gridEngine",
+            },
+          ],
+        },
         scene: [MainScene, InteriorScene],
       });
     }
