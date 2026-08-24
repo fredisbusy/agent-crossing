@@ -34,6 +34,7 @@ class MapLocation:
     kind: str
     location_path: str
     color: str
+    aliases: tuple[str, ...]
     bounds: MapBounds
 
 
@@ -85,6 +86,55 @@ class WorldMap:
             ),
             None,
         )
+
+    def resolve_location(self, plan_text: str) -> MapLocation | None:
+        normalized_plan = _normalize_label(plan_text)
+        if not normalized_plan:
+            return None
+        candidates: list[tuple[int, int, MapLocation]] = []
+        for index, location in enumerate(self.locations):
+            labels = (
+                location.name,
+                location.kind,
+                location.location_path,
+                *location.aliases,
+            )
+            matches = [
+                len(normalized_label)
+                for label in labels
+                if (normalized_label := _normalize_label(label))
+                and normalized_label in normalized_plan
+            ]
+            if matches:
+                candidates.append((-max(matches), index, location))
+        return min(candidates)[2] if candidates else None
+
+    def nearest_walkable_tile(
+        self, *, bounds: MapBounds, origin: MapPoint
+    ) -> MapPoint | None:
+        candidates: list[tuple[int, int, int, MapPoint]] = []
+        for tile_y in range(self.height):
+            for tile_x in range(self.width):
+                tile = MapPoint(tile_x, tile_y)
+                if not self.is_walkable_tile(tile):
+                    continue
+                center_x = (tile_x * self.tile_width) + (self.tile_width // 2)
+                center_y = (tile_y * self.tile_height) + (self.tile_height // 2)
+                distance_to_bounds = _distance_to_bounds(
+                    x=center_x,
+                    y=center_y,
+                    bounds=bounds,
+                )
+                distance_from_origin = abs(tile_x - origin.x) + abs(tile_y - origin.y)
+                candidates.append(
+                    (
+                        distance_to_bounds,
+                        distance_from_origin,
+                        tile_y * self.width + tile_x,
+                        tile,
+                    )
+                )
+        return min(candidates)[3] if candidates else None
 
     def is_walkable_tile(self, tile: MapPoint) -> bool:
         if not 0 <= tile.x < self.width or not 0 <= tile.y < self.height:
@@ -164,6 +214,11 @@ def load_world_map(path: Path | None = None) -> WorldMap:
             kind=str(_property(item, "kind", "location")),
             location_path=str(_property(item, "location_path", _string(item, "name"))),
             color=str(_property(item, "color", "#c7d8b4")),
+            aliases=tuple(
+                alias.strip()
+                for alias in str(_property(item, "aliases", "")).split(",")
+                if alias.strip()
+            ),
             bounds=_bounds(item),
         )
         for item in _objects(layers, "locations")
@@ -271,3 +326,16 @@ def _number(
 
 def _integer(source: dict[str, object], key: str) -> int:
     return round(_number(source, key))
+
+
+def _normalize_label(value: str) -> str:
+    normalized_characters = (
+        character.lower() if character.isalnum() else " " for character in value
+    )
+    return " ".join("".join(normalized_characters).split())
+
+
+def _distance_to_bounds(*, x: int, y: int, bounds: MapBounds) -> int:
+    horizontal = max(bounds.x - x, 0, x - (bounds.x + bounds.width - 1))
+    vertical = max(bounds.y - y, 0, y - (bounds.y + bounds.height - 1))
+    return horizontal + vertical

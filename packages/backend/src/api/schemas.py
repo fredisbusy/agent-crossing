@@ -101,3 +101,20 @@ class WorldPathRequest(BaseModel):
 class WorldPathResponse(BaseModel):
     reachable: bool
     path: list[WorldMapPointResponse]
+
+
+class SpatialAgentResponse(BaseModel):
+    agent_id: str
+    name: str
+    tile_position: WorldMapPointResponse
+    position: WorldMapPointResponse
+    destination: str | None
+    current_action: str
+    plan: str
+    route_remaining: int
+
+
+class SpatialWorldResponse(BaseModel):
+    revision: int
+    map_id: str
+    agents: list[SpatialAgentResponse]

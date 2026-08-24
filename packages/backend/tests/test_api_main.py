@@ -9,11 +9,15 @@ from world.engine import SimulationStepObservability, SimulationStepResult
 from api.main import (
     _require_runtime,
     app,
+    get_world_spatial_state,
     get_world_state,
+    post_world_spatial_step,
     post_world_step,
     post_world_tick_start,
     post_world_tick_stop,
 )
+from world.spatial import SpatialAgentSeed, SpatialWorldRuntime
+from world.world_map import load_world_map
 
 
 @dataclass(frozen=True)
@@ -77,6 +81,28 @@ def test_require_runtime_raises_when_unavailable() -> None:
 
     with pytest.raises(HTTPException):
         _ = _require_runtime()
+
+
+@pytest.mark.anyio
+async def test_spatial_state_and_step_endpoints_advance_planned_route() -> None:
+    app.state.spatial_runtime = SpatialWorldRuntime(
+        world_map=load_world_map(),
+        seeds=[
+            SpatialAgentSeed(
+                agent_id="jiho",
+                name="Jiho Park",
+                plan_context=("Jiho is visiting Morning Dew Cafe.",),
+            )
+        ],
+    )
+
+    initial = await get_world_spatial_state()
+    stepped = await post_world_spatial_step()
+
+    assert initial.revision == 0
+    assert stepped.revision == 1
+    assert stepped.agents[0].destination == "Briar Cove > The Honey Cup"
+    assert stepped.agents[0].position != initial.agents[0].position
 
 
 @pytest.mark.anyio

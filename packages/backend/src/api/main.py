@@ -3,18 +3,20 @@ from typing import cast
 
 from agents.persona_loader import PersonaLoader
 from api.schemas import (
+    SpatialAgentResponse,
+    SpatialWorldResponse,
     StatusResponse,
     WorldMapBoundsResponse,
     WorldMapInteractableResponse,
     WorldMapLocationResponse,
     WorldMapPointResponse,
     WorldMapResponse,
-    WorldSchedulerResponse,
     WorldMapSpawnResponse,
     WorldObservationResponse,
     WorldObserveRequest,
     WorldPathRequest,
     WorldPathResponse,
+    WorldSchedulerResponse,
     WorldStateResponse,
     WorldStepResponse,
 )
@@ -30,6 +32,7 @@ from settings import (
     WORLD_TICK_INTERVAL_SECONDS,
 )
 from world.runtime import WorldRuntime, WorldRuntimeConfig, build_world_runtime
+from world.spatial import SpatialAgentSeed, SpatialWorldRuntime, SpatialWorldSnapshot
 from world.world_map import MapBounds, MapPoint, WorldMap, load_world_map
 
 app = FastAPI(title="Agent Crossing API")
@@ -41,6 +44,17 @@ def on_startup() -> None:
     persona_dir = Path(__file__).resolve().parents[2] / "persona"
     app.state.persona_loader = PersonaLoader(persona_dir)
     app.state.agent_personas = app.state.persona_loader.load_all()
+    app.state.spatial_runtime = SpatialWorldRuntime(
+        world_map=load_world_map(),
+        seeds=[
+            SpatialAgentSeed(
+                agent_id=persona.agent.id,
+                name=persona.agent.name,
+                plan_context=tuple(persona.current_plan_context),
+            )
+            for persona in app.state.agent_personas
+        ],
+    )
     persona_names = [persona.agent.id for persona in app.state.agent_personas]
     app.state.world_runtime = None
     if len(persona_names) >= 2:
@@ -130,6 +144,48 @@ def _map_bounds_response(bounds: MapBounds) -> WorldMapBoundsResponse:
         width=bounds.width,
         height=bounds.height,
     )
+
+
+def _require_spatial_runtime() -> SpatialWorldRuntime:
+    runtime = cast(
+        SpatialWorldRuntime | None,
+        getattr(app.state, "spatial_runtime", None),
+    )
+    if runtime is None:
+        raise HTTPException(
+            status_code=503, detail="spatial runtime is not initialized"
+        )
+    return runtime
+
+
+def _spatial_response(snapshot: SpatialWorldSnapshot) -> SpatialWorldResponse:
+    return SpatialWorldResponse(
+        revision=snapshot.revision,
+        map_id=snapshot.map_id,
+        agents=[
+            SpatialAgentResponse(
+                agent_id=agent.agent_id,
+                name=agent.name,
+                tile_position=_map_point_response(agent.tile_position),
+                position=_map_point_response(agent.pixel_position),
+                destination=agent.destination,
+                current_action=agent.current_action,
+                plan=agent.plan,
+                route_remaining=agent.route_remaining,
+            )
+            for agent in snapshot.agents
+        ],
+    )
+
+
+@app.get("/world/spatial/state", response_model=SpatialWorldResponse)
+async def get_world_spatial_state() -> SpatialWorldResponse:
+    return _spatial_response(_require_spatial_runtime().snapshot())
+
+
+@app.post("/world/spatial/step", response_model=SpatialWorldResponse)
+async def post_world_spatial_step() -> SpatialWorldResponse:
+    return _spatial_response(_require_spatial_runtime().tick())
 
 
 @app.post("/world/observe", response_model=WorldObservationResponse)
