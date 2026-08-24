@@ -10,6 +10,9 @@ export const TILE = {
   park: "tile-park",
   water: "tile-water",
   flowers: "tile-flowers",
+  woodFloor: "tile-wood-floor",
+  stoneFloor: "tile-stone-floor",
+  wall: "tile-wall",
 } as const;
 
 function paintTexture(
@@ -134,6 +137,40 @@ export function createPixelTextures(scene: Phaser.Scene): void {
       context.fillStyle = "#fff0a0";
       context.fillRect(x, y + 1, 2, 2);
     }
+  });
+
+  paintTexture(scene, TILE.woodFloor, TILE_SIZE, TILE_SIZE, (context) => {
+    context.fillStyle = "#c98e55";
+    context.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+    context.fillStyle = "#a86d40";
+    context.fillRect(0, 15, 32, 2);
+    context.fillRect(15, 0, 2, 15);
+    context.fillRect(7, 17, 2, 15);
+    context.fillStyle = "#dfaa68";
+    context.fillRect(3, 5, 8, 2);
+    context.fillRect(20, 23, 7, 2);
+  });
+
+  paintTexture(scene, TILE.stoneFloor, TILE_SIZE, TILE_SIZE, (context) => {
+    context.fillStyle = "#d9c99f";
+    context.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+    context.fillStyle = "#b8aa86";
+    context.fillRect(0, 15, 32, 2);
+    context.fillRect(15, 0, 2, 16);
+    context.fillRect(7, 17, 2, 15);
+    context.fillStyle = "#eee1bd";
+    context.fillRect(3, 4, 5, 3);
+  });
+
+  paintTexture(scene, TILE.wall, TILE_SIZE, TILE_SIZE, (context) => {
+    context.fillStyle = "#ead8a7";
+    context.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+    context.fillStyle = "#cfb879";
+    context.fillRect(0, 24, TILE_SIZE, 8);
+    context.fillStyle = "#f6e9c4";
+    context.fillRect(4, 5, 24, 3);
+    context.fillStyle = "#b69b62";
+    context.fillRect(0, 30, TILE_SIZE, 2);
   });
 
   paintTexture(scene, "tree", 48, 64, (context) => {

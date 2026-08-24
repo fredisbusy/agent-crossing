@@ -253,6 +253,14 @@
     - [x] 전체 지도 축소 대신 agent 추적/드래그/줌 카메라를 제공한다
     - [x] WebSocket spatial snapshot이 agent 이동과 HUD 상태에 반영된다
 
+- [x] `P2` 건물별 pixel interior와 출입 portal을 구현한다
+  - Depends on: 탑다운 픽셀 월드 렌더러
+  - DoD:
+    - [x] 건물 문 hover/click으로 별도 interior scene에 진입한다
+    - [x] cafe/library/market/home kind별 가구와 바닥 템플릿을 제공한다
+    - [x] `ESC`, `E`, 출구 클릭으로 outdoor scene에 복귀한다
+    - [x] 새 building object는 kind 기반 interior template을 재사용할 수 있다
+
 - [x] `P2` Tiled map + collision을 연결한다
   - Depends on: WebSocket state broadcast 구현
   - DoD:

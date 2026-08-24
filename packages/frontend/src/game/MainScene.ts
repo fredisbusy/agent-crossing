@@ -251,6 +251,35 @@ export class MainScene extends Phaser.Scene {
       .setDepth(location.y + height + 1)
       .setResolution(1);
     sign.setShadow(2, 2, "#15271f", 0, false, true);
+
+    const doorX = location.x + width / 2;
+    const doorY = bottom - 22;
+    const enterLabel = this.add
+      .text(doorX, bottom + 10, "▼ ENTER", {
+        fontFamily: PIXEL_FONT,
+        fontSize: "8px",
+        fontStyle: "bold",
+        color: "#fff5b8",
+        backgroundColor: "#8f4348",
+        padding: { x: 5, y: 3 },
+      })
+      .setOrigin(0.5)
+      .setDepth(location.y + height + 2)
+      .setVisible(false)
+      .setResolution(1);
+    const portal = this.add
+      .zone(doorX, doorY, 40, 56)
+      .setDepth(location.y + height + 3)
+      .setInteractive({ useHandCursor: true });
+    portal.on("pointerover", () => enterLabel.setVisible(true));
+    portal.on("pointerout", () => enterLabel.setVisible(false));
+    portal.on("pointerdown", () => {
+      this.scene.start("InteriorScene", {
+        name: location.name,
+        kind,
+        color: getProperty(location, "color", "#d58c68"),
+      });
+    });
   }
 
   private drawDecorations(): void {

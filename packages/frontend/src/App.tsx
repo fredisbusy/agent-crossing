@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import Phaser from "phaser";
+import { InteriorScene } from "./game/InteriorScene";
 import { MainScene } from "./game/MainScene";
 import { useWorldStream } from "./hooks/useWorldStream";
 import { getLayer, getMapProperty, getProperty } from "./map/tiled";
@@ -39,7 +40,7 @@ function App() {
           autoCenter: Phaser.Scale.CENTER_BOTH,
         },
         render: { antialias: false, pixelArt: true, roundPixels: true },
-        scene: [MainScene],
+        scene: [MainScene, InteriorScene],
       });
     }
     return () => {

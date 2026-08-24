@@ -201,6 +201,9 @@ react 정책:
   전체 월드 축소가 아닌 local follow camera를 기본 관찰 시점으로 사용한다.
 - pixel texture는 nearest-neighbor로 렌더링하며 terrain/building/decor/agent의
   depth는 tile y 좌표를 기준으로 정렬한다.
+- building portal은 semantic `kind`를 interior template(cafe/library/market/home)에
+  연결한다. 실내는 독립 scene으로 렌더링하고 출구 portal로 outdoor scene에 복귀한다.
+- agent는 backend 상태가 해당 building에 도착한 경우에만 interior에 표시한다.
 - interactable은 `location_path`와 쉼표로 구분된 `affordances`를 가져야 한다.
 
 월드 API:
