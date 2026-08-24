@@ -151,6 +151,12 @@ To expand Briar Cove, add or move semantic objects in
 `location_path`; the backend and pixel renderer consume the same layers without
 requiring a second map definition.
 
+Homes use a roofless Smallville-style dollhouse view directly on the outdoor
+map. Bedroom, kitchen, common-room, and bathroom fixtures remain visible, and
+an agent who has arrived home is projected into the room matching its current
+action with a readable plan bubble. This indoor projection is observational;
+the backend remains authoritative for the agent's canonical tile and route.
+
 ## Reference
 
 - Paper: [Generative Agents: Interactive Simulacra of Human Behavior](https://arxiv.org/abs/2304.03442)

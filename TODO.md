@@ -268,6 +268,14 @@
     - [x] `ESC`, `E`, 출구 클릭으로 outdoor scene에 복귀한다
     - [x] 새 building object는 kind 기반 interior template을 재사용할 수 있다
 
+- [x] `P2` Smallville형 상시 노출 주택 interior를 구현한다
+  - Depends on: 건물별 pixel interior와 출입 portal 구현
+  - DoD:
+    - [x] home kind는 지붕 없이 침실/주방/공용실/욕실을 메인 맵에 표시한다
+    - [x] 침대/책상/책장/테이블/주방/욕실 fixture를 재사용 템플릿으로 렌더링한다
+    - [x] 집에 도착한 agent를 행동에 맞는 방에 표시하고 현재 계획을 말풍선으로 보여준다
+    - [x] 실내 관찰 위치가 backend canonical tile이나 4방향 route를 변경하지 않는다
+
 - [x] `P2` Tiled map + collision을 연결한다
   - Depends on: WebSocket state broadcast 구현
   - DoD:
