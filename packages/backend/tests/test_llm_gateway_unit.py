@@ -971,7 +971,7 @@ def test_generate_minute_plan_retries_once_on_schema_validation_error() -> None:
     assert client.calls == 2
 
 
-def test_generate_minute_plan_retries_when_duration_exceeds_parent_window() -> None:
+def test_generate_minute_plan_trims_the_final_boundary_to_parent_window() -> None:
     client = StubGenerationClient(
         responses=[
             json.dumps(
@@ -980,16 +980,6 @@ def test_generate_minute_plan_retries_when_duration_exceeds_parent_window() -> N
                         {
                             "duration_minutes": 15,
                             "action_content": "Prepare the next hour.",
-                        }
-                    ]
-                }
-            ),
-            json.dumps(
-                {
-                    "items": [
-                        {
-                            "duration_minutes": 5,
-                            "action_content": "Finish the current task.",
                         }
                     ]
                 }
@@ -1009,12 +999,84 @@ def test_generate_minute_plan_retries_when_duration_exceeds_parent_window() -> N
         ),
     )
 
-    assert client.calls == 2
+    assert client.calls == 1
     assert len(items) == 1
     assert items[0].start_time == datetime.datetime(2026, 2, 13, 13, 55)
     assert items[0].end_time == datetime.datetime(2026, 2, 13, 14, 0)
-    retry_prompt = cast(str, client.call_kwargs[1]["prompt"])
-    assert "duration_total_mismatch_expected_5_got_15" in retry_prompt
+
+
+def test_generate_minute_plan_fits_100_generated_minutes_into_90_minute_window() -> None:
+    client = StubGenerationClient(
+        responses=[
+            json.dumps(
+                {
+                    "items": [
+                        *[
+                            {
+                                "duration_minutes": 15,
+                                "action_content": f"Concrete task {index}",
+                            }
+                            for index in range(1, 7)
+                        ],
+                        {
+                            "duration_minutes": 10,
+                            "action_content": "Extra trailing task",
+                        },
+                    ]
+                }
+            )
+        ]
+    )
+    service = LlmGateway(client)
+
+    items = service.generate_minute_plan(
+        agent_name="Eddy Lin",
+        current_time=datetime.datetime(2026, 2, 13, 12, 0),
+        hourly_plan_item=HourlyPlanItem(
+            start_time=datetime.datetime(2026, 2, 13, 12, 0),
+            end_time=datetime.datetime(2026, 2, 13, 13, 30),
+            location="Town > Home > Study",
+            action_content="Complete focused work",
+        ),
+    )
+
+    assert client.calls == 1
+    assert sum(item.duration_minutes for item in items) == 90
+    assert items[-1].end_time == datetime.datetime(2026, 2, 13, 13, 30)
+    assert all(item.action_content != "Extra trailing task" for item in items)
+
+
+def test_generate_minute_plan_extends_last_item_when_total_is_short() -> None:
+    client = StubGenerationClient(
+        responses=[
+            json.dumps(
+                {
+                    "items": [
+                        {"duration_minutes": 15, "action_content": "First task"},
+                        {"duration_minutes": 15, "action_content": "Second task"},
+                        {"duration_minutes": 10, "action_content": "Final task"},
+                    ]
+                }
+            )
+        ]
+    )
+    service = LlmGateway(client)
+
+    items = service.generate_minute_plan(
+        agent_name="Eddy Lin",
+        current_time=datetime.datetime(2026, 2, 13, 12, 0),
+        hourly_plan_item=HourlyPlanItem(
+            start_time=datetime.datetime(2026, 2, 13, 12, 0),
+            end_time=datetime.datetime(2026, 2, 13, 13, 0),
+            location="Town > Home > Study",
+            action_content="Complete focused work",
+        ),
+    )
+
+    assert client.calls == 1
+    assert items[-1].action_content == "Final task"
+    assert items[-1].duration_minutes == 30
+    assert items[-1].end_time == datetime.datetime(2026, 2, 13, 13, 0)
 
 
 def test_generate_day_plan_parses_json_items() -> None:

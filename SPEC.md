@@ -159,7 +159,7 @@ Backend 레이어 책임:
 
 1. Day plan: 하루 거시 일정(5~8 broad strokes)
 2. Hourly plan: **현재 시점이 속한 day plan 항목**을 시간 단위로 세분화한 근미래 계획
-3. Minute plan: **현재 시점이 속한 hourly plan 항목**을 5~15분 단위로 세분화한 실행 액션
+3. Minute plan: **현재 시점이 속한 hourly plan 항목**을 기본 5~15분 단위로 세분화한 실행 액션
 
 Minute decomposition은 Park et al.의 Generative Agents 구현처럼 상위 task의
 고정 duration을 5분 단위 하위 행동으로 분해한다. LLM은
@@ -186,11 +186,13 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
 - `duration_minutes`는 저장 필드가 아니라 `end_time - start_time`으로부터 계산되는 파생값으로 취급
 - day/hourly/minute plan 모두 초 단위 없이 minute precision 사용
 - day/hourly plan은 exact-hour 정렬을 강제하지 않으며 `5:30 pm` 같은 자연스러운 broad-strokes 시간을 허용
-- minute plan은 `end_time - start_time`이 5~15분 범위를 만족해야 함
+- LLM이 생성하는 minute duration은 5~15분이며 5분 단위여야 함
+- 고정 시간창보다 총합이 짧을 때는 논문 구현처럼 마지막 항목을 종료 시각까지 늘릴 수 있어 최종 canonical 항목은 15분을 초과할 수 있음
 - minute decomposition의 duration 합계는 현재 시각부터 active hourly 종료까지의 남은 시간과 정확히 같아야 함
 - day/hourly plan은 고정 planning window의 시작과 끝을 모두 덮고 항목 사이에 gap/overlap이 없어야 함
 - hourly location은 active day-plan의 canonical location을 runtime이 상속함
-- duration 합계 불일치는 semantic parse error로 재시도하며 임의 연장·반복·fallback으로 보정하지 않음
+- duration 합계가 고정 시간창보다 길면 끝부분을 잘라내고, 짧으면 마지막 항목을 늘려 authoritative 종료 시각에 맞춤
+- JSON/schema/필수 행동/duration 단위 자체가 잘못된 경우에는 보정하지 않고 semantic parse error로 재시도함
 - active day/hourly/minute 항목은 모두 현재 world clock을 포함해야 하며, 미래 항목을 현재 항목처럼 선택하지 않는다
 - day plan만 하루 전체를 미리 생성하고, hourly/minute plan은 near future만 just-in-time으로 재귀 분해한다
 - hourly plan은 현재 시점의 active day-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다

@@ -148,15 +148,15 @@
     - [x] 현재 시점 기준 active day plan 항목을 선택한다
     - [x] hourly plan이 시간 순서로 정렬된다
 
-- [x] `P1` minute plan(5~15분 단위) 생성기를 구현한다
+- [x] `P1` minute plan(기본 5~15분 단위) 생성기를 구현한다
   - Depends on: hourly plan 생성기 구현
   - DoD:
-    - [x] minute plan 단위가 5~15분 범위를 만족한다
+    - [x] 모델 생성 minute 단위가 5~15분 범위를 만족하고 최종 시간창 보정은 5분 단위를 유지한다
     - [x] active hourly plan 항목 입력을 기준으로 near-future minute plan을 생성한다
     - [x] 현재 시점 기준 active hourly plan 항목을 선택한다
     - [x] 현재 시점 기준 다음 실행 항목을 즉시 찾을 수 있다
     - [x] 논문식 fixed-duration task decomposition으로 minute plan의 시간·장소를 runtime이 조립한다
-    - [x] minute duration 총합 불일치를 semantic retry로 처리하고 시간 경계 월경을 차단한다
+    - [x] 논문 구현처럼 minute duration 초과분은 끝에서 자르고 부족분은 마지막 항목을 늘려 시간 경계를 맞춘다
     - [x] day/hourly 고정 시간창의 시작·끝·연속성을 semantic retry로 검증한다
     - [x] hourly/minute 위치를 authoritative parent plan에서 상속한다
 

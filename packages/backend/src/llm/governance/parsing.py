@@ -207,7 +207,7 @@ def try_parse_minute_task_decomposition(
     *,
     expected_duration_minutes: int,
 ) -> MinuteTaskDecompositionParseResult:
-    """Parse paper-style task decomposition with a fixed total duration."""
+    """Parse and fit paper-style task decomposition to a fixed total duration."""
     payload = parse_json_object(response_text)
     if payload is None:
         payload = attempt_json_repair_once(response_text)
@@ -243,11 +243,34 @@ def try_parse_minute_task_decomposition(
         )
 
     actual_duration_minutes = sum(item.duration_minutes for item in items)
-    if actual_duration_minutes != expected_duration_minutes:
-        raise MinutePlanParseError(
-            "duration_total_mismatch_"
-            f"expected_{expected_duration_minutes}_got_{actual_duration_minutes}"
+    if actual_duration_minutes < expected_duration_minutes:
+        deficit = expected_duration_minutes - actual_duration_minutes
+        last = items[-1]
+        items[-1] = MinuteTaskDecompositionItem(
+            action_content=last.action_content,
+            duration_minutes=last.duration_minutes + deficit,
         )
+    elif actual_duration_minutes > expected_duration_minutes:
+        remaining = expected_duration_minutes
+        fitted: list[MinuteTaskDecompositionItem] = []
+        for item in items:
+            if remaining <= 0:
+                break
+            fitted_duration = min(item.duration_minutes, remaining)
+            if fitted_duration < 5 or fitted_duration % 5 != 0:
+                raise MinutePlanParseError("fixed_window_is_not_a_5_minute_multiple")
+            fitted.append(
+                MinuteTaskDecompositionItem(
+                    action_content=item.action_content,
+                    duration_minutes=fitted_duration,
+                )
+            )
+            remaining -= fitted_duration
+        items = fitted
+
+    fitted_total_minutes = sum(item.duration_minutes for item in items)
+    if not items or fitted_total_minutes != expected_duration_minutes:
+        raise MinutePlanParseError("unable_to_fit_fixed_duration_window")
     return MinuteTaskDecompositionParseResult(items=items)
 
 
