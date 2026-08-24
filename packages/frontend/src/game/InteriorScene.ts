@@ -2,12 +2,12 @@ import Phaser from "phaser";
 import { useGameStore } from "../stores/game.store";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 import { agentBubbleLabel } from "./agentBubble";
+import { GAME_UI_FONT, makeCrispText } from "./gameText";
 
 const ROOM_COLUMNS = 20;
 const ROOM_ROWS = 14;
 const ROOM_WIDTH = ROOM_COLUMNS * TILE_SIZE;
 const ROOM_HEIGHT = ROOM_ROWS * TILE_SIZE;
-const PIXEL_FONT = '"Courier New", monospace';
 
 interface InteriorData {
   name: string;
@@ -167,16 +167,16 @@ export class InteriorScene extends Phaser.Scene {
     graphics.fillRect(x + 5, y + 8, width - 10, 42);
     graphics.fillStyle(0xd4a064, 1);
     graphics.fillRect(x - 6, y - 7, width + 12, 13);
-    this.add
-      .text(x + width / 2, y + 21, label, {
-        fontFamily: PIXEL_FONT,
+    makeCrispText(
+      this.add.text(x + width / 2, y + 21, label, {
+        fontFamily: GAME_UI_FONT,
         fontSize: "8px",
         fontStyle: "bold",
         color: "#fff2c1",
-      })
+      }),
+    )
       .setOrigin(0.5)
-      .setDepth(y + 61)
-      .setResolution(1);
+      .setDepth(y + 61);
   }
 
   private drawShelf(
@@ -316,28 +316,26 @@ export class InteriorScene extends Phaser.Scene {
       graphics.fillRect(-8, -15, 16, 15);
       graphics.fillStyle(0x3e322e, 1);
       graphics.fillRect(-9, -20, 18, 7);
-      const bubble = this.add
-        .text(0, -34, agentBubbleLabel(agent), {
-          fontFamily: PIXEL_FONT,
+      const bubble = makeCrispText(
+        this.add.text(0, -34, agentBubbleLabel(agent), {
+          fontFamily: GAME_UI_FONT,
           fontSize: "9px",
           color: "#2d3028",
           backgroundColor: "#fffbed",
           padding: { x: 5, y: 3 },
           wordWrap: { width: 220 },
-        })
-        .setOrigin(0.5, 1)
-        .setResolution(1);
-      const nameplate = this.add
-        .text(0, 31, agent.name, {
-          fontFamily: PIXEL_FONT,
+        }),
+      ).setOrigin(0.5, 1);
+      const nameplate = makeCrispText(
+        this.add.text(0, 31, agent.name, {
+          fontFamily: GAME_UI_FONT,
           fontSize: "8px",
           fontStyle: "bold",
           color: "#fff3c1",
           backgroundColor: "#2a4334",
           padding: { x: 4, y: 2 },
-        })
-        .setOrigin(0.5)
-        .setResolution(1);
+        }),
+      ).setOrigin(0.5);
       resident.add([graphics, bubble, nameplate]);
       resident.on("pointerdown", () =>
         useGameStore.getState().selectAgent(agent.agent_id),
@@ -354,45 +352,44 @@ export class InteriorScene extends Phaser.Scene {
     graphics.fillRect(x - 28, ROOM_HEIGHT - 66, 56, 66);
     graphics.fillStyle(0xd5ae68, 1);
     graphics.fillRect(x - 19, ROOM_HEIGHT - 10, 38, 7);
-    const exitText = this.add
-      .text(x, y - 8, "▲  EXIT", {
-        fontFamily: PIXEL_FONT,
+    const exitText = makeCrispText(
+      this.add.text(x, y - 8, "▲  EXIT", {
+        fontFamily: GAME_UI_FONT,
         fontSize: "9px",
         fontStyle: "bold",
         color: "#fff2b1",
         backgroundColor: "#8f4348",
         padding: { x: 7, y: 4 },
-      })
+      }),
+    )
       .setOrigin(0.5)
       .setDepth(502)
-      .setResolution(1)
       .setInteractive({ useHandCursor: true });
     exitText.on("pointerdown", () => this.exitInterior());
   }
 
   private drawRoomHud(): void {
-    this.add
-      .text(18, 18, this.interior.name.toUpperCase(), {
-        fontFamily: PIXEL_FONT,
+    makeCrispText(
+      this.add.text(18, 18, this.interior.name.toUpperCase(), {
+        fontFamily: GAME_UI_FONT,
         fontSize: "13px",
         fontStyle: "bold",
         color: "#fff4c5",
         backgroundColor: "#2b4635",
         padding: { x: 8, y: 6 },
-      })
-      .setDepth(600)
-      .setResolution(1);
-    this.add
-      .text(ROOM_WIDTH - 18, 18, "ESC / E  LEAVE", {
-        fontFamily: PIXEL_FONT,
+      }),
+    ).setDepth(600);
+    makeCrispText(
+      this.add.text(ROOM_WIDTH - 18, 18, "ESC / E  LEAVE", {
+        fontFamily: GAME_UI_FONT,
         fontSize: "8px",
         color: "#594638",
         backgroundColor: "#f0dfad",
         padding: { x: 6, y: 4 },
-      })
+      }),
+    )
       .setOrigin(1, 0)
-      .setDepth(600)
-      .setResolution(1);
+      .setDepth(600);
   }
 
   private fitCamera(): void {

@@ -1,8 +1,7 @@
 import Phaser from "phaser";
 import type { TiledObject } from "../map/tiled";
+import { GAME_UI_FONT, makeCrispText } from "./gameText";
 import { HOME_ROOMS, type HomeRoom } from "./homeInterior";
-
-const PIXEL_FONT = '"Courier New", monospace';
 
 export interface DollhouseHomeView {
   name: string;
@@ -98,29 +97,38 @@ export function drawDollhouseHome(
   graphics.strokeRect(x - 6, y - 6, width + 12, height + 12);
 
   for (const room of HOME_ROOMS) {
-    scene.add
-      .text(x + room.x * width + 5, y + room.y * height + 4, room.label, {
-        fontFamily: PIXEL_FONT,
-        fontSize: "6px",
-        fontStyle: "bold",
-        color: "#5a4334",
-      })
-      .setDepth(depth + 1)
-      .setResolution(1);
+    makeCrispText(
+      scene.add.text(
+        x + room.x * width + 5,
+        y + room.y * height + 4,
+        room.label,
+        {
+          fontFamily: GAME_UI_FONT,
+          fontSize: "6px",
+          fontStyle: "bold",
+          color: "#5a4334",
+        },
+      ),
+    ).setDepth(depth + 1);
   }
 
-  scene.add
-    .text(location.x + (location.width ?? 0) / 2, location.y - 4, location.name, {
-      fontFamily: PIXEL_FONT,
-      fontSize: "9px",
-      fontStyle: "bold",
-      color: "#fff8d9",
-      backgroundColor: "#253e31",
-      padding: { x: 5, y: 3 },
-    })
+  makeCrispText(
+    scene.add.text(
+      location.x + (location.width ?? 0) / 2,
+      location.y - 4,
+      location.name,
+      {
+        fontFamily: GAME_UI_FONT,
+        fontSize: "9px",
+        fontStyle: "bold",
+        color: "#fff8d9",
+        backgroundColor: "#253e31",
+        padding: { x: 5, y: 3 },
+      },
+    ),
+  )
     .setOrigin(0.5)
-    .setDepth(depth + 20)
-    .setResolution(1);
+    .setDepth(depth + 20);
 
   return {
     name: location.name,
@@ -152,29 +160,27 @@ export function createIndoorResidentView(
   const body = scene.add.rectangle(0, 0, 14, 15, color);
   const head = scene.add.rectangle(0, -11, 12, 11, 0xefc59e);
   const hair = scene.add.rectangle(0, -16, 14, 5, 0x3e322e);
-  const nameplate = scene.add
-    .text(0, 15, name, {
-      fontFamily: PIXEL_FONT,
+  const nameplate = makeCrispText(
+    scene.add.text(0, 15, name, {
+      fontFamily: GAME_UI_FONT,
       fontSize: "6px",
       fontStyle: "bold",
       color: "#fff3c1",
       backgroundColor: "#2a4334",
       padding: { x: 3, y: 1 },
-    })
-    .setOrigin(0.5, 0)
-    .setResolution(1);
-  const bubble = scene.add
-    .text(0, -27, "", {
-      fontFamily: PIXEL_FONT,
+    }),
+  ).setOrigin(0.5, 0);
+  const bubble = makeCrispText(
+    scene.add.text(0, -27, "", {
+      fontFamily: GAME_UI_FONT,
       fontSize: "6px",
       color: "#4a382d",
       backgroundColor: "#fff5d3",
       padding: { x: 3, y: 2 },
       wordWrap: { width: 118 },
       align: "center",
-    })
-    .setOrigin(0.5, 1)
-    .setResolution(1);
+    }),
+  ).setOrigin(0.5, 1);
   container.add([shadow, body, head, hair, nameplate, bubble]);
   return { container, bubble };
 }

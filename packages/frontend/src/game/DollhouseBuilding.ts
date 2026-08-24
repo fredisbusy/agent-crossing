@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import type { TiledObject } from "../map/tiled";
-
-const PIXEL_FONT = '"Courier New", monospace';
+import { GAME_UI_FONT, makeCrispText } from "./gameText";
 
 interface BuildingBounds {
   x: number;
@@ -282,21 +281,21 @@ function drawLabel(
   location: TiledObject,
   depth: number,
 ): void {
-  scene.add
-    .text(
+  makeCrispText(
+    scene.add.text(
       location.x + (location.width ?? 0) / 2,
       location.y - 4,
       location.name,
       {
-        fontFamily: PIXEL_FONT,
+        fontFamily: GAME_UI_FONT,
         fontSize: "9px",
         fontStyle: "bold",
         color: "#fff8d9",
         backgroundColor: "#253e31",
         padding: { x: 5, y: 3 },
       },
-    )
+    ),
+  )
     .setOrigin(0.5)
-    .setDepth(depth + 20)
-    .setResolution(1);
+    .setDepth(depth + 20);
 }

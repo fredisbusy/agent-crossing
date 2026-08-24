@@ -19,11 +19,11 @@ import { drawDollhouseBuilding } from "./DollhouseBuilding";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 import { ServerGridMovement } from "./gridMovement";
 import { agentBubbleLabel } from "./agentBubble";
+import { GAME_UI_FONT, makeCrispText } from "./gameText";
 import { isAgentAtHome, resolveHomeRoom } from "./homeInterior";
 
 const WORLD_WIDTH = townMap.width * townMap.tilewidth;
 const WORLD_HEIGHT = townMap.height * townMap.tileheight;
-const PIXEL_FONT = '"Courier New", monospace';
 const AFFORDANCE_LABELS: Readonly<Record<string, string>> = {
   read_notice: "공지 읽기",
   post_notice: "공지 쓰기",
@@ -237,19 +237,19 @@ export class MainScene extends Phaser.Scene {
   private drawPixelBuilding(location: TiledObject, kind: string): void {
     const bodyColor = parseColor(getProperty(location, "color"), 0xd58c68);
     const building = drawDollhouseBuilding(this, location, kind, bodyColor);
-    const enterLabel = this.add
-      .text(building.doorX, building.doorY + 10, "▼ VIEW", {
-        fontFamily: PIXEL_FONT,
+    const enterLabel = makeCrispText(
+      this.add.text(building.doorX, building.doorY + 10, "▼ VIEW", {
+        fontFamily: GAME_UI_FONT,
         fontSize: "8px",
         fontStyle: "bold",
         color: "#fff5b8",
         backgroundColor: "#8f4348",
         padding: { x: 5, y: 3 },
-      })
+      }),
+    )
       .setOrigin(0.5)
       .setDepth(building.depth + 21)
-      .setVisible(false)
-      .setResolution(1);
+      .setVisible(false);
     const portal = this.add
       .zone(building.doorX, building.doorY - 11, 48, 48)
       .setDepth(building.depth + 22)
@@ -388,30 +388,29 @@ export class MainScene extends Phaser.Scene {
         id === "Sujin" ? 0x4b2f2c : 0x34302d,
       );
       const eyes = this.add.rectangle(0, -16, 10, 2, 0x3d3835);
-      const bubble = this.add
-        .text(0, -38, "", {
-          fontFamily: PIXEL_FONT,
+      const bubble = makeCrispText(
+        this.add.text(0, -38, "", {
+          fontFamily: GAME_UI_FONT,
           fontSize: "8px",
           color: "#2d3028",
           backgroundColor: "#fffbed",
           padding: { x: 5, y: 3 },
           wordWrap: { width: 170 },
           align: "center",
-        })
+        }),
+      )
         .setOrigin(0.5, 1)
-        .setVisible(false)
-        .setResolution(1);
-      const nameplate = this.add
-        .text(0, 28, spawn.name, {
-          fontFamily: PIXEL_FONT,
+        .setVisible(false);
+      const nameplate = makeCrispText(
+        this.add.text(0, 28, spawn.name, {
+          fontFamily: GAME_UI_FONT,
           fontSize: "9px",
           fontStyle: "bold",
           color: "#fffbe8",
           backgroundColor: "#263e32",
           padding: { x: 4, y: 2 },
-        })
-        .setOrigin(0.5)
-        .setResolution(1);
+        }),
+      ).setOrigin(0.5);
       container.add([
         shadow,
         leftLeg,
@@ -650,16 +649,15 @@ export class MainScene extends Phaser.Scene {
   }
 
   private drawWorldTitle(): void {
-    this.add
-      .text(34, 36, "BRIAR COVE", {
-        fontFamily: PIXEL_FONT,
+    makeCrispText(
+      this.add.text(34, 36, "BRIAR COVE", {
+        fontFamily: GAME_UI_FONT,
         fontSize: "14px",
         fontStyle: "bold",
         color: "#fff7d1",
         backgroundColor: "#1d3b2c",
         padding: { x: 9, y: 6 },
-      })
-      .setDepth(2000)
-      .setResolution(1);
+      }),
+    ).setDepth(2000);
   }
 }
