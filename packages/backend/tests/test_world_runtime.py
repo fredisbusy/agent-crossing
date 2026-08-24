@@ -1,9 +1,12 @@
 import asyncio
 import datetime
+import threading
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import cast
 
 from agents.sim_agent import SimAgent
+from agents.planning.lifecycle import PlanningCoordinator
 from world.engine import (
     SimulationEngine,
     SimulationStepObservability,
@@ -47,6 +50,64 @@ class DummyEngine:
         _ = speaker
         _ = speaking_partner
         return self.result
+
+
+class FailingEngine:
+    def __init__(self) -> None:
+        self.config: SimpleNamespace = SimpleNamespace(turn_time_step_seconds=300)
+
+    def step(self, **kwargs: object) -> SimulationStepResult:
+        _ = kwargs
+        raise RuntimeError("cognitive provider unavailable")
+
+
+class BlockingEngine:
+    def __init__(self) -> None:
+        self.config: SimpleNamespace = SimpleNamespace(turn_time_step_seconds=300)
+        self.started: threading.Event = threading.Event()
+        self.release: threading.Event = threading.Event()
+
+    def step(self, **kwargs: object) -> SimulationStepResult:
+        _ = kwargs
+        self.started.set()
+        if not self.release.wait(timeout=1):
+            raise TimeoutError("test cognitive turn was not released")
+        return SimulationStepResult(
+            now=datetime.datetime(2026, 8, 24, 18, 40),
+            speaker_name="Jiho",
+            trace={},
+            reply="안녕",
+            silent_reason="",
+            parse_failure=False,
+            observability=SimulationStepObservability(
+                thought="",
+                model_thought="",
+                self_critique="",
+                decision_reason="",
+                action_summary="talk",
+                decision_process={},
+            ),
+        )
+
+
+class DelayedPlanningCoordinator:
+    def __init__(self) -> None:
+        self.started: threading.Event = threading.Event()
+        self.release: threading.Event = threading.Event()
+        self.install_times: list[datetime.datetime] = []
+
+    def generate_day_plan(self, **kwargs: object) -> list[object]:
+        _ = kwargs
+        self.started.set()
+        if not self.release.wait(timeout=1):
+            raise TimeoutError("test plan generation was not released")
+        return []
+
+    def install_day_plan(self, **kwargs: object) -> object:
+        now = kwargs["now"]
+        assert isinstance(now, datetime.datetime)
+        self.install_times.append(now)
+        return object()
 
 
 def test_world_runtime_updates_counters_on_step() -> None:
@@ -129,6 +190,108 @@ def test_world_runtime_tick_uses_single_step_clock() -> None:
     assert runtime.turn == 1
     assert runtime.current_time == datetime.datetime(2026, 3, 4, 10, 15, 0)
     assert runtime.state().scheduler_running is False
+
+
+def test_world_runtime_keeps_clock_running_when_cognitive_step_fails() -> None:
+    agents = cast(list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")])
+    session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+    current_time = datetime.datetime(2026, 8, 24, 18, 35)
+    runtime = WorldRuntime(
+        agents=agents,
+        session=session,
+        engine=cast(SimulationEngine, cast(object, FailingEngine())),
+        current_time=current_time,
+    )
+
+    result = runtime.tick()
+
+    assert result.silent_reason == "action_loop_error"
+    assert result.trace == {"runtime_error": "RuntimeError"}
+    assert runtime.current_time == current_time + datetime.timedelta(minutes=5)
+    assert runtime.turn == 1
+    assert runtime.parse_failures == 1
+
+
+def test_background_plan_refresh_applies_against_latest_world_time() -> None:
+    asyncio.run(_assert_background_plan_refresh_uses_latest_world_time())
+
+
+async def _assert_background_plan_refresh_uses_latest_world_time() -> None:
+    agents = cast(list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")])
+    session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+    coordinator = DelayedPlanningCoordinator()
+    runtime = WorldRuntime(
+        agents=agents,
+        session=session,
+        engine=cast(
+            SimulationEngine,
+            cast(
+                object,
+                DummyEngine(
+                    result=SimulationStepResult(
+                        now=datetime.datetime(2026, 8, 24, 6, 5),
+                        speaker_name="Jiho",
+                        trace={},
+                        reply="",
+                        silent_reason="dialogue_session_ended",
+                        parse_failure=False,
+                        observability=SimulationStepObservability(
+                            thought="",
+                            model_thought="",
+                            self_critique="",
+                            decision_reason="",
+                            action_summary="continue_current_plan",
+                            decision_process={},
+                        ),
+                    )
+                ),
+            ),
+        ),
+        current_time=datetime.datetime(2026, 8, 24, 6, 0),
+        planning_coordinator=cast(
+            PlanningCoordinator, cast(object, coordinator)
+        ),
+    )
+
+    refresh_task = asyncio.create_task(runtime._refresh_plans())
+    started = await asyncio.to_thread(coordinator.started.wait, 1)
+    assert started is True
+    latest_time = datetime.datetime(2026, 8, 24, 18, 35)
+    runtime.current_time = latest_time
+    coordinator.release.set()
+    await refresh_task
+
+    assert coordinator.install_times == [latest_time, latest_time]
+
+
+def test_scheduler_clock_advances_while_cognitive_turn_is_blocked() -> None:
+    asyncio.run(_assert_scheduler_clock_advances_during_cognitive_turn())
+
+
+async def _assert_scheduler_clock_advances_during_cognitive_turn() -> None:
+    agents = cast(list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")])
+    session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+    engine = BlockingEngine()
+    initial_time = datetime.datetime(2026, 8, 24, 18, 35)
+    runtime = WorldRuntime(
+        agents=agents,
+        session=session,
+        engine=cast(SimulationEngine, cast(object, engine)),
+        current_time=initial_time,
+        tick_interval_seconds=0.01,
+    )
+
+    assert await runtime.start_scheduler() is True
+    started = await asyncio.to_thread(engine.started.wait, 1)
+    assert started is True
+    await asyncio.sleep(0.05)
+
+    assert runtime.scheduler_running is True
+    assert runtime.current_time >= initial_time + datetime.timedelta(minutes=15)
+
+    engine.release.set()
+    await asyncio.sleep(0.02)
+    assert await runtime.stop_scheduler() is True
 
 
 def test_world_runtime_scheduler_starts_and_stops() -> None:

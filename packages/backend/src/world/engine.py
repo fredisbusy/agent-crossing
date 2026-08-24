@@ -295,3 +295,42 @@ class SimulationEngine:
                 observed_events=observed_events,
             )
         )
+
+
+def build_failed_step_result(
+    *,
+    current_time: datetime.datetime,
+    speaker_name: str,
+    error: Exception,
+    turn_time_step_seconds: int,
+) -> SimulationStepResult:
+    """Advance the world clock when a cognitive action fails unexpectedly."""
+    now = current_time + datetime.timedelta(seconds=turn_time_step_seconds)
+    error_type = type(error).__name__
+    return SimulationStepResult(
+        now=now,
+        speaker_name=speaker_name,
+        trace={"runtime_error": error_type},
+        reply="",
+        silent_reason="action_loop_error",
+        parse_failure=True,
+        observability=SimulationStepObservability(
+            thought="",
+            model_thought="",
+            self_critique="",
+            decision_reason="action_loop_error",
+            action_summary="continue_current_plan",
+            decision_process={
+                "runtime": {
+                    "error_type": error_type,
+                    "recovered": True,
+                },
+                "final_output": {
+                    "reply": "",
+                    "action_intent": "continue_current_plan",
+                    "speak_decision": False,
+                    "end_dialogue": True,
+                },
+            },
+        ),
+    )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import threading
 from dataclasses import dataclass, field
 from typing import Protocol, TypeVar
 
@@ -102,6 +103,7 @@ class PlanningCoordinator:
 
     def __init__(self) -> None:
         self._states: dict[str, _AgentPlanState] = {}
+        self._lock: threading.RLock = threading.RLock()
 
     def bootstrap(
         self, *, agent: LifeAgent, now: datetime.datetime
@@ -109,7 +111,7 @@ class PlanningCoordinator:
         """Install a deterministic schedule so the world never waits for an LLM."""
         agent_id = str(agent.identity.id)
         day_items = _fallback_day_plan(agent_id=agent_id, date=now.date())
-        return self._install_hierarchy(
+        return self.install_day_plan(
             agent=agent,
             now=now,
             day_items=day_items,
@@ -120,25 +122,41 @@ class PlanningCoordinator:
         self, *, agent: LifeAgent, now: datetime.datetime
     ) -> AgentPlanSnapshot:
         """Generate an LLM-authored hierarchy and atomically replace the fallback."""
+        day_items = self.generate_day_plan(agent=agent, now=now)
+        return self.install_day_plan(
+            agent=agent,
+            now=now,
+            day_items=day_items,
+            reason="llm_refresh",
+        )
+
+    def generate_day_plan(
+        self, *, agent: LifeAgent, now: datetime.datetime
+    ) -> list[DayPlanItem]:
+        """Generate broad strokes without mutating live planning state."""
         planner = agent.brain.planner
         if planner is None:
-            return self.bootstrap(agent=agent, now=now)
-        day_items = self._generate_day_plan(planner=planner, agent=agent, now=now)
-        active_day = _active_or_next(day_items, now)
-        hourly_items = _fallback_hourly(active_day)
-        active_hourly = _active_or_next(hourly_items, now)
-        minute_items = _fallback_minute(active_hourly)
-        state = _AgentPlanState(
-            plan_date=now.date(),
-            day_items=day_items,
-            hourly_items=hourly_items,
-            minute_items=minute_items,
-            hourly_parent_key=(active_day.start_time, active_day.end_time),
-            minute_parent_key=(active_hourly.start_time, active_hourly.end_time),
-            last_replan_reason="llm_refresh",
-        )
-        self._states[str(agent.identity.id)] = state
-        return _state_snapshot(agent=agent, state=state, now=now)
+            return _fallback_day_plan(
+                agent_id=str(agent.identity.id), date=now.date()
+            )
+        return self._generate_day_plan(planner=planner, agent=agent, now=now)
+
+    def install_day_plan(
+        self,
+        *,
+        agent: LifeAgent,
+        now: datetime.datetime,
+        day_items: list[DayPlanItem],
+        reason: str,
+    ) -> AgentPlanSnapshot:
+        """Install generated broad strokes against the current world time."""
+        with self._lock:
+            return self._install_hierarchy(
+                agent=agent,
+                now=now,
+                day_items=day_items,
+                reason=reason,
+            )
 
     def _install_hierarchy(
         self,
@@ -170,6 +188,16 @@ class PlanningCoordinator:
         agent: LifeAgent,
         now: datetime.datetime,
         generate: bool = True,
+    ) -> AgentPlanSnapshot:
+        with self._lock:
+            return self._ensure_current(agent=agent, now=now, generate=generate)
+
+    def _ensure_current(
+        self,
+        *,
+        agent: LifeAgent,
+        now: datetime.datetime,
+        generate: bool,
     ) -> AgentPlanSnapshot:
         agent_id = str(agent.identity.id)
         state = self._states.setdefault(agent_id, _AgentPlanState())

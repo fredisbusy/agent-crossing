@@ -242,6 +242,8 @@
     - [x] 06:00부터 5분 단위로 가속된 하루를 자동 시작한다
     - [x] active minute plan을 canonical 공간 이동과 WebSocket UI에 연결한다
     - [x] 같은 장소에 실제로 인접한 두 agent만 대화를 시작한다
+    - [x] cognitive action 실패를 tick scheduler에서 격리해 world clock과 이동을 계속 진행한다
+    - [x] 비동기 day plan 결과를 완료 시점의 최신 world clock에 맞춰 설치한다
     - [ ] 재시작 후에도 게임 시각, 위치, 계획 cache와 조우 cooldown을 복원한다
     - [ ] 비대화 tick에도 주변 사건을 perceive/store하고 필요할 때 retrieve/reflect/react한다
 
