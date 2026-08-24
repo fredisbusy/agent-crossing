@@ -186,7 +186,7 @@ function App() {
         </div>
 
         <section className="seed-event">
-          <span className="pixel-kicker">오늘의 씨앗 사건</span>
+          <span className="pixel-kicker">오늘의 메인이벤트</span>
           <h3>달맞이꽃 소풍</h3>
           <p>
             광장 게시판에서 시작된 소식이 주민들의 기억과 계획을 어떻게 바꾸는지

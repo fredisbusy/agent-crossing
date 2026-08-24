@@ -274,6 +274,7 @@
     - [x] 건물, 장식, 상호작용 물체, agent를 pixel-art 규칙으로 표시한다
     - [x] 전체 지도 축소 대신 agent 추적/드래그/줌 카메라를 제공한다
     - [x] 관찰자 패널의 주민 선택을 카메라 추적과 모바일 패널 닫기에 연결한다
+    - [x] 관찰자 패널의 대표 사건을 `오늘의 메인이벤트`로 표시한다
     - [x] WebSocket spatial snapshot이 agent 이동과 HUD 상태에 반영된다
 
 - [x] `P2` 건물별 pixel interior와 출입 portal을 구현한다
