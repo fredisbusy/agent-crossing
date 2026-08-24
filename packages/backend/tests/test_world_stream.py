@@ -46,13 +46,18 @@ async def _assert_world_stream_broadcasts_monotonic_snapshots() -> None:
 class _DisconnectingWebSocket:
     accepted: bool = False
     payloads: list[dict[str, object]] = field(default_factory=list)
+    snapshot_sent: asyncio.Event = field(default_factory=asyncio.Event)
 
     async def accept(self) -> None:
         self.accepted = True
 
     async def send_json(self, data: object) -> None:
         self.payloads.append(cast(dict[str, object], data))
-        raise WebSocketDisconnect()
+        self.snapshot_sent.set()
+
+    async def receive(self) -> dict[str, object]:
+        _ = await self.snapshot_sent.wait()
+        return {"type": "websocket.disconnect", "code": 1001}
 
 
 def test_world_websocket_sends_initial_snapshot_and_unsubscribes() -> None:
@@ -70,4 +75,37 @@ async def _assert_world_websocket_sends_initial_snapshot_and_unsubscribes() -> N
     assert websocket.payloads[0]["map_id"] == "briar-cove"
     assert websocket.payloads[0]["revision"] == 0
     assert websocket.payloads[0]["planning_error"] is None
+    assert stream.subscriber_count == 0
+
+
+@dataclass
+class _SendFailingWebSocket:
+    accepted: bool = False
+
+    async def accept(self) -> None:
+        self.accepted = True
+
+    async def send_json(self, _data: object) -> None:
+        raise WebSocketDisconnect()
+
+    async def receive(self) -> dict[str, object]:
+        await asyncio.Future()
+        raise AssertionError("unreachable")
+
+
+def test_world_websocket_cancels_receiver_when_send_detects_disconnect() -> None:
+    asyncio.run(_assert_world_websocket_cancels_receiver())
+
+
+async def _assert_world_websocket_cancels_receiver() -> None:
+    stream = SpatialWorldStream(runtime=_runtime())
+    app.state.spatial_stream = stream
+    websocket = _SendFailingWebSocket()
+
+    await asyncio.wait_for(
+        world_websocket(cast(WebSocket, cast(object, websocket))),
+        timeout=0.2,
+    )
+
+    assert websocket.accepted is True
     assert stream.subscriber_count == 0

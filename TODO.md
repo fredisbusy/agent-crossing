@@ -264,6 +264,8 @@
     - [x] `revision`, `position`, `destination`, `action`, `plan`, `route_remaining`을 브로드캐스트한다
     - [x] 느린 클라이언트에는 stale frame 대신 최신 snapshot을 전달한다
     - [x] shared contract 기반 runtime validation 후 클라이언트에서 파싱한다
+    - [x] client disconnect를 능동 수신하고 sender/receiver task와 구독을 함께 정리한다
+    - [x] 활성 WebSocket 중 hot reload가 worker 종료를 막지 않는지 회귀 검증한다
 
 - [x] `P1` HTTPS 배포 WebSocket 경로와 로컬 포트를 분리한다
   - Depends on: spatial WebSocket snapshot broadcast 구현

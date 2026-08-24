@@ -460,14 +460,39 @@ async def world_websocket(websocket: WebSocket) -> None:
     stream = _require_spatial_stream()
     await websocket.accept()
     queue = stream.subscribe()
+    sender = asyncio.create_task(_send_world_snapshots(websocket, queue))
+    receiver = asyncio.create_task(_wait_for_websocket_disconnect(websocket))
     try:
-        while True:
-            snapshot = await queue.get()
-            await websocket.send_json(_spatial_response(snapshot).model_dump())
+        done, _ = await asyncio.wait(
+            {sender, receiver},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in done:
+            await task
     except WebSocketDisconnect:
         pass
     finally:
+        for task in (sender, receiver):
+            if not task.done():
+                _ = task.cancel()
+        _ = await asyncio.gather(sender, receiver, return_exceptions=True)
         stream.unsubscribe(queue)
+
+
+async def _send_world_snapshots(
+    websocket: WebSocket,
+    queue: asyncio.Queue[SpatialWorldSnapshot],
+) -> None:
+    while True:
+        snapshot = await queue.get()
+        await websocket.send_json(_spatial_response(snapshot).model_dump())
+
+
+async def _wait_for_websocket_disconnect(websocket: WebSocket) -> None:
+    while True:
+        message = await websocket.receive()
+        if message["type"] == "websocket.disconnect":
+            return
 
 
 @app.post("/world/observe", response_model=WorldObservationResponse)

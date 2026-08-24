@@ -267,6 +267,9 @@ react 정책:
 - `POST /world/spatial/step`: 결정론적 공간 tick을 한 번 진행
 - `WS /ws/world`: 최신 공간 snapshot을 약 650ms 간격으로 전달
 - 목적지가 막혔거나 도달 불가능하면 `reachable=false`, `path=[]`를 반환
+- `/ws/world` handler는 snapshot 송신과 client disconnect 수신을 동시에 감시한다.
+  한쪽이 종료되면 반대 task와 stream 구독을 즉시 취소해 reload/shutdown이 열린
+  WebSocket 때문에 지연되지 않게 한다.
 
 공간 실행 규칙:
 
