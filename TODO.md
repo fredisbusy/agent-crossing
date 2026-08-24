@@ -285,9 +285,9 @@
     - [x] 게시판·분수·벤치 선택 시 canonical agent affordance를 안내한다
     - [x] WebSocket spatial snapshot이 agent 이동과 HUD 상태에 반영된다
 
-- [x] `P2` 픽셀 월드와 게임 텍스트의 렌더링 필터를 분리한다
-  - [x] 타일·캐릭터는 nearest-neighbor 필터를 유지한다
-  - [x] 말풍선·이름표·장소 라벨은 고해상도 linear 필터로 렌더링한다
+- [x] `P2` 픽셀 월드와 게임 텍스트의 렌더링 계층을 분리한다
+  - [x] 타일·캐릭터는 nearest-neighbor Phaser 캔버스에 유지한다
+  - [x] 말풍선·이름표·장소 라벨은 카메라 좌표를 따르는 DOM 오버레이로 렌더링한다
 
 - [x] `P2` 건물별 pixel interior와 출입 portal을 구현한다
   - Depends on: 탑다운 픽셀 월드 렌더러

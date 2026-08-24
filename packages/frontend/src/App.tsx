@@ -25,6 +25,30 @@ import {
 
 const mapSpawns = getLayer("spawns");
 
+function GameTextOverlay() {
+  const labels = useGameStore((state) => state.gameTextOverlay.labels);
+
+  return (
+    <div className="game-text-overlay" aria-hidden="true">
+      {labels.map((label) => (
+        <span
+          className={`game-map-text tone-${label.tone} anchor-${label.anchor}${
+            label.selected ? " selected" : ""
+          }`}
+          key={label.id}
+          style={{
+            left: label.left,
+            top: label.top,
+            maxWidth: label.maxWidth,
+          }}
+        >
+          {label.text}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function App() {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
@@ -115,6 +139,7 @@ function App() {
   return (
     <main className="game-shell">
       <div ref={gameContainerRef} className="game-viewport" />
+      <GameTextOverlay />
 
       <header className="game-hud top-hud">
         <div className="game-brand">

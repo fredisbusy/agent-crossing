@@ -3,6 +3,7 @@ import type {
   SpatialWorldSnapshot,
 } from "@agent-crossing/shared";
 import { create } from "zustand";
+import type { GameTextOverlay } from "../game/gameText";
 
 export type ConnectionStatus = "connecting" | "live" | "offline";
 export type SceneContext =
@@ -12,6 +13,11 @@ export type SceneContext =
 export interface WorldInteractionNotice {
   title: string;
   description: string;
+}
+
+interface GameTextOverlayState {
+  owner: string | null;
+  labels: readonly GameTextOverlay[];
 }
 
 interface GameState {
@@ -26,12 +32,18 @@ interface GameState {
   followRequestId: number;
   sceneContext: SceneContext;
   interactionNotice: WorldInteractionNotice | null;
+  gameTextOverlay: GameTextOverlayState;
   setSnapshot: (snapshot: SpatialWorldSnapshot) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   selectAgent: (agentId: string) => void;
   setSceneContext: (sceneContext: SceneContext) => void;
   showInteractionNotice: (notice: WorldInteractionNotice) => void;
   dismissInteractionNotice: () => void;
+  setGameTextOverlay: (
+    owner: string,
+    labels: readonly GameTextOverlay[],
+  ) => void;
+  clearGameTextOverlay: (owner: string) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -46,6 +58,7 @@ export const useGameStore = create<GameState>((set) => ({
   followRequestId: 0,
   sceneContext: { kind: "world" },
   interactionNotice: null,
+  gameTextOverlay: { owner: null, labels: [] },
   setSnapshot: (snapshot) =>
     set({
       revision: snapshot.revision,
@@ -66,4 +79,12 @@ export const useGameStore = create<GameState>((set) => ({
   setSceneContext: (sceneContext) => set({ sceneContext }),
   showInteractionNotice: (interactionNotice) => set({ interactionNotice }),
   dismissInteractionNotice: () => set({ interactionNotice: null }),
+  setGameTextOverlay: (owner, labels) =>
+    set({ gameTextOverlay: { owner, labels } }),
+  clearGameTextOverlay: (owner) =>
+    set((state) =>
+      state.gameTextOverlay.owner === owner
+        ? { gameTextOverlay: { owner: null, labels: [] } }
+        : state,
+    ),
 }));

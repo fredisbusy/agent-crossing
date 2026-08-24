@@ -1,6 +1,5 @@
 import Phaser from "phaser";
 import type { TiledObject } from "../map/tiled";
-import { GAME_UI_FONT, makeCrispText } from "./gameText";
 
 interface BuildingBounds {
   x: number;
@@ -38,7 +37,6 @@ export function drawDollhouseBuilding(
   const doorX = bounds.x + bounds.width / 2;
   const doorY = bounds.y + bounds.height;
   drawDoor(graphics, doorX, doorY);
-  drawLabel(scene, location, bounds.depth);
 
   return { ...bounds, doorX, doorY };
 }
@@ -274,28 +272,4 @@ function drawDoor(
   graphics.fillRect(x - 13, y - 23, 26, 23);
   graphics.fillStyle(0xd5ae68, 1);
   graphics.fillRect(x - 7, y - 4, 14, 4);
-}
-
-function drawLabel(
-  scene: Phaser.Scene,
-  location: TiledObject,
-  depth: number,
-): void {
-  makeCrispText(
-    scene.add.text(
-      location.x + (location.width ?? 0) / 2,
-      location.y - 4,
-      location.name,
-      {
-        fontFamily: GAME_UI_FONT,
-        fontSize: "9px",
-        fontStyle: "bold",
-        color: "#fff8d9",
-        backgroundColor: "#253e31",
-        padding: { x: 5, y: 3 },
-      },
-    ),
-  )
-    .setOrigin(0.5)
-    .setDepth(depth + 20);
 }

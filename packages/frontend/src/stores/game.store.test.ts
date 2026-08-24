@@ -37,4 +37,25 @@ describe("game store UI commands", () => {
     useGameStore.getState().dismissInteractionNotice();
     expect(useGameStore.getState().interactionNotice).toBeNull();
   });
+
+  it("only clears text overlays owned by the active scene", () => {
+    const label = {
+      id: "location:Story House",
+      text: "Story House",
+      left: 120,
+      top: 80,
+      tone: "location" as const,
+      anchor: "center" as const,
+    };
+
+    useGameStore.getState().setGameTextOverlay("world", [label]);
+    useGameStore.getState().clearGameTextOverlay("interior:Story House");
+    expect(useGameStore.getState().gameTextOverlay.labels).toEqual([label]);
+
+    useGameStore.getState().clearGameTextOverlay("world");
+    expect(useGameStore.getState().gameTextOverlay).toEqual({
+      owner: null,
+      labels: [],
+    });
+  });
 });

@@ -56,6 +56,84 @@ button {
   image-rendering: crisp-edges;
   touch-action: none;
 }
+.game-text-overlay {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  image-rendering: auto;
+}
+.game-map-text {
+  position: absolute;
+  display: block;
+  padding: 3px 6px;
+  font-family:
+    Pretendard,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Apple SD Gothic Neo",
+    sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  white-space: pre-wrap;
+}
+.game-map-text.anchor-center {
+  transform: translate(-50%, -50%);
+}
+.game-map-text.anchor-top {
+  transform: translate(-50%, 0);
+}
+.game-map-text.anchor-bottom {
+  transform: translate(-50%, -100%);
+}
+.game-map-text.anchor-left-top {
+  transform: none;
+}
+.game-map-text.anchor-right-top {
+  transform: translateX(-100%);
+}
+.game-map-text.tone-location,
+.game-map-text.tone-nameplate,
+.game-map-text.tone-title {
+  border-radius: 2px;
+  background: rgba(31, 59, 45, 0.94);
+  color: #fff8d9;
+  box-shadow: 0 1px 2px rgba(12, 28, 19, 0.35);
+}
+.game-map-text.tone-nameplate.selected {
+  background: rgba(162, 78, 83, 0.96);
+}
+.game-map-text.tone-room {
+  padding: 0;
+  color: #5a4334;
+  font-size: 9px;
+  font-weight: 600;
+}
+.game-map-text.tone-bubble {
+  padding: 6px 9px;
+  border: 1px solid rgba(98, 90, 69, 0.28);
+  border-radius: 4px;
+  background: rgba(255, 251, 237, 0.97);
+  color: #2d3028;
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  box-shadow: 0 2px 5px rgba(24, 40, 29, 0.22);
+}
+.game-map-text.tone-action {
+  background: rgba(143, 67, 72, 0.96);
+  color: #fff5d1;
+}
+.game-map-text.tone-title {
+  padding: 6px 9px;
+  font-size: 14px;
+}
 .game-shell::after {
   content: "";
   position: absolute;

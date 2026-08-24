@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { useGameStore } from "../stores/game.store";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 import { agentBubbleLabel } from "./agentBubble";
-import { GAME_UI_FONT, makeCrispText } from "./gameText";
+import { GameTextOverlayController } from "./gameText";
 
 const ROOM_COLUMNS = 20;
 const ROOM_ROWS = 14;
@@ -23,6 +23,7 @@ export class InteriorScene extends Phaser.Scene {
   };
   private residentLayer?: Phaser.GameObjects.Container;
   private unsubscribeStore?: () => void;
+  private textOverlay!: GameTextOverlayController;
 
   constructor() {
     super("InteriorScene");
@@ -34,6 +35,10 @@ export class InteriorScene extends Phaser.Scene {
 
   create(): void {
     createPixelTextures(this);
+    this.textOverlay = new GameTextOverlayController(
+      this,
+      `interior:${this.interior.name}`,
+    );
     useGameStore.getState().setSceneContext({
       kind: "interior",
       name: this.interior.name,
@@ -61,6 +66,7 @@ export class InteriorScene extends Phaser.Scene {
     const cleanup = () => {
       this.scale.off("resize", handleResize);
       unsubscribeStore();
+      this.textOverlay.destroy();
       if (this.unsubscribeStore === unsubscribeStore) {
         this.unsubscribeStore = undefined;
       }
@@ -69,6 +75,10 @@ export class InteriorScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
     this.input.keyboard?.on("keydown-ESC", () => this.exitInterior());
     this.input.keyboard?.on("keydown-E", () => this.exitInterior());
+  }
+
+  update(): void {
+    this.textOverlay.sync();
   }
 
   private drawRoomShell(): void {
@@ -167,16 +177,13 @@ export class InteriorScene extends Phaser.Scene {
     graphics.fillRect(x + 5, y + 8, width - 10, 42);
     graphics.fillStyle(0xd4a064, 1);
     graphics.fillRect(x - 6, y - 7, width + 12, 13);
-    makeCrispText(
-      this.add.text(x + width / 2, y + 21, label, {
-        fontFamily: GAME_UI_FONT,
-        fontSize: "8px",
-        fontStyle: "bold",
-        color: "#fff2c1",
-      }),
-    )
-      .setOrigin(0.5)
-      .setDepth(y + 61);
+    this.textOverlay.add({
+      id: `counter:${label}`,
+      text: label,
+      x: x + width / 2,
+      y: y + 21,
+      tone: "location",
+    });
   }
 
   private drawShelf(
@@ -286,6 +293,7 @@ export class InteriorScene extends Phaser.Scene {
 
   private drawResidents(): void {
     this.residentLayer?.destroy(true);
+    this.textOverlay.removeByPrefix("resident:");
     const residentLayer = this.add.container(0, 0);
     this.residentLayer = residentLayer;
     const residents = Object.values(useGameStore.getState().agents).filter(
@@ -316,31 +324,29 @@ export class InteriorScene extends Phaser.Scene {
       graphics.fillRect(-8, -15, 16, 15);
       graphics.fillStyle(0x3e322e, 1);
       graphics.fillRect(-9, -20, 18, 7);
-      const bubble = makeCrispText(
-        this.add.text(0, -34, agentBubbleLabel(agent), {
-          fontFamily: GAME_UI_FONT,
-          fontSize: "9px",
-          color: "#2d3028",
-          backgroundColor: "#fffbed",
-          padding: { x: 5, y: 3 },
-          wordWrap: { width: 220 },
-        }),
-      ).setOrigin(0.5, 1);
-      const nameplate = makeCrispText(
-        this.add.text(0, 31, agent.name, {
-          fontFamily: GAME_UI_FONT,
-          fontSize: "8px",
-          fontStyle: "bold",
-          color: "#fff3c1",
-          backgroundColor: "#2a4334",
-          padding: { x: 4, y: 2 },
-        }),
-      ).setOrigin(0.5);
-      resident.add([graphics, bubble, nameplate]);
+      resident.add(graphics);
       resident.on("pointerdown", () =>
         useGameStore.getState().selectAgent(agent.agent_id),
       );
       residentLayer.add(resident);
+      this.textOverlay.add({
+        id: `resident:${agent.agent_id}:bubble`,
+        text: agentBubbleLabel(agent),
+        x: () => resident.x,
+        y: () => resident.y - 34,
+        tone: "bubble",
+        anchor: "bottom",
+        maxWidth: 300,
+      });
+      this.textOverlay.add({
+        id: `resident:${agent.agent_id}:name`,
+        text: agent.name,
+        x: () => resident.x,
+        y: () => resident.y + 31,
+        tone: "nameplate",
+        selected: () =>
+          useGameStore.getState().selectedAgentId === agent.agent_id,
+      });
     });
   }
 
@@ -352,44 +358,37 @@ export class InteriorScene extends Phaser.Scene {
     graphics.fillRect(x - 28, ROOM_HEIGHT - 66, 56, 66);
     graphics.fillStyle(0xd5ae68, 1);
     graphics.fillRect(x - 19, ROOM_HEIGHT - 10, 38, 7);
-    const exitText = makeCrispText(
-      this.add.text(x, y - 8, "▲  EXIT", {
-        fontFamily: GAME_UI_FONT,
-        fontSize: "9px",
-        fontStyle: "bold",
-        color: "#fff2b1",
-        backgroundColor: "#8f4348",
-        padding: { x: 7, y: 4 },
-      }),
-    )
-      .setOrigin(0.5)
+    this.textOverlay.add({
+      id: "interior:exit",
+      text: "▲  EXIT",
+      x,
+      y: y - 8,
+      tone: "action",
+    });
+    const exitZone = this.add
+      .zone(x, y - 8, 76, 34)
       .setDepth(502)
       .setInteractive({ useHandCursor: true });
-    exitText.on("pointerdown", () => this.exitInterior());
+    exitZone.on("pointerdown", () => this.exitInterior());
   }
 
   private drawRoomHud(): void {
-    makeCrispText(
-      this.add.text(18, 18, this.interior.name.toUpperCase(), {
-        fontFamily: GAME_UI_FONT,
-        fontSize: "13px",
-        fontStyle: "bold",
-        color: "#fff4c5",
-        backgroundColor: "#2b4635",
-        padding: { x: 8, y: 6 },
-      }),
-    ).setDepth(600);
-    makeCrispText(
-      this.add.text(ROOM_WIDTH - 18, 18, "ESC / E  LEAVE", {
-        fontFamily: GAME_UI_FONT,
-        fontSize: "8px",
-        color: "#594638",
-        backgroundColor: "#f0dfad",
-        padding: { x: 6, y: 4 },
-      }),
-    )
-      .setOrigin(1, 0)
-      .setDepth(600);
+    this.textOverlay.add({
+      id: "interior:title",
+      text: this.interior.name.toUpperCase(),
+      x: 18,
+      y: 18,
+      tone: "title",
+      anchor: "left-top",
+    });
+    this.textOverlay.add({
+      id: "interior:leave-hint",
+      text: "ESC / E  LEAVE",
+      x: ROOM_WIDTH - 18,
+      y: 18,
+      tone: "location",
+      anchor: "right-top",
+    });
   }
 
   private fitCamera(): void {

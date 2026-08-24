@@ -19,8 +19,8 @@ import { drawDollhouseBuilding } from "./DollhouseBuilding";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 import { ServerGridMovement } from "./gridMovement";
 import { agentBubbleLabel } from "./agentBubble";
-import { GAME_UI_FONT, makeCrispText } from "./gameText";
-import { isAgentAtHome, resolveHomeRoom } from "./homeInterior";
+import { GameTextOverlayController } from "./gameText";
+import { HOME_ROOMS, isAgentAtHome, resolveHomeRoom } from "./homeInterior";
 
 const WORLD_WIDTH = townMap.width * townMap.tilewidth;
 const WORLD_HEIGHT = townMap.height * townMap.tileheight;
@@ -40,8 +40,9 @@ interface AgentView {
   body: Phaser.GameObjects.Rectangle;
   leftLeg: Phaser.GameObjects.Rectangle;
   rightLeg: Phaser.GameObjects.Rectangle;
-  bubble: Phaser.GameObjects.Text;
-  nameplate: Phaser.GameObjects.Text;
+  name: string;
+  bubbleText: string;
+  selected: boolean;
 }
 
 function tileKeyAt(x: number, y: number): string {
@@ -129,6 +130,7 @@ export class MainScene extends Phaser.Scene {
   private dragOrigin?: Phaser.Math.Vector2;
   private pinchStartDistance?: number;
   private pinchStartZoom?: number;
+  private textOverlay!: GameTextOverlayController;
 
   constructor() {
     super("MainScene");
@@ -136,6 +138,7 @@ export class MainScene extends Phaser.Scene {
 
   create(): void {
     createPixelTextures(this);
+    this.textOverlay = new GameTextOverlayController(this, "world");
     useGameStore.getState().setSceneContext({ kind: "world" });
     this.cameras.main
       .setBackgroundColor("#173b2b")
@@ -163,6 +166,7 @@ export class MainScene extends Phaser.Scene {
     this.applyAgentStates(useGameStore.getState().agents);
     const cleanupStoreSubscription = () => {
       unsubscribeStore();
+      this.textOverlay.destroy();
       if (this.unsubscribeStore === unsubscribeStore) {
         this.unsubscribeStore = undefined;
       }
@@ -175,27 +179,29 @@ export class MainScene extends Phaser.Scene {
     for (const view of this.agentViews.values()) {
       view.container.setDepth(view.container.y + 40);
     }
-    if (!this.cursors) return;
-    const camera = this.cameras.main;
-    const speed = (delta / camera.zoom) * 0.48;
-    let moved = false;
-    if (this.cursors.left.isDown) {
-      camera.scrollX -= speed;
-      moved = true;
+    if (this.cursors) {
+      const camera = this.cameras.main;
+      const speed = (delta / camera.zoom) * 0.48;
+      let moved = false;
+      if (this.cursors.left.isDown) {
+        camera.scrollX -= speed;
+        moved = true;
+      }
+      if (this.cursors.right.isDown) {
+        camera.scrollX += speed;
+        moved = true;
+      }
+      if (this.cursors.up.isDown) {
+        camera.scrollY -= speed;
+        moved = true;
+      }
+      if (this.cursors.down.isDown) {
+        camera.scrollY += speed;
+        moved = true;
+      }
+      if (moved) this.stopFollowing();
     }
-    if (this.cursors.right.isDown) {
-      camera.scrollX += speed;
-      moved = true;
-    }
-    if (this.cursors.up.isDown) {
-      camera.scrollY -= speed;
-      moved = true;
-    }
-    if (this.cursors.down.isDown) {
-      camera.scrollY += speed;
-      moved = true;
-    }
-    if (moved) this.stopFollowing();
+    this.textOverlay.sync();
   }
 
   private drawTileWorld(): void {
@@ -220,42 +226,62 @@ export class MainScene extends Phaser.Scene {
       const kind = getProperty(location, "kind", "building");
       if (kind === "plaza" || kind === "park") continue;
       if (kind === "home") {
-        this.homeViews.set(
-          location.name,
-          drawDollhouseHome(
-            this,
-            location,
-            parseColor(getProperty(location, "color"), 0xd58c68),
-          ),
+        const home = drawDollhouseHome(
+          this,
+          location,
+          parseColor(getProperty(location, "color"), 0xd58c68),
         );
+        this.homeViews.set(location.name, home);
+        for (const room of HOME_ROOMS) {
+          this.textOverlay.add({
+            id: `room:${location.name}:${room.id}`,
+            text: room.label,
+            x: home.x + room.x * home.width + 5,
+            y: home.y + room.y * home.height + 4,
+            tone: "room",
+            anchor: "left-top",
+          });
+        }
+        this.addLocationLabel(location);
         continue;
       }
       this.drawPixelBuilding(location, kind);
+      this.addLocationLabel(location);
     }
+  }
+
+  private addLocationLabel(location: TiledObject): void {
+    this.textOverlay.add({
+      id: `location:${location.name}`,
+      text: location.name,
+      x: location.x + (location.width ?? 0) / 2,
+      y: location.y - 4,
+      tone: "location",
+    });
   }
 
   private drawPixelBuilding(location: TiledObject, kind: string): void {
     const bodyColor = parseColor(getProperty(location, "color"), 0xd58c68);
     const building = drawDollhouseBuilding(this, location, kind, bodyColor);
-    const enterLabel = makeCrispText(
-      this.add.text(building.doorX, building.doorY + 10, "▼ VIEW", {
-        fontFamily: GAME_UI_FONT,
-        fontSize: "8px",
-        fontStyle: "bold",
-        color: "#fff5b8",
-        backgroundColor: "#8f4348",
-        padding: { x: 5, y: 3 },
-      }),
-    )
-      .setOrigin(0.5)
-      .setDepth(building.depth + 21)
-      .setVisible(false);
+    let showEnterLabel = false;
+    this.textOverlay.add({
+      id: `enter:${location.name}`,
+      text: "▼ VIEW",
+      x: building.doorX,
+      y: building.doorY + 10,
+      tone: "action",
+      visible: () => showEnterLabel,
+    });
     const portal = this.add
       .zone(building.doorX, building.doorY - 11, 48, 48)
       .setDepth(building.depth + 22)
       .setInteractive({ useHandCursor: true });
-    portal.on("pointerover", () => enterLabel.setVisible(true));
-    portal.on("pointerout", () => enterLabel.setVisible(false));
+    portal.on("pointerover", () => {
+      showEnterLabel = true;
+    });
+    portal.on("pointerout", () => {
+      showEnterLabel = false;
+    });
     portal.on("pointerdown", () => {
       this.scene.start("InteriorScene", {
         name: location.name,
@@ -388,29 +414,6 @@ export class MainScene extends Phaser.Scene {
         id === "Sujin" ? 0x4b2f2c : 0x34302d,
       );
       const eyes = this.add.rectangle(0, -16, 10, 2, 0x3d3835);
-      const bubble = makeCrispText(
-        this.add.text(0, -38, "", {
-          fontFamily: GAME_UI_FONT,
-          fontSize: "8px",
-          color: "#2d3028",
-          backgroundColor: "#fffbed",
-          padding: { x: 5, y: 3 },
-          wordWrap: { width: 170 },
-          align: "center",
-        }),
-      )
-        .setOrigin(0.5, 1)
-        .setVisible(false);
-      const nameplate = makeCrispText(
-        this.add.text(0, 28, spawn.name, {
-          fontFamily: GAME_UI_FONT,
-          fontSize: "9px",
-          fontStyle: "bold",
-          color: "#fffbe8",
-          backgroundColor: "#263e32",
-          padding: { x: 4, y: 2 },
-        }),
-      ).setOrigin(0.5);
       container.add([
         shadow,
         leftLeg,
@@ -421,25 +424,65 @@ export class MainScene extends Phaser.Scene {
         hair,
         fringe,
         eyes,
-        bubble,
-        nameplate,
       ]);
       container.on("pointerdown", () =>
         useGameStore.getState().selectAgent(id),
       );
-      this.agentViews.set(id, {
+      const view: AgentView = {
         container,
         body,
         leftLeg,
         rightLeg,
-        bubble,
-        nameplate,
+        name: spawn.name,
+        bubbleText: "",
+        selected: false,
+      };
+      this.agentViews.set(id, view);
+      this.textOverlay.add({
+        id: `agent:${id}:bubble`,
+        text: () => view.bubbleText,
+        x: () => view.container.x,
+        y: () => view.container.y - 38,
+        tone: "bubble",
+        anchor: "bottom",
+        maxWidth: 300,
+        visible: () => view.container.visible && view.bubbleText.length > 0,
+      });
+      this.textOverlay.add({
+        id: `agent:${id}:name`,
+        text: () => view.name,
+        x: () => view.container.x,
+        y: () => view.container.y + 28,
+        tone: "nameplate",
+        selected: () => view.selected,
+        visible: () => view.container.visible,
       });
       const indoorView = createIndoorResidentView(this, spawn.name, color);
       indoorView.container.on("pointerdown", () =>
         useGameStore.getState().selectAgent(id),
       );
       this.indoorAgentViews.set(id, indoorView);
+      this.textOverlay.add({
+        id: `indoor-agent:${id}:bubble`,
+        text: () => indoorView.bubbleText,
+        x: () => indoorView.container.x,
+        y: () => indoorView.container.y - 27,
+        tone: "bubble",
+        anchor: "bottom",
+        maxWidth: 220,
+        visible: () =>
+          indoorView.container.visible && indoorView.bubbleText.length > 0,
+      });
+      this.textOverlay.add({
+        id: `indoor-agent:${id}:name`,
+        text: () => indoorView.name,
+        x: () => indoorView.container.x,
+        y: () => indoorView.container.y + 15,
+        tone: "nameplate",
+        anchor: "top",
+        selected: () => indoorView.selected,
+        visible: () => indoorView.container.visible,
+      });
     }
   }
 
@@ -524,7 +567,8 @@ export class MainScene extends Phaser.Scene {
           .setPosition(position.x + occupancy * 18, position.y)
           .setDepth(home.depth + 12 + occupancy)
           .setVisible(true);
-        indoorView.bubble.setText(agentBubbleLabel(state));
+        indoorView.bubbleText = agentBubbleLabel(state);
+        indoorView.name = state.name;
         if (this.followedAgentId === characterId) {
           this.cameras.main.startFollow(indoorView.container, true, 0.12, 0.12);
         }
@@ -540,8 +584,8 @@ export class MainScene extends Phaser.Scene {
       );
       view.leftLeg.y = isMoving ? 8 : 10;
       view.rightLeg.y = isMoving ? 12 : 10;
-      view.bubble.setText(agentBubbleLabel(state)).setVisible(true);
-      view.nameplate.setText(state.name);
+      view.bubbleText = agentBubbleLabel(state);
+      view.name = state.name;
     }
   }
 
@@ -638,10 +682,12 @@ export class MainScene extends Phaser.Scene {
       ? indoorView.container
       : view.container;
     this.cameras.main.startFollow(target, true, 0.12, 0.12);
-    for (const [agentId, candidate] of this.agentViews)
-      candidate.nameplate.setBackgroundColor(
-        agentId === characterId ? "#a24e53" : "#263e32",
-      );
+    for (const [agentId, candidate] of this.agentViews) {
+      const selected = agentId === characterId;
+      candidate.selected = selected;
+      const indoorCandidate = this.indoorAgentViews.get(agentId);
+      if (indoorCandidate) indoorCandidate.selected = selected;
+    }
   }
 
   private stopFollowing(): void {
@@ -649,15 +695,13 @@ export class MainScene extends Phaser.Scene {
   }
 
   private drawWorldTitle(): void {
-    makeCrispText(
-      this.add.text(34, 36, "BRIAR COVE", {
-        fontFamily: GAME_UI_FONT,
-        fontSize: "14px",
-        fontStyle: "bold",
-        color: "#fff7d1",
-        backgroundColor: "#1d3b2c",
-        padding: { x: 9, y: 6 },
-      }),
-    ).setDepth(2000);
+    this.textOverlay.add({
+      id: "world:title",
+      text: "BRIAR COVE",
+      x: 34,
+      y: 36,
+      tone: "title",
+      anchor: "left-top",
+    });
   }
 }
