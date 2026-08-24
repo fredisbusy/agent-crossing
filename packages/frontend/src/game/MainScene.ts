@@ -6,12 +6,17 @@ import {
   townMap,
   type TiledObject,
 } from "../map/tiled";
+import { useGameStore } from "../stores/game.store";
 
 const FONT_FAMILY = '"Nunito", "Apple SD Gothic Neo", sans-serif';
 const WORLD_WIDTH = townMap.width * townMap.tilewidth;
 const WORLD_HEIGHT = townMap.height * townMap.tileheight;
 
 export class MainScene extends Phaser.Scene {
+  private readonly agentContainers = new Map<string, Phaser.GameObjects.Container>();
+  private readonly agentBubbles = new Map<string, Phaser.GameObjects.Text>();
+  private unsubscribeFromWorld: (() => void) | null = null;
+
   constructor() {
     super("MainScene");
   }
@@ -27,6 +32,7 @@ export class MainScene extends Phaser.Scene {
     this.drawDecorations();
     this.drawInteractables();
     this.drawAgents();
+    this.connectLiveAgents();
     this.addAtmosphere();
 
     this.scale.on("resize", () => this.fitCamera());
@@ -337,8 +343,13 @@ export class MainScene extends Phaser.Scene {
 
   private drawAgents(): void {
     for (const spawn of getLayer("spawns")) {
+      const agentId = normalizeAgentId(
+        getProperty(spawn, "agent_id", spawn.name),
+      );
       const color = parseColor(getProperty(spawn, "color"), 0x6b8fd6);
-      const container = this.add.container(spawn.x, spawn.y).setDepth(50);
+      const container = this.add
+        .container(spawn.x, spawn.y)
+        .setDepth(50 + spawn.y);
       const shadow = this.add.ellipse(0, 15, 34, 13, 0x263d32, 0.18);
       const body = this.add.circle(0, 0, 16, color);
       body.setStrokeStyle(3, 0xf9f3df, 1);
@@ -374,16 +385,46 @@ export class MainScene extends Phaser.Scene {
         name,
         bubble,
       ]);
-
-      this.tweens.add({
-        targets: container,
-        y: spawn.y - 4,
-        duration: 1300 + spawn.id * 7,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.inOut",
-      });
+      this.agentContainers.set(agentId, container);
+      this.agentBubbles.set(agentId, bubble);
     }
+  }
+
+  private connectLiveAgents(): void {
+    const renderSnapshot = (): void => {
+      const agents = useGameStore.getState().agents;
+      for (const [agentId, agent] of Object.entries(agents)) {
+        const container = this.agentContainers.get(normalizeAgentId(agentId));
+        if (!container) {
+          continue;
+        }
+        this.tweens.killTweensOf(container);
+        this.tweens.add({
+          targets: container,
+          x: agent.position.x,
+          y: agent.position.y,
+          duration: 580,
+          ease: "Sine.inOut",
+          onUpdate: () => container.setDepth(50 + container.y),
+        });
+        this.agentBubbles
+          .get(normalizeAgentId(agentId))
+          ?.setText(actionEmoji(agent.current_action));
+      }
+    };
+
+    renderSnapshot();
+    this.unsubscribeFromWorld = useGameStore.subscribe(
+      (state, previousState) => {
+        if (state.revision !== previousState.revision) {
+          renderSnapshot();
+        }
+      },
+    );
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.unsubscribeFromWorld?.();
+      this.unsubscribeFromWorld = null;
+    });
   }
 
   private addAtmosphere(): void {
@@ -407,4 +448,21 @@ export class MainScene extends Phaser.Scene {
       });
     }
   }
+}
+
+function normalizeAgentId(value: string): string {
+  return value.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
+}
+
+function actionEmoji(action: string): string {
+  if (action.startsWith("moving_to:")) {
+    return "🚶";
+  }
+  if (action.startsWith("arrived_at:") || action.startsWith("at:")) {
+    return "✨";
+  }
+  if (action.startsWith("blocked:")) {
+    return "🧭";
+  }
+  return "💭";
 }

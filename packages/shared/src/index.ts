@@ -58,3 +58,20 @@ export interface WorldMapDefinition {
   interactables: WorldInteractable[];
   spawns: WorldSpawn[];
 }
+
+export interface SpatialAgentState {
+  agent_id: AgentId;
+  name: string;
+  tile_position: AgentPosition;
+  position: AgentPosition;
+  destination: string | null;
+  current_action: string;
+  plan: string;
+  route_remaining: number;
+}
+
+export interface SpatialWorldSnapshot {
+  revision: number;
+  map_id: string;
+  agents: SpatialAgentState[];
+}

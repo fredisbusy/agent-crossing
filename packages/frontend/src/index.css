@@ -94,6 +94,28 @@ input {
   background: #66ad72;
   box-shadow: 0 0 0 4px rgba(102, 173, 114, 0.14);
 }
+.status-dot.live {
+  animation: status-pulse 1.8s ease-out infinite;
+}
+.status-dot.connecting,
+.online-dot.connecting {
+  background: #d4a84d;
+  box-shadow: 0 0 0 4px rgba(212, 168, 77, 0.14);
+}
+.status-dot.offline,
+.online-dot.offline {
+  background: #9da79f;
+  box-shadow: 0 0 0 4px rgba(157, 167, 159, 0.12);
+}
+@keyframes status-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(102, 173, 114, 0.3);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px rgba(102, 173, 114, 0);
+  }
+}
 .divider {
   width: 1px;
   height: 16px;
@@ -217,6 +239,11 @@ input {
   font-weight: 800;
   letter-spacing: 0.12em;
 }
+.live-pill.connecting,
+.live-pill.offline {
+  color: #7d776a;
+  background: #eeeee8;
+}
 .agent-list {
   display: grid;
   gap: 8px;
@@ -276,6 +303,12 @@ input {
   font-size: 10px;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.agent-copy small {
+  display: block;
+  margin-top: 2px;
+  color: #9aa49c;
+  font-size: 9px;
 }
 .activity-card,
 .experiment-card {

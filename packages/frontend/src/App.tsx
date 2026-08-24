@@ -2,7 +2,9 @@ import { useEffect, useRef } from "react";
 import { Clock3, Map, MessageCircle, Sparkles, Users } from "lucide-react";
 import Phaser from "phaser";
 import { MainScene } from "./game/MainScene";
+import { useWorldStream } from "./hooks/useWorldStream";
 import { getLayer, getMapProperty, getProperty } from "./map/tiled";
+import { useGameStore } from "./stores/game.store";
 
 const agents = getLayer("spawns");
 const locations = getLayer("locations");
@@ -10,6 +12,11 @@ const locations = getLayer("locations");
 function App() {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
+  const liveAgents = useGameStore((state) => Object.values(state.agents));
+  const connectionStatus = useGameStore((state) => state.connectionStatus);
+  const revision = useGameStore((state) => state.revision);
+
+  useWorldStream();
 
   useEffect(() => {
     if (gameContainerRef.current && !gameRef.current) {
@@ -37,6 +44,16 @@ function App() {
     };
   }, []);
 
+  const displayAgents =
+    liveAgents.length > 0
+      ? liveAgents
+      : agents.map((agent) => ({
+          agent_id: getProperty(agent, "agent_id", agent.name),
+          name: agent.name,
+          current_action: "Waiting for world stream",
+          route_remaining: 0,
+        }));
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -50,11 +67,11 @@ function App() {
           </div>
         </div>
         <div className="world-status">
-          <span className="status-dot" />
-          <span>Briar Cove is awake</span>
+          <span className={`status-dot ${connectionStatus}`} />
+          <span>{connectionLabel(connectionStatus)}</span>
           <span className="divider" />
           <Clock3 size={15} />
-          <strong>09:42 AM</strong>
+          <strong>tick {revision}</strong>
         </div>
       </header>
 
@@ -69,7 +86,7 @@ function App() {
             </div>
             <div className="world-metrics">
               <span>
-                <Users size={14} /> {agents.length} residents
+                <Users size={14} /> {displayAgents.length} residents
               </span>
               <span>{locations.length} places</span>
             </div>
@@ -96,34 +113,33 @@ function App() {
             <span className="section-kicker">
               <Users size={14} /> RESIDENTS
             </span>
-            <span className="live-pill">LIVE</span>
+            <span className={`live-pill ${connectionStatus}`}>
+              {connectionStatus === "live" ? "LIVE" : "PREVIEW"}
+            </span>
           </div>
 
           <div className="agent-list">
-            {agents.map((agent, index) => (
+            {displayAgents.map((agent, index) => (
               <article
                 className={`agent-card ${index === 0 ? "selected" : ""}`}
-                key={agent.id}
+                key={agent.agent_id}
               >
                 <div
                   className="agent-avatar"
                   style={{
-                    backgroundColor: getProperty(agent, "color", "#6b8fd6"),
+                    backgroundColor: agentColor(agent.agent_id),
                   }}
                 >
                   {agent.name.slice(0, 1)}
-                  <span className="online-dot" />
+                  <span className={`online-dot ${connectionStatus}`} />
                 </div>
                 <div className="agent-copy">
                   <div className="agent-title">
                     <strong>{agent.name}</strong>
-                    <span>{index === 0 ? "☕" : "📚"}</span>
+                    <span>{actionEmoji(agent.current_action)}</span>
                   </div>
-                  <p>
-                    {index === 0
-                      ? "Heading to the café"
-                      : "Reviewing morning plans"}
-                  </p>
+                  <p>{formatAction(agent.current_action)}</p>
+                  <small>{agent.route_remaining} tiles remaining</small>
                 </div>
               </article>
             ))}
@@ -172,3 +188,44 @@ function App() {
 }
 
 export default App;
+
+function normalizeAgentId(value: string): string {
+  return value.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
+}
+
+function agentColor(agentId: string): string {
+  const normalizedId = normalizeAgentId(agentId);
+  const spawn = agents.find(
+    (candidate) =>
+      normalizeAgentId(getProperty(candidate, "agent_id", candidate.name)) ===
+      normalizedId,
+  );
+  return spawn ? getProperty(spawn, "color", "#6b8fd6") : "#6b8fd6";
+}
+
+function connectionLabel(status: "connecting" | "live" | "offline"): string {
+  if (status === "live") {
+    return "Briar Cove is moving";
+  }
+  if (status === "connecting") {
+    return "Connecting to Briar Cove";
+  }
+  return "Briar Cove preview";
+}
+
+function formatAction(action: string): string {
+  return action.replaceAll("_", " ").replace(":", " · ");
+}
+
+function actionEmoji(action: string): string {
+  if (action.startsWith("moving_to:")) {
+    return "🚶";
+  }
+  if (action.startsWith("arrived_at:") || action.startsWith("at:")) {
+    return "✨";
+  }
+  if (action.startsWith("blocked:")) {
+    return "🧭";
+  }
+  return "💭";
+}
