@@ -21,6 +21,7 @@ class AgentBrain:
         llm_gateway: LlmGateway,
         planner: Planner | None = None,
     ):
+        self.planner: Planner | None = planner
         self.memory_manager: MemoryManager = memory_manager
         self.reflection_graph: ReflectionGraphRunner = reflection_graph
         self.llm_gateway: LlmGateway = llm_gateway

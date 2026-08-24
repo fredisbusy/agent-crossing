@@ -180,6 +180,16 @@ Backend 레이어 책임:
 - hourly plan은 현재 시점의 active day-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다
 - minute plan은 현재 시점의 active hourly-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다
 
+라이브 하루 실행 규칙:
+
+- 시뮬레이션은 매 tick마다 5분씩 진행하며, 서비스 시작 시 당일 06:00에서 시작한다.
+- 즉시 실행 가능한 persona 기반 fallback hierarchy로 하루를 시작하고, qwen day/hour/minute 계획은 별도 background task에서 생성한 뒤 두 agent 계획을 함께 교체한다.
+- day plan은 날짜가 바뀔 때 한 번 선택하고, hourly/minute plan은 active parent가 바뀔 때만 JIT 선택한다. LLM 지연은 world clock을 멈추지 않는다.
+- 생성 실패 또는 parent 범위를 벗어난 결과는 같은 장소와 행동을 유지하는 결정론적 하위 계획으로 대체한다.
+- active minute plan의 canonical `location`과 `action_content`가 공간 runtime의 목적지와 현재 행동에 직접 반영된다.
+- 두 agent가 같은 canonical 목적지에서 인접했을 때만 대화 세션을 열고, 종료 뒤 30분 동안 재조우 대화를 억제한다.
+- Jiho의 Sujin에 대한 호감은 Jiho만 가진 private seed memory다. Sujin은 이를 선험적으로 알지 못하며 독립된 일정, 판단, 경계를 유지한다.
+
 react 정책:
 
 - 매 tick마다 “현재 계획 유지 vs 반응” 판정
@@ -216,14 +226,14 @@ react 정책:
 - `GET /world/map`: 장소, 충돌, 상호작용 물체, 스폰의 canonical snapshot
 - `POST /world/observe`: 좌표와 반경을 입력받아 현재 위치와 주변 affordance 반환
 - `POST /world/path`: tile 좌표 입력을 받아 충돌을 우회하는 4방향 A\* 경로 반환
-- `GET /world/spatial/state`: 현재 공간 revision, 좌표, 목적지, 남은 경로 반환
+- `GET /world/spatial/state`: 현재 공간 revision, 게임 시각, scheduler 상태, 좌표, 목적지, 활성 계층 계획과 하루 계획을 반환
 - `POST /world/spatial/step`: 결정론적 공간 tick을 한 번 진행
 - `WS /ws/world`: 최신 공간 snapshot을 약 650ms 간격으로 전달
 - 목적지가 막혔거나 도달 불가능하면 `reachable=false`, `path=[]`를 반환
 
 공간 실행 규칙:
 
-- persona의 `current_plan_context`에서 canonical location 또는 alias를 찾는다.
+- live planning이 있으면 active minute plan의 canonical location을 우선하고, 초기 상태에서는 persona의 `current_plan_context`에서 canonical location 또는 alias를 찾는다.
 - 목적지 bounds에서 현재 위치와 가장 가까운 walkable tile을 선택한다.
 - backend가 계산한 4방향 A\* route를 한 tick에 한 tile씩 소비한다.
 - 프런트엔드 tile motion은 `grid-engine@2.48.2`에 위임하고 전역/character

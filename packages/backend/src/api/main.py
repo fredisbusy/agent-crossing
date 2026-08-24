@@ -1,10 +1,13 @@
 import logging
 from pathlib import Path
 from typing import cast
+import asyncio
 
 from agents.persona_loader import PersonaLoader
+from agents.planning.lifecycle import PlanItemSnapshot
 from api.schemas import (
     SpatialAgentResponse,
+    PlanItemResponse,
     SpatialWorldResponse,
     StatusResponse,
     WorldMapBoundsResponse,
@@ -75,8 +78,10 @@ async def on_startup() -> None:
                     timeout_seconds=LLM_TIMEOUT_SECONDS,
                     persona_dir=str(persona_dir),
                     tick_interval_seconds=WORLD_TICK_INTERVAL_SECONDS,
-                )
+                ),
+                spatial_runtime=app.state.spatial_runtime,
             )
+            await app.state.world_runtime.start_scheduler()
     except Exception as error:
         app.state.cognitive_runtime_error = str(error)
         logger.exception(
@@ -187,6 +192,22 @@ def _require_spatial_stream() -> SpatialWorldStream:
 
 
 def _spatial_response(snapshot: SpatialWorldSnapshot) -> SpatialWorldResponse:
+    def optional_plan_item(item: PlanItemSnapshot | None) -> PlanItemResponse | None:
+        if item is None:
+            return None
+        return PlanItemResponse(
+            start_time=item.start_time.isoformat(),
+            end_time=item.end_time.isoformat(),
+            location=item.location,
+            action_content=item.action_content,
+        )
+
+    def plan_item(item: PlanItemSnapshot) -> PlanItemResponse:
+        result = optional_plan_item(item)
+        if result is None:
+            raise ValueError("plan item must not be None")
+        return result
+
     return SpatialWorldResponse(
         revision=snapshot.revision,
         map_id=snapshot.map_id,
@@ -200,9 +221,16 @@ def _spatial_response(snapshot: SpatialWorldSnapshot) -> SpatialWorldResponse:
                 current_action=agent.current_action,
                 plan=agent.plan,
                 route_remaining=agent.route_remaining,
+                active_day=optional_plan_item(agent.active_day),
+                active_hourly=optional_plan_item(agent.active_hourly),
+                active_minute=optional_plan_item(agent.active_minute),
+                day_plan=[plan_item(item) for item in agent.day_plan],
             )
             for agent in snapshot.agents
         ],
+        current_time=(snapshot.current_time.isoformat() if snapshot.current_time else None),
+        turn=snapshot.turn,
+        scheduler_running=snapshot.scheduler_running,
     )
 
 
@@ -296,7 +324,7 @@ async def get_world_state() -> WorldStateResponse:
 @app.post("/world/step", response_model=WorldStepResponse)
 async def post_world_step() -> WorldStepResponse:
     runtime = _require_runtime()
-    step_result = runtime.step()
+    step_result = await asyncio.to_thread(runtime.step)
     metrics = runtime.metrics()
     return WorldStepResponse(
         turn=runtime.turn,

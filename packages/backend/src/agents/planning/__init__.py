@@ -1,4 +1,5 @@
 from .graph import PlanningGraphRunner
+from .lifecycle import AgentPlanSnapshot, PlanItemSnapshot, PlanningCoordinator
 from .models import (
     DayPlan,
     DayPlanBroadStrokes,
@@ -21,5 +22,8 @@ __all__ = [
     "MinutePlan",
     "MinutePlanItem",
     "Planner",
+    "AgentPlanSnapshot",
+    "PlanItemSnapshot",
+    "PlanningCoordinator",
     "PlanningGraphRunner",
 ]

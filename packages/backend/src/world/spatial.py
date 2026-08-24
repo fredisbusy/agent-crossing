@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import threading
+import datetime
 from dataclasses import dataclass
+
+from agents.planning.lifecycle import AgentPlanSnapshot, PlanItemSnapshot
 
 from .world_map import MapLocation, MapPoint, MapSpawn, WorldMap
 
@@ -23,6 +26,10 @@ class SpatialAgentSnapshot:
     current_action: str
     plan: str
     route_remaining: int
+    active_day: PlanItemSnapshot | None
+    active_hourly: PlanItemSnapshot | None
+    active_minute: PlanItemSnapshot | None
+    day_plan: tuple[PlanItemSnapshot, ...]
 
 
 @dataclass(frozen=True)
@@ -30,6 +37,9 @@ class SpatialWorldSnapshot:
     revision: int
     map_id: str
     agents: tuple[SpatialAgentSnapshot, ...]
+    current_time: datetime.datetime | None
+    turn: int
+    scheduler_running: bool
 
 
 @dataclass
@@ -42,6 +52,8 @@ class _MutableAgentMovement:
     goal: MapPoint | None = None
     route: list[MapPoint] | None = None
     current_action: str = "idle"
+    explicit_location: str | None = None
+    schedule: AgentPlanSnapshot | None = None
 
 
 class SpatialWorldRuntime:
@@ -57,6 +69,9 @@ class SpatialWorldRuntime:
         self.revision: int = 0
         self._lock: threading.RLock = threading.RLock()
         self._agents: dict[str, _MutableAgentMovement] = {}
+        self._current_time: datetime.datetime | None = None
+        self._turn: int = 0
+        self._scheduler_running: bool = False
         for index, seed in enumerate(seeds):
             spawn = self._resolve_spawn(seed=seed, fallback_index=index)
             tile_position = MapPoint(
@@ -82,6 +97,33 @@ class SpatialWorldRuntime:
             agent.route = []
             agent.current_action = "planning_route"
 
+    def set_schedule(self, schedule: AgentPlanSnapshot) -> None:
+        with self._lock:
+            agent = self._require_agent(schedule.agent_id)
+            plan = schedule.active_minute.action_content
+            location = schedule.active_minute.location
+            changed = agent.plan != plan or agent.explicit_location != location
+            agent.plan = plan
+            agent.explicit_location = location
+            agent.schedule = schedule
+            if changed:
+                agent.destination = None
+                agent.goal = None
+                agent.route = []
+                agent.current_action = "planning_route"
+
+    def update_world_state(
+        self,
+        *,
+        current_time: datetime.datetime,
+        turn: int,
+        scheduler_running: bool,
+    ) -> None:
+        with self._lock:
+            self._current_time = current_time
+            self._turn = turn
+            self._scheduler_running = scheduler_running
+
     def tick(self) -> SpatialWorldSnapshot:
         with self._lock:
             for agent in self._agents.values():
@@ -94,7 +136,9 @@ class SpatialWorldRuntime:
             return self._snapshot_unlocked()
 
     def _advance(self, agent: _MutableAgentMovement) -> None:
-        resolved_destination = self.world_map.resolve_location(agent.plan)
+        resolved_destination = self.world_map.resolve_location(
+            agent.explicit_location or agent.plan
+        )
         destination_changed = (
             resolved_destination.id if resolved_destination else None
         ) != (agent.destination.id if agent.destination else None)
@@ -156,6 +200,9 @@ class SpatialWorldRuntime:
         return SpatialWorldSnapshot(
             revision=self.revision,
             map_id=self.world_map.id,
+            current_time=self._current_time,
+            turn=self._turn,
+            scheduler_running=self._scheduler_running,
             agents=tuple(
                 SpatialAgentSnapshot(
                     agent_id=agent.agent_id,
@@ -175,6 +222,14 @@ class SpatialWorldRuntime:
                     current_action=agent.current_action,
                     plan=agent.plan,
                     route_remaining=len(agent.route or []),
+                    active_day=(agent.schedule.active_day if agent.schedule else None),
+                    active_hourly=(
+                        agent.schedule.active_hourly if agent.schedule else None
+                    ),
+                    active_minute=(
+                        agent.schedule.active_minute if agent.schedule else None
+                    ),
+                    day_plan=agent.schedule.day_plan if agent.schedule else (),
                 )
                 for agent in self._agents.values()
             ),

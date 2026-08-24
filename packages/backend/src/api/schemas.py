@@ -112,9 +112,23 @@ class SpatialAgentResponse(BaseModel):
     current_action: str
     plan: str
     route_remaining: int
+    active_day: "PlanItemResponse | None"
+    active_hourly: "PlanItemResponse | None"
+    active_minute: "PlanItemResponse | None"
+    day_plan: list["PlanItemResponse"]
+
+
+class PlanItemResponse(BaseModel):
+    start_time: str
+    end_time: str
+    location: str
+    action_content: str
 
 
 class SpatialWorldResponse(BaseModel):
     revision: int
     map_id: str
     agents: list[SpatialAgentResponse]
+    current_time: str | None
+    turn: int
+    scheduler_running: bool

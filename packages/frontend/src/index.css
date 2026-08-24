@@ -218,6 +218,7 @@ button {
 }
 .resident-card {
   position: relative;
+  width: 100%;
   display: grid;
   grid-template-columns: 44px 1fr 15px;
   gap: 10px;
@@ -225,10 +226,20 @@ button {
   padding: 10px;
   border: 2px solid #c6b481;
   background: #fff4d4;
+  color: inherit;
+  text-align: left;
   box-shadow: inset -3px -3px 0 #ead8aa;
+  cursor: pointer;
+  touch-action: manipulation;
 }
-.resident-card:first-child {
+.resident-card.selected {
   border-color: #a85355;
+}
+.resident-card:hover,
+.resident-card:focus-visible {
+  border-color: #7d945f;
+  outline: 2px solid #405b3f;
+  outline-offset: 2px;
 }
 .pixel-portrait {
   position: relative;

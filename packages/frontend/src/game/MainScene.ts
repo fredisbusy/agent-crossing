@@ -141,9 +141,14 @@ export class MainScene extends Phaser.Scene {
     this.drawWorldTitle();
     this.configureCamera();
 
-    const unsubscribeStore = useGameStore.subscribe((state) =>
-      this.applyAgentStates(state.agents),
-    );
+    const unsubscribeStore = useGameStore.subscribe((state, previousState) => {
+      if (state.agents !== previousState.agents) {
+        this.applyAgentStates(state.agents);
+      }
+      if (state.followRequestId !== previousState.followRequestId) {
+        this.followAgent(state.selectedAgentId);
+      }
+    });
     this.unsubscribeStore = unsubscribeStore;
     this.applyAgentStates(useGameStore.getState().agents);
     const cleanupStoreSubscription = () => {
@@ -380,7 +385,9 @@ export class MainScene extends Phaser.Scene {
         bubble,
         nameplate,
       ]);
-      container.on("pointerdown", () => this.followAgent(id));
+      container.on("pointerdown", () =>
+        useGameStore.getState().selectAgent(id),
+      );
       this.agentViews.set(id, {
         container,
         body,
@@ -390,7 +397,9 @@ export class MainScene extends Phaser.Scene {
         nameplate,
       });
       const indoorView = createIndoorResidentView(this, spawn.name, color);
-      indoorView.container.on("pointerdown", () => this.followAgent(id));
+      indoorView.container.on("pointerdown", () =>
+        useGameStore.getState().selectAgent(id),
+      );
       this.indoorAgentViews.set(id, indoorView);
     }
   }
@@ -536,21 +545,25 @@ export class MainScene extends Phaser.Scene {
       camera.scrollY -= dy / camera.zoom;
       this.dragOrigin.set(pointer.x, pointer.y);
     });
-    this.followAgent(this.followedAgentId);
+    this.followAgent(useGameStore.getState().selectedAgentId);
   }
 
   private followAgent(id: string): void {
-    const view = this.agentViews.get(id);
+    const characterId = [...this.agentViews.keys()].find(
+      (candidate) => candidate.toLocaleLowerCase() === id.toLocaleLowerCase(),
+    );
+    if (!characterId) return;
+    const view = this.agentViews.get(characterId);
     if (!view) return;
-    this.followedAgentId = id;
-    const indoorView = this.indoorAgentViews.get(id);
+    this.followedAgentId = characterId;
+    const indoorView = this.indoorAgentViews.get(characterId);
     const target = indoorView?.container.visible
       ? indoorView.container
       : view.container;
     this.cameras.main.startFollow(target, true, 0.12, 0.12);
     for (const [agentId, candidate] of this.agentViews)
       candidate.nameplate.setBackgroundColor(
-        agentId === id ? "#a24e53" : "#263e32",
+        agentId === characterId ? "#a24e53" : "#263e32",
       );
   }
 

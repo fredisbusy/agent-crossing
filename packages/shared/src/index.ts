@@ -68,10 +68,24 @@ export interface SpatialAgentState {
   current_action: string;
   plan: string;
   route_remaining: number;
+  active_day: PlanItemState | null;
+  active_hourly: PlanItemState | null;
+  active_minute: PlanItemState | null;
+  day_plan: PlanItemState[];
+}
+
+export interface PlanItemState {
+  start_time: string;
+  end_time: string;
+  location: string;
+  action_content: string;
 }
 
 export interface SpatialWorldSnapshot {
   revision: number;
   map_id: string;
   agents: SpatialAgentState[];
+  current_time: string | null;
+  turn: number;
+  scheduler_running: boolean;
 }

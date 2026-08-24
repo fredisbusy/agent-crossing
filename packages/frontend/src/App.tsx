@@ -25,6 +25,10 @@ function App() {
   const connectionStatus = useGameStore((state) => state.connectionStatus);
   const liveAgents = useGameStore((state) => state.agents);
   const revision = useGameStore((state) => state.revision);
+  const currentTime = useGameStore((state) => state.currentTime);
+  const schedulerRunning = useGameStore((state) => state.schedulerRunning);
+  const selectedAgentId = useGameStore((state) => state.selectedAgentId);
+  const selectAgent = useGameStore((state) => state.selectAgent);
   useWorldStream();
 
   useEffect(() => {
@@ -71,9 +75,20 @@ function App() {
         current_action: "세계를 기다리는 중",
         plan: "자율 세계에 연결하는 중…",
         route_remaining: 0,
+        active_day: null,
+        active_hourly: null,
+        active_minute: null,
+        day_plan: [],
       }
     );
   });
+
+  function handleResidentSelect(agentId: string): void {
+    selectAgent(agentId);
+    if (window.matchMedia("(max-width: 720px)").matches) {
+      setInspectorOpen(false);
+    }
+  }
 
   return (
     <main className="game-shell">
@@ -89,13 +104,21 @@ function App() {
         </div>
         <div className="clock-chip">
           <Clock3 size={14} />
-          <strong>09:42</strong>
-          <span>SPRING 8</span>
+          <strong>
+            {currentTime
+              ? new Intl.DateTimeFormat("ko-KR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                }).format(new Date(currentTime))
+              : "--:--"}
+          </strong>
+          <span>{currentTime ? new Date(currentTime).toLocaleDateString("ko-KR") : "DAY --"}</span>
         </div>
         <div className={`connection-chip ${connectionStatus}`}>
           <Radio size={13} />{" "}
           {connectionStatus === "live"
-            ? `세계 틱 ${revision}`
+            ? `${schedulerRunning ? "하루 진행 중" : "일시 정지"} · 틱 ${revision}`
             : connectionStatus === "connecting"
               ? "연결 중"
               : "오프라인"}
@@ -123,7 +146,22 @@ function App() {
 
         <div className="resident-list">
           {displayedAgents.map((agent, index) => (
-            <article className="resident-card" key={agent.agent_id}>
+            <button
+              type="button"
+              className={`resident-card ${
+                selectedAgentId.toLocaleLowerCase() ===
+                agent.agent_id.toLocaleLowerCase()
+                  ? "selected"
+                  : ""
+              }`}
+              key={agent.agent_id}
+              onClick={() => handleResidentSelect(agent.agent_id)}
+              aria-label={`${agent.name} 따라가기`}
+              aria-pressed={
+                selectedAgentId.toLocaleLowerCase() ===
+                agent.agent_id.toLocaleLowerCase()
+              }
+            >
               <div className={`pixel-portrait portrait-${index % 2}`}>
                 <span />
               </div>
@@ -136,14 +174,14 @@ function App() {
                       : "활동 중"}
                   </i>
                 </div>
-                <p>{agent.plan.split("|")[0]}</p>
+                <p>{agent.active_minute?.action_content ?? agent.plan.split("|")[0]}</p>
                 <div className="destination">
                   <MapPin size={11} />{" "}
                   {agent.destination?.split(" > ").at(-1) ?? "마을 광장"}
                 </div>
               </div>
               <ChevronRight size={16} className="card-chevron" />
-            </article>
+            </button>
           ))}
         </div>
 

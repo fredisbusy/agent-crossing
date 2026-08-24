@@ -2,6 +2,7 @@ import type {
   AgentPosition,
   SpatialAgentState,
   SpatialWorldSnapshot,
+  PlanItemState,
 } from "@agent-crossing/shared";
 import { useEffect } from "react";
 import { useGameStore } from "../stores/game.store";
@@ -21,6 +22,23 @@ function parsePosition(value: unknown): AgentPosition | null {
     : null;
 }
 
+function parsePlanItem(value: unknown): PlanItemState | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  return typeof value.start_time === "string" &&
+    typeof value.end_time === "string" &&
+    typeof value.location === "string" &&
+    typeof value.action_content === "string"
+    ? {
+        start_time: value.start_time,
+        end_time: value.end_time,
+        location: value.location,
+        action_content: value.action_content,
+      }
+    : null;
+}
+
 function parseAgent(value: unknown): SpatialAgentState | null {
   if (!isRecord(value)) {
     return null;
@@ -28,6 +46,12 @@ function parseAgent(value: unknown): SpatialAgentState | null {
   const tilePosition = parsePosition(value.tile_position);
   const position = parsePosition(value.position);
   const destination = value.destination;
+  const activeDay = value.active_day === null ? null : parsePlanItem(value.active_day);
+  const activeHourly = value.active_hourly === null ? null : parsePlanItem(value.active_hourly);
+  const activeMinute = value.active_minute === null ? null : parsePlanItem(value.active_minute);
+  const dayPlan = Array.isArray(value.day_plan)
+    ? value.day_plan.map(parsePlanItem)
+    : null;
   if (
     typeof value.agent_id !== "string" ||
     typeof value.name !== "string" ||
@@ -36,7 +60,11 @@ function parseAgent(value: unknown): SpatialAgentState | null {
     (destination !== null && typeof destination !== "string") ||
     typeof value.current_action !== "string" ||
     typeof value.plan !== "string" ||
-    typeof value.route_remaining !== "number"
+    typeof value.route_remaining !== "number" ||
+    activeDay === null && value.active_day !== null ||
+    activeHourly === null && value.active_hourly !== null ||
+    activeMinute === null && value.active_minute !== null ||
+    dayPlan === null || dayPlan.some((item) => item === null)
   ) {
     return null;
   }
@@ -49,6 +77,10 @@ function parseAgent(value: unknown): SpatialAgentState | null {
     current_action: value.current_action,
     plan: value.plan,
     route_remaining: value.route_remaining,
+    active_day: activeDay,
+    active_hourly: activeHourly,
+    active_minute: activeMinute,
+    day_plan: dayPlan.filter((item): item is PlanItemState => item !== null),
   };
 }
 
@@ -57,7 +89,10 @@ function parseSnapshot(value: unknown): SpatialWorldSnapshot | null {
     !isRecord(value) ||
     typeof value.revision !== "number" ||
     typeof value.map_id !== "string" ||
-    !Array.isArray(value.agents)
+    !Array.isArray(value.agents) ||
+    (value.current_time !== null && typeof value.current_time !== "string") ||
+    typeof value.turn !== "number" ||
+    typeof value.scheduler_running !== "boolean"
   ) {
     return null;
   }
@@ -69,6 +104,9 @@ function parseSnapshot(value: unknown): SpatialWorldSnapshot | null {
     revision: value.revision,
     map_id: value.map_id,
     agents: agents.filter((agent): agent is SpatialAgentState => agent !== null),
+    current_time: value.current_time,
+    turn: value.turn,
+    scheduler_running: value.scheduler_running,
   };
 }
 

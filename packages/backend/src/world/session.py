@@ -90,6 +90,14 @@ class WorldConversationSession:
             agent.name: [] for agent in agents
         }
 
+    def start_dialogue(self) -> bool:
+        if self.is_active:
+            return False
+        self.is_active = True
+        self.dialogue_turns_taken = 0
+        self.dialogue_goal = None
+        return True
+
     def next_speaker(self) -> SimAgent:
         speaker = self.agents[self.turn_index % len(self.agents)]
         self.turn_index += 1

@@ -141,20 +141,20 @@
     - [x] day plan 항목 수가 5~8 범위를 만족한다
     - [x] 각 항목에 `start_time`, `end_time`, `location`, `action_content`가 포함된다
 
-- [ ] `P1` hourly plan 생성기를 구현한다
+- [x] `P1` hourly plan 생성기를 구현한다
   - Depends on: day plan 생성기 구현
   - DoD:
     - [x] active day plan 항목 입력을 기준으로 near-future hourly plan을 생성한다
-    - [ ] 현재 시점 기준 active day plan 항목을 선택한다
+    - [x] 현재 시점 기준 active day plan 항목을 선택한다
     - [x] hourly plan이 시간 순서로 정렬된다
 
-- [ ] `P1` minute plan(5~15분 단위) 생성기를 구현한다
+- [x] `P1` minute plan(5~15분 단위) 생성기를 구현한다
   - Depends on: hourly plan 생성기 구현
   - DoD:
     - [x] minute plan 단위가 5~15분 범위를 만족한다
     - [x] active hourly plan 항목 입력을 기준으로 near-future minute plan을 생성한다
-    - [ ] 현재 시점 기준 active hourly plan 항목을 선택한다
-    - [ ] 현재 시점 기준 다음 실행 항목을 즉시 찾을 수 있다
+    - [x] 현재 시점 기준 active hourly plan 항목을 선택한다
+    - [x] 현재 시점 기준 다음 실행 항목을 즉시 찾을 수 있다
 
 ### 3-B. Tick react 판정과 부분 재계획
 
@@ -239,6 +239,11 @@
   - DoD:
     - [x] 단일 기준 시계로 tick이 안정적으로 증가한다
     - [x] tick loop에서 perceive-plan-act 순서가 유지된다
+    - [x] 06:00부터 5분 단위로 가속된 하루를 자동 시작한다
+    - [x] active minute plan을 canonical 공간 이동과 WebSocket UI에 연결한다
+    - [x] 같은 장소에 실제로 인접한 두 agent만 대화를 시작한다
+    - [ ] 재시작 후에도 게임 시각, 위치, 계획 cache와 조우 cooldown을 복원한다
+    - [ ] 비대화 tick에도 주변 사건을 perceive/store하고 필요할 때 retrieve/reflect/react한다
 
 - [x] `P1` spatial WebSocket snapshot broadcast를 구현한다
   - Depends on: world clock + tick scheduler 연동
@@ -268,6 +273,7 @@
     - [x] 32px 타일 단위의 지형/길/광장/물 타일을 렌더링한다
     - [x] 건물, 장식, 상호작용 물체, agent를 pixel-art 규칙으로 표시한다
     - [x] 전체 지도 축소 대신 agent 추적/드래그/줌 카메라를 제공한다
+    - [x] 관찰자 패널의 주민 선택을 카메라 추적과 모바일 패널 닫기에 연결한다
     - [x] WebSocket spatial snapshot이 agent 이동과 HUD 상태에 반영된다
 
 - [x] `P2` 건물별 pixel interior와 출입 portal을 구현한다
