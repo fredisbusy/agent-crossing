@@ -48,6 +48,7 @@ class WorldRuntimeConfig:
     suppress_repeated_replies: bool = True
     repetition_window: int = 4
     turn_time_step_seconds: int = 300
+    cognitive_time_step_seconds: int = 30
     tick_interval_seconds: float = 1.0
 
 
@@ -60,6 +61,8 @@ class WorldRuntimeState:
     history_size: int
     scheduler_running: bool
     tick_interval_seconds: float
+    cognitive_active: bool
+    effective_time_step_seconds: int
 
 
 class WorldRuntime:
@@ -71,6 +74,7 @@ class WorldRuntime:
         engine: SimulationEngine,
         current_time: datetime.datetime,
         tick_interval_seconds: float = 1.0,
+        cognitive_time_step_seconds: int = 30,
         planning_coordinator: PlanningCoordinator | None = None,
         spatial_runtime: SpatialWorldRuntime | None = None,
     ) -> None:
@@ -78,12 +82,19 @@ class WorldRuntime:
             raise ValueError("WorldRuntime currently supports exactly two agents")
         if tick_interval_seconds <= 0:
             raise ValueError("tick_interval_seconds must be greater than 0")
+        if cognitive_time_step_seconds <= 0:
+            raise ValueError("cognitive_time_step_seconds must be greater than 0")
+        if cognitive_time_step_seconds > engine.config.turn_time_step_seconds:
+            raise ValueError(
+                "cognitive_time_step_seconds must not exceed turn_time_step_seconds"
+            )
 
         self.agents: list[SimAgent] = agents
         self.session: WorldConversationSession = session
         self.engine: SimulationEngine = engine
         self.current_time: datetime.datetime = current_time
         self.tick_interval_seconds: float = tick_interval_seconds
+        self.cognitive_time_step_seconds: int = cognitive_time_step_seconds
         self.turn: int = 0
         self.parse_failures: int = 0
         self.silent_turns: int = 0
@@ -208,6 +219,19 @@ class WorldRuntime:
     def scheduler_running(self) -> bool:
         return self._scheduler_task is not None and not self._scheduler_task.done()
 
+    @property
+    def cognitive_active(self) -> bool:
+        cognitive_turn_in_flight = (
+            self._cognitive_task is not None and not self._cognitive_task.done()
+        )
+        return self.session.is_active or cognitive_turn_in_flight
+
+    @property
+    def effective_time_step_seconds(self) -> int:
+        if self.cognitive_active:
+            return self.cognitive_time_step_seconds
+        return self.engine.config.turn_time_step_seconds
+
     async def start_scheduler(self) -> bool:
         if self.scheduler_running:
             return False
@@ -261,10 +285,15 @@ class WorldRuntime:
         """Advance plans, movement time, and encounter detection without LLM I/O."""
         with self._step_lock:
             self.turn += 1
+            cognitive_active = self.cognitive_active
             planning_time = self.current_time + datetime.timedelta(
-                seconds=self.engine.config.turn_time_step_seconds
+                seconds=(
+                    self.cognitive_time_step_seconds
+                    if cognitive_active
+                    else self.engine.config.turn_time_step_seconds
+                )
             )
-            if self.planning_coordinator is not None:
+            if self.planning_coordinator is not None and not cognitive_active:
                 for agent in self.agents:
                     schedule = self.planning_coordinator.ensure_current(
                         agent=_as_life_agent(agent),
@@ -399,6 +428,8 @@ class WorldRuntime:
             history_size=len(self.session.history),
             scheduler_running=self.scheduler_running,
             tick_interval_seconds=self.tick_interval_seconds,
+            cognitive_active=self.cognitive_active,
+            effective_time_step_seconds=self.effective_time_step_seconds,
         )
 
 
@@ -443,6 +474,7 @@ def build_world_runtime(
         engine=engine,
         current_time=now,
         tick_interval_seconds=config.tick_interval_seconds,
+        cognitive_time_step_seconds=config.cognitive_time_step_seconds,
         planning_coordinator=PlanningCoordinator(),
         spatial_runtime=spatial_runtime,
     )

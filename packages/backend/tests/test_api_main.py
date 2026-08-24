@@ -31,6 +31,8 @@ class DummyState:
     history_size: int
     scheduler_running: bool
     tick_interval_seconds: float
+    cognitive_active: bool = False
+    effective_time_step_seconds: int = 300
 
 
 @dataclass
@@ -56,6 +58,8 @@ class DummyRuntime:
             history_size=self._state.history_size,
             scheduler_running=self.scheduler_running,
             tick_interval_seconds=self._state.tick_interval_seconds,
+            cognitive_active=self._state.cognitive_active,
+            effective_time_step_seconds=self._state.effective_time_step_seconds,
         )
 
     def step(self) -> SimulationStepResult:
@@ -172,6 +176,8 @@ async def test_get_world_state_returns_runtime_snapshot() -> None:
     assert response.agent_names == ["Jiho", "Sujin"]
     assert response.scheduler_running is False
     assert response.tick_interval_seconds == 1.0
+    assert response.cognitive_active is False
+    assert response.effective_time_step_seconds == 300
 
 
 @pytest.mark.anyio
@@ -266,3 +272,5 @@ async def test_world_tick_start_and_stop_return_scheduler_state() -> None:
     assert started.running is True
     assert stopped.running is False
     assert started.tick_interval_seconds == 1.5
+    assert started.cognitive_active is False
+    assert started.effective_time_step_seconds == 300

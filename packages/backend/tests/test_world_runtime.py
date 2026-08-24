@@ -37,6 +37,10 @@ class DummyAgent:
 class DummyEngine:
     result: SimulationStepResult
 
+    @property
+    def config(self) -> SimpleNamespace:
+        return SimpleNamespace(turn_time_step_seconds=300)
+
     def step(
         self,
         *,
@@ -107,6 +111,16 @@ class DelayedPlanningCoordinator:
         now = kwargs["now"]
         assert isinstance(now, datetime.datetime)
         self.install_times.append(now)
+        return object()
+
+
+class CountingPlanningCoordinator:
+    def __init__(self) -> None:
+        self.ensure_calls: int = 0
+
+    def ensure_current(self, **kwargs: object) -> object:
+        _ = kwargs
+        self.ensure_calls += 1
         return object()
 
 
@@ -287,11 +301,35 @@ async def _assert_scheduler_clock_advances_during_cognitive_turn() -> None:
     await asyncio.sleep(0.05)
 
     assert runtime.scheduler_running is True
-    assert runtime.current_time >= initial_time + datetime.timedelta(minutes=15)
+    assert runtime.current_time >= initial_time + datetime.timedelta(minutes=1, seconds=30)
+    assert runtime.cognitive_active is True
+    assert runtime.effective_time_step_seconds == 30
 
     engine.release.set()
     await asyncio.sleep(0.02)
     assert await runtime.stop_scheduler() is True
+
+
+def test_cognitive_tick_slows_clock_and_holds_current_plan() -> None:
+    agents = cast(list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")])
+    session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+    coordinator = CountingPlanningCoordinator()
+    initial_time = datetime.datetime(2026, 8, 24, 18, 35)
+    runtime = WorldRuntime(
+        agents=agents,
+        session=session,
+        engine=cast(SimulationEngine, cast(object, BlockingEngine())),
+        current_time=initial_time,
+        planning_coordinator=cast(
+            PlanningCoordinator, cast(object, coordinator)
+        ),
+    )
+
+    runtime._advance_world_tick()
+
+    assert runtime.current_time == initial_time + datetime.timedelta(seconds=30)
+    assert runtime.effective_time_step_seconds == 30
+    assert coordinator.ensure_calls == 0
 
 
 def test_world_runtime_scheduler_starts_and_stops() -> None:

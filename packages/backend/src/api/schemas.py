@@ -16,6 +16,8 @@ class WorldStateResponse(BaseModel):
     agent_names: list[str]
     scheduler_running: bool
     tick_interval_seconds: float
+    cognitive_active: bool
+    effective_time_step_seconds: int
 
 
 class WorldStepResponse(BaseModel):
@@ -35,6 +37,8 @@ class WorldSchedulerResponse(BaseModel):
     turn: int
     current_time: str
     tick_interval_seconds: float
+    cognitive_active: bool
+    effective_time_step_seconds: int
 
 
 class WorldMapPointResponse(BaseModel):

@@ -47,3 +47,6 @@ LLM_API_KEY: Final[str] = os.getenv(
 WORLD_TICK_INTERVAL_SECONDS: Final[float] = float(
     os.getenv("WORLD_TICK_INTERVAL_SECONDS", "1.0")
 )
+WORLD_COGNITIVE_TIME_STEP_SECONDS: Final[int] = int(
+    os.getenv("WORLD_COGNITIVE_TIME_STEP_SECONDS", "30")
+)

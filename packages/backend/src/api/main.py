@@ -34,6 +34,7 @@ from settings import (
     LLM_MODEL,
     LLM_TIMEOUT_SECONDS,
     WORLD_TICK_INTERVAL_SECONDS,
+    WORLD_COGNITIVE_TIME_STEP_SECONDS,
 )
 from world.runtime import WorldRuntime, WorldRuntimeConfig, build_world_runtime
 from world.spatial import SpatialAgentSeed, SpatialWorldRuntime, SpatialWorldSnapshot
@@ -78,6 +79,7 @@ async def on_startup() -> None:
                     timeout_seconds=LLM_TIMEOUT_SECONDS,
                     persona_dir=str(persona_dir),
                     tick_interval_seconds=WORLD_TICK_INTERVAL_SECONDS,
+                    cognitive_time_step_seconds=WORLD_COGNITIVE_TIME_STEP_SECONDS,
                 ),
                 spatial_runtime=app.state.spatial_runtime,
             )
@@ -322,6 +324,8 @@ async def get_world_state() -> WorldStateResponse:
         agent_names=[agent.name for agent in runtime.agents],
         scheduler_running=state.scheduler_running,
         tick_interval_seconds=state.tick_interval_seconds,
+        cognitive_active=state.cognitive_active,
+        effective_time_step_seconds=state.effective_time_step_seconds,
     )
 
 
@@ -350,6 +354,8 @@ def _scheduler_response(runtime: WorldRuntime) -> WorldSchedulerResponse:
         turn=state.turn,
         current_time=state.current_time.isoformat(),
         tick_interval_seconds=state.tick_interval_seconds,
+        cognitive_active=state.cognitive_active,
+        effective_time_step_seconds=state.effective_time_step_seconds,
     )
 
 
