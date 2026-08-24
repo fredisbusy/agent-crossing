@@ -15,6 +15,7 @@ import {
   type DollhouseHomeView,
   type IndoorResidentView,
 } from "./DollhouseHome";
+import { drawDollhouseBuilding } from "./DollhouseBuilding";
 import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 import { ServerGridMovement } from "./gridMovement";
 import {
@@ -151,10 +152,7 @@ export class MainScene extends Phaser.Scene {
         this.unsubscribeStore = undefined;
       }
     };
-    this.events.once(
-      Phaser.Scenes.Events.SHUTDOWN,
-      cleanupStoreSubscription,
-    );
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupStoreSubscription);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanupStoreSubscription);
   }
 
@@ -222,80 +220,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   private drawPixelBuilding(location: TiledObject, kind: string): void {
-    const width = location.width ?? 0;
-    const height = location.height ?? 0;
     const bodyColor = parseColor(getProperty(location, "color"), 0xd58c68);
-    const graphics = this.add.graphics().setDepth(location.y + height - 8);
-    const left = location.x + 16;
-    const right = location.x + width - 16;
-    const roofTop = location.y + 12;
-    const bodyTop = location.y + 70;
-    const bottom = location.y + height - 12;
-
-    graphics.fillStyle(0x294c35, 0.32);
-    graphics.fillRect(left + 8, bodyTop + 12, right - left, bottom - bodyTop);
-    graphics.fillStyle(bodyColor, 1);
-    graphics.fillRect(left, bodyTop, right - left, bottom - bodyTop);
-    graphics.fillStyle(0x694337, 1);
-    for (let step = 0; step < 7; step += 1) {
-      graphics.fillRect(
-        left + step * 8,
-        roofTop + step * 8,
-        right - left - step * 16,
-        9,
-      );
-    }
-    graphics.fillStyle(0x8c5b45, 1);
-    graphics.fillRect(left + 12, bodyTop - 8, right - left - 24, 9);
-    graphics.fillStyle(0x54372f, 1);
-    graphics.fillRect(location.x + width / 2 - 13, bottom - 45, 26, 45);
-    graphics.fillStyle(0xf8cf68, 1);
-    graphics.fillRect(location.x + width / 2 + 7, bottom - 23, 4, 4);
-
-    const windowColor = kind === "library" ? 0xa9dcf0 : 0xffdfa0;
-    for (const windowX of [left + 27, right - 51]) {
-      graphics.fillStyle(0xf3efe0, 1);
-      graphics.fillRect(windowX - 3, bodyTop + 25, 30, 26);
-      graphics.fillStyle(windowColor, 1);
-      graphics.fillRect(windowX, bodyTop + 28, 24, 20);
-      graphics.fillStyle(0xd3b46e, 1);
-      graphics.fillRect(windowX + 10, bodyTop + 28, 3, 20);
-      graphics.fillRect(windowX, bodyTop + 36, 24, 3);
-    }
-
-    if (kind === "cafe" || kind === "market") {
-      graphics.fillStyle(0xf4e8c8, 1);
-      graphics.fillRect(left + 28, bodyTop + 4, right - left - 56, 18);
-      const awningColor = kind === "cafe" ? 0xb94d4d : 0x367f61;
-      for (let x = left + 30; x < right - 31; x += 16) {
-        graphics.fillStyle(awningColor, 1);
-        graphics.fillRect(x, bodyTop + 5, 8, 17);
-      }
-    }
-
-    const sign = this.add
-      .text(
-        location.x + width / 2,
-        location.y - 4,
-        location.name.toUpperCase(),
-        {
-          fontFamily: PIXEL_FONT,
-          fontSize: "10px",
-          fontStyle: "bold",
-          color: "#fff8d9",
-          backgroundColor: "#253e31",
-          padding: { x: 6, y: 3 },
-        },
-      )
-      .setOrigin(0.5)
-      .setDepth(location.y + height + 1)
-      .setResolution(1);
-    sign.setShadow(2, 2, "#15271f", 0, false, true);
-
-    const doorX = location.x + width / 2;
-    const doorY = bottom - 22;
+    const building = drawDollhouseBuilding(this, location, kind, bodyColor);
     const enterLabel = this.add
-      .text(doorX, bottom + 10, "▼ ENTER", {
+      .text(building.doorX, building.doorY + 10, "▼ VIEW", {
         fontFamily: PIXEL_FONT,
         fontSize: "8px",
         fontStyle: "bold",
@@ -304,12 +232,12 @@ export class MainScene extends Phaser.Scene {
         padding: { x: 5, y: 3 },
       })
       .setOrigin(0.5)
-      .setDepth(location.y + height + 2)
+      .setDepth(building.depth + 21)
       .setVisible(false)
       .setResolution(1);
     const portal = this.add
-      .zone(doorX, doorY, 40, 56)
-      .setDepth(location.y + height + 3)
+      .zone(building.doorX, building.doorY - 11, 40, 34)
+      .setDepth(building.depth + 22)
       .setInteractive({ useHandCursor: true });
     portal.on("pointerover", () => enterLabel.setVisible(true));
     portal.on("pointerout", () => enterLabel.setVisible(false));
@@ -550,12 +478,7 @@ export class MainScene extends Phaser.Scene {
           .setVisible(true);
         indoorView.bubble.setText(homeActionLabel(state));
         if (this.followedAgentId === characterId) {
-          this.cameras.main.startFollow(
-            indoorView.container,
-            true,
-            0.12,
-            0.12,
-          );
+          this.cameras.main.startFollow(indoorView.container, true, 0.12, 0.12);
         }
       }
       const transition = this.gridMovement?.sync(

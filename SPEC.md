@@ -203,7 +203,8 @@ react 정책:
   depth는 tile y 좌표를 기준으로 정렬한다.
 - `home` kind는 Smallville Figure 2처럼 지붕 없는 dollhouse 평면도로 메인 맵에
   침실, 주방, 공용실, 욕실과 핵심 가구를 항상 노출한다.
-- cafe/library/market portal은 semantic `kind`를 독립 interior scene template에
+- cafe/library/market도 지붕 없는 kind별 dollhouse interior를 메인 맵에 항상
+  노출한다. 문 portal은 같은 semantic `kind`의 확대 interior scene template에
   연결하고 출구 portal로 outdoor scene에 복귀한다.
 - agent는 backend 상태가 해당 home에 도착한 경우 outdoor avatar 대신 dollhouse
   안에 표시한다. `current_action`과 `plan`의 행동 키워드는 관찰용 실내 방 위치와
