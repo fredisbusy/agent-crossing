@@ -26,6 +26,7 @@ The cognitive runtime logged an Ollama TLS embedding connection error during sta
 - Recursive workspace build: passed; existing frontend large-chunk warning only.
 - Live runtime: scheduler advanced from 06:00 through 09:15 while background qwen planning remained isolated from the clock.
 - Live movement: Jiho arrived at Story House and Sujin moved from Sage Cottage toward The Honey Cup after the 08:00 plan transition.
+- Runtime capacity: qwen authors day broad strokes in the background; deterministic hour/minute subdivision keeps the 27B model available for real encounters.
 - Remaining scope: restart persistence and non-dialogue perceive/retrieve/reflect are tracked as incomplete TODO items; this is an accelerated daily-life MVP, not full paper parity.
 
 ## 2026-08-24 resident card interaction review

@@ -125,34 +125,9 @@ class PlanningCoordinator:
             return self.bootstrap(agent=agent, now=now)
         day_items = self._generate_day_plan(planner=planner, agent=agent, now=now)
         active_day = _active_or_next(day_items, now)
-        try:
-            hourly_items = _children_within(
-                planner.generate_hourly_plan(
-                    agent_name=agent.name,
-                    current_time=now,
-                    day_plan_item=active_day,
-                ),
-                active_day,
-            )
-        except Exception:
-            hourly_items = []
-        hourly_items = [item for item in hourly_items if item.duration_minutes >= 5]
-        if not hourly_items:
-            hourly_items = _fallback_hourly(active_day)
+        hourly_items = _fallback_hourly(active_day)
         active_hourly = _active_or_next(hourly_items, now)
-        try:
-            minute_items = _children_within(
-                planner.generate_minute_plan(
-                    agent_name=agent.name,
-                    current_time=now,
-                    hourly_plan_item=active_hourly,
-                ),
-                active_hourly,
-            )
-        except Exception:
-            minute_items = []
-        if not minute_items or _active_or_none(minute_items, now) is None:
-            minute_items = _fallback_minute(active_hourly)
+        minute_items = _fallback_minute(active_hourly)
         state = _AgentPlanState(
             plan_date=now.date(),
             day_items=day_items,
