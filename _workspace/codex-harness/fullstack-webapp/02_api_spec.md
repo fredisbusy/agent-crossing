@@ -12,3 +12,10 @@ No API endpoint or WebSocket schema was added. The UI derives truthful presentat
 - `GET /dashboard/events?after=<sequence>&limit=100` returns cursor-filtered events.
 - Diagnostics responses omit embedding, provider `raw_response`, prompt, and API key.
 - `/ws/world` remains unchanged and continues to carry only public spatial snapshots.
+
+## 2026-08-24 directional relationship summaries
+
+- Every dashboard agent includes `relationships`, omitting self-relations.
+- Each entry includes target identity, qualitative summary, supporting persona/memory
+  evidence, `affinity_score: null`, and `measurement: "not_modeled"`.
+- `/ws/world` remains unchanged.

@@ -24,3 +24,8 @@ No deployment configuration change is required. The existing Vite development se
   Docker network and to `127.0.0.1:8001` for host-local development.
 - Caddy continues to proxy the frontend origin; no new public host is required.
 - Verify `https://agentcrossing.byfred.io/dashboard` and `/dashboard/state` after changes.
+
+## 2026-08-24 directional relationship summaries
+
+No deployment configuration change is required. The existing dashboard state endpoint
+and frontend bundle carry the additive relationship contract.

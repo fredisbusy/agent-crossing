@@ -2,6 +2,8 @@ import type {
   DashboardAgent,
   DashboardEvent,
   DashboardMemory,
+  DashboardRelationship,
+  DashboardRelationshipEvidence,
   DashboardState,
   PlanItemState,
 } from "@agent-crossing/shared";
@@ -57,6 +59,61 @@ function parseMemory(value: unknown): DashboardMemory | null {
   };
 }
 
+function parseRelationshipEvidence(
+  value: unknown,
+): DashboardRelationshipEvidence | null {
+  if (!isRecord(value)) return null;
+  if (
+    !["persona", "memory"].includes(String(value.source)) ||
+    typeof value.content !== "string" ||
+    (value.memory_id !== null && typeof value.memory_id !== "number") ||
+    (value.node_type !== null &&
+      !["OBSERVATION", "REFLECTION", "PLAN"].includes(
+        String(value.node_type),
+      )) ||
+    (value.importance !== null && typeof value.importance !== "number") ||
+    (value.created_at !== null && typeof value.created_at !== "string")
+  ) {
+    return null;
+  }
+  return {
+    source: value.source as DashboardRelationshipEvidence["source"],
+    content: value.content,
+    memory_id: value.memory_id as number | null,
+    node_type: value.node_type as DashboardMemory["node_type"] | null,
+    importance: value.importance as number | null,
+    created_at: value.created_at as string | null,
+  };
+}
+
+function parseRelationship(value: unknown): DashboardRelationship | null {
+  if (!isRecord(value)) return null;
+  const evidence = Array.isArray(value.evidence)
+    ? value.evidence.map(parseRelationshipEvidence)
+    : null;
+  if (
+    typeof value.target_agent_id !== "string" ||
+    typeof value.target_name !== "string" ||
+    (value.affinity_score !== null && typeof value.affinity_score !== "number") ||
+    value.measurement !== "not_modeled" ||
+    (value.summary !== null && typeof value.summary !== "string") ||
+    evidence === null ||
+    evidence.some((item) => item === null)
+  ) {
+    return null;
+  }
+  return {
+    target_agent_id: value.target_agent_id,
+    target_name: value.target_name,
+    affinity_score: value.affinity_score as number | null,
+    measurement: "not_modeled",
+    summary: value.summary as string | null,
+    evidence: evidence.filter(
+      (item): item is DashboardRelationshipEvidence => item !== null,
+    ),
+  };
+}
+
 function parseAgent(value: unknown): DashboardAgent | null {
   if (!isRecord(value) || !isRecord(value.tile_position)) return null;
   const activeDay = value.active_day === null ? null : parsePlan(value.active_day);
@@ -71,6 +128,9 @@ function parseAgent(value: unknown): DashboardAgent | null {
     ? value.memories.map(parseMemory)
     : null;
   const reflection = value.reflection_status;
+  const relationships = Array.isArray(value.relationships)
+    ? value.relationships.map(parseRelationship)
+    : null;
   if (
     typeof value.agent_id !== "string" ||
     typeof value.name !== "string" ||
@@ -91,7 +151,9 @@ function parseAgent(value: unknown): DashboardAgent | null {
     memories.some((item) => item === null) ||
     !isRecord(reflection) ||
     typeof reflection.accumulated_importance !== "number" ||
-    typeof reflection.threshold !== "number"
+    typeof reflection.threshold !== "number" ||
+    relationships === null ||
+    relationships.some((relationship) => relationship === null)
   ) {
     return null;
   }
@@ -113,6 +175,10 @@ function parseAgent(value: unknown): DashboardAgent | null {
       accumulated_importance: reflection.accumulated_importance,
       threshold: reflection.threshold,
     },
+    relationships: relationships.filter(
+      (relationship): relationship is DashboardRelationship =>
+        relationship !== null,
+    ),
     memories: memories.filter((item): item is DashboardMemory => item !== null),
   };
 }

@@ -42,3 +42,9 @@
   actions, dialogue, and governance diagnostics.
 - Keep internal diagnostics out of the public spatial WebSocket contract.
 - Preserve existing `/` Phaser behavior and avoid fabricated dashboard data.
+
+## 2026-08-24 directional relationship summaries
+
+- When an agent is selected, summarize how that agent currently perceives every other agent.
+- Keep private and asymmetric knowledge directional; never infer the reverse perspective.
+- Show evidence-backed qualitative affinity because the runtime has no canonical numeric relationship score.

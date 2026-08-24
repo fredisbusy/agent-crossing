@@ -107,6 +107,24 @@ export interface DashboardReflectionStatus {
   threshold: number;
 }
 
+export interface DashboardRelationshipEvidence {
+  source: "persona" | "memory";
+  content: string;
+  memory_id: number | null;
+  node_type: DashboardMemory["node_type"] | null;
+  importance: number | null;
+  created_at: string | null;
+}
+
+export interface DashboardRelationship {
+  target_agent_id: AgentId;
+  target_name: string;
+  affinity_score: number | null;
+  measurement: "not_modeled";
+  summary: string | null;
+  evidence: DashboardRelationshipEvidence[];
+}
+
 export interface DashboardAgent {
   agent_id: AgentId;
   name: string;
@@ -122,6 +140,7 @@ export interface DashboardAgent {
   active_minute: PlanItemState | null;
   day_plan: PlanItemState[];
   reflection_status: DashboardReflectionStatus;
+  relationships: DashboardRelationship[];
   memories: DashboardMemory[];
 }
 

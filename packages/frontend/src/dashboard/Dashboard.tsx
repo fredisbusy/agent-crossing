@@ -2,6 +2,7 @@ import type {
   DashboardAgent,
   DashboardEvent,
   DashboardMemory,
+  DashboardRelationship,
   PlanItemState,
 } from "@agent-crossing/shared";
 import {
@@ -12,6 +13,7 @@ import {
   Database,
   Eye,
   Footprints,
+  Heart,
   ListTree,
   MessageCircle,
   Radio,
@@ -22,10 +24,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useDashboardState } from "../hooks/useDashboardState";
 import "./dashboard.css";
 
-type DashboardTab = "overview" | "memory" | "plans" | "reflection" | "logs";
+type DashboardTab =
+  | "overview"
+  | "relationship"
+  | "memory"
+  | "plans"
+  | "reflection"
+  | "logs";
 
 const tabs: { id: DashboardTab; label: string }[] = [
   { id: "overview", label: "개요" },
+  { id: "relationship", label: "관계" },
   { id: "memory", label: "기억" },
   { id: "plans", label: "계획" },
   { id: "reflection", label: "성찰" },
@@ -147,7 +156,131 @@ function EventRow({ event }: { event: DashboardEvent }) {
   );
 }
 
-function AgentOverview({ agent }: { agent: DashboardAgent }) {
+function RelationshipCard({
+  relationship,
+  target,
+  onSelect,
+}: {
+  relationship: DashboardRelationship;
+  target: DashboardAgent | null;
+  onSelect: (agentId: string) => void;
+}) {
+  return (
+    <article className="dashboard-relationship-card">
+      <header>
+        <div>
+          <span>TO · {relationship.target_agent_id}</span>
+          <h3>{relationship.target_name}</h3>
+        </div>
+        <span className="dashboard-affinity-badge">
+          {relationship.affinity_score === null
+            ? "호감도 · 정성 상태"
+            : `호감도 ${relationship.affinity_score}`}
+        </span>
+      </header>
+      <p className="dashboard-relationship-summary">
+        {relationship.summary ?? "명시적으로 기록된 관계 상태가 없습니다."}
+      </p>
+      <dl className="dashboard-relationship-facts">
+        <div>
+          <dt>상대 현재 상태</dt>
+          <dd>{target ? actionLabel(target.current_action) : "상태 확인 불가"}</dd>
+        </div>
+        <div>
+          <dt>현재 위치</dt>
+          <dd>{target?.destination ?? "목적지 없음"}</dd>
+        </div>
+        <div>
+          <dt>관계 근거</dt>
+          <dd>{relationship.evidence.length}개</dd>
+        </div>
+      </dl>
+      <details>
+        <summary>관계 근거 보기</summary>
+        {relationship.evidence.length ? (
+          <div className="dashboard-relationship-evidence">
+            {relationship.evidence.map((evidence, index) => (
+              <article key={`${evidence.source}-${evidence.memory_id ?? index}`}>
+                <span>
+                  {evidence.source === "persona"
+                    ? "PERSONA"
+                    : `MEMORY #${evidence.memory_id}`}
+                </span>
+                <p>{evidence.content}</p>
+                {evidence.importance !== null ? (
+                  <small>중요도 {evidence.importance}</small>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="dashboard-empty-copy">관련 기억이 아직 없습니다.</p>
+        )}
+      </details>
+      <button
+        type="button"
+        className="dashboard-perspective-button"
+        onClick={() => onSelect(relationship.target_agent_id)}
+      >
+        {relationship.target_name} 관점 보기 <ChevronRight size={13} />
+      </button>
+    </article>
+  );
+}
+
+function RelationshipPanel({
+  agent,
+  agents,
+  onSelect,
+}: {
+  agent: DashboardAgent;
+  agents: DashboardAgent[];
+  onSelect: (agentId: string) => void;
+}) {
+  return (
+    <section className="dashboard-panel dashboard-relationship-panel">
+      <div className="dashboard-panel-title">
+        <span><Heart size={14} /> 다른 에이전트에 대한 인식</span>
+        <strong>{agent.name}의 관점</strong>
+      </div>
+      <p className="dashboard-relationship-note">
+        이 요약은 {agent.name} 자신의 persona와 memory에 있는 근거만 사용합니다.
+        숫자형 호감도는 아직 시스템에 정의되어 있지 않습니다.
+      </p>
+      <div className="dashboard-relationship-grid">
+        {agent.relationships.length ? (
+          agent.relationships.map((relationship) => (
+            <RelationshipCard
+              key={relationship.target_agent_id}
+              relationship={relationship}
+              target={
+                agents.find(
+                  (candidate) =>
+                    candidate.agent_id === relationship.target_agent_id,
+                ) ?? null
+              }
+              onSelect={onSelect}
+            />
+          ))
+        ) : (
+          <p className="dashboard-empty-copy">
+            명시적으로 기록된 관계 상태가 없습니다.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function AgentOverview({
+  agent,
+  agents,
+  onSelect,
+}: {
+  agent: DashboardAgent;
+  agents: DashboardAgent[];
+  onSelect: (agentId: string) => void;
+}) {
   const recentThought = agent.bubble_kind === "thought" ? agent.bubble_text : null;
   return (
     <div className="dashboard-overview-grid">
@@ -184,6 +317,7 @@ function AgentOverview({ agent }: { agent: DashboardAgent }) {
         <div className="dashboard-progress"><span style={{ width: `${Math.min(100, (agent.reflection_status.accumulated_importance / Math.max(1, agent.reflection_status.threshold)) * 100)}%` }} /></div>
         <p>임계치에 도달하면 최근 기억을 바탕으로 고차원 성찰을 생성합니다.</p>
       </section>
+      <RelationshipPanel agent={agent} agents={agents} onSelect={onSelect} />
     </div>
   );
 }
@@ -278,7 +412,20 @@ export function Dashboard() {
                 <div><span>{selectedAgent.agent_id}</span><h1>{selectedAgent.name}</h1></div>
                 <p>{selectedAgent.bubble_text || "현재 관찰 문장 없음"}</p>
               </div>
-              {tab === "overview" ? <AgentOverview agent={selectedAgent} /> : null}
+              {tab === "overview" ? (
+                <AgentOverview
+                  agent={selectedAgent}
+                  agents={data?.agents ?? []}
+                  onSelect={setSelectedAgentId}
+                />
+              ) : null}
+              {tab === "relationship" ? (
+                <RelationshipPanel
+                  agent={selectedAgent}
+                  agents={data?.agents ?? []}
+                  onSelect={setSelectedAgentId}
+                />
+              ) : null}
               {tab === "memory" ? (
                 <section className="dashboard-panel dashboard-list-panel">
                   <div className="dashboard-panel-title"><span><Database size={14} /> Memory Stream</span><strong>{selectedAgent.memories.length}</strong></div>

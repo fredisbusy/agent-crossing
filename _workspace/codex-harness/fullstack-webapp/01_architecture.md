@@ -24,3 +24,10 @@
   visiting `/dashboard` does not boot or download the Phaser runtime chunk.
 - The dashboard uses a dedicated polling hook and strict runtime parser rather than
   overloading the Phaser/Zustand game bridge.
+
+## Directional relationship summaries — 2026-08-24
+
+- A diagnostics helper derives each subject-to-target summary only from the subject's
+  identity stable set and memory stream.
+- The dashboard joins that directional evidence with the target's existing live status;
+  no relationship state is added to the Brain result object.

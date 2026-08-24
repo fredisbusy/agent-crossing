@@ -157,6 +157,24 @@ class DashboardReflectionStatusResponse(BaseModel):
     threshold: int
 
 
+class DashboardRelationshipEvidenceResponse(BaseModel):
+    source: Literal["persona", "memory"]
+    content: str
+    memory_id: int | None
+    node_type: Literal["OBSERVATION", "REFLECTION", "PLAN"] | None
+    importance: int | None
+    created_at: str | None
+
+
+class DashboardRelationshipResponse(BaseModel):
+    target_agent_id: str
+    target_name: str
+    affinity_score: int | None
+    measurement: Literal["not_modeled"]
+    summary: str | None
+    evidence: list[DashboardRelationshipEvidenceResponse]
+
+
 class DashboardAgentResponse(BaseModel):
     agent_id: str
     name: str
@@ -172,6 +190,7 @@ class DashboardAgentResponse(BaseModel):
     active_minute: PlanItemResponse | None
     day_plan: list[PlanItemResponse]
     reflection_status: DashboardReflectionStatusResponse
+    relationships: list[DashboardRelationshipResponse]
     memories: list[DashboardMemoryResponse]
 
 

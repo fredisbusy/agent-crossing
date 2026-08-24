@@ -337,6 +337,8 @@
     - [x] 자동 cognitive turn의 thought/action/decision/governance 로그를 별도 diagnostics buffer에 남긴다
     - [x] `/ws/world`에 내부 진단을 섞지 않고 `/dashboard/state` 읽기 전용 API로 제공한다
     - [x] embedding, raw provider response, prompt, API key를 사용자 응답에서 제외한다
+    - [x] 선택 agent의 관점에서 다른 agent와의 비대칭 관계 요약과 근거를 표시한다
+    - [x] 정식 호감도 모델이 없는 동안 memory importance를 거짓 호감 점수로 변환하지 않는다
 
 - [ ] `P2` God mode 입력으로 perception event를 주입한다
   - Depends on: agent inspector 구현

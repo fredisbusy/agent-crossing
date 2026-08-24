@@ -47,3 +47,10 @@
 - Verify the public state endpoint returns current runtime facts.
 - In a browser, select Sujin, open Memory and Diagnostics tabs, confirm real rows render,
   and confirm there are no browser console errors.
+
+## Directional relationship summaries
+
+- Unit-test Jiho-to-Sujin and Sujin-to-Jiho independently to prevent private-affection leakage.
+- Verify missing evidence yields no summary and no numeric score.
+- Unit-test strict parsing of relationship evidence and malformed evidence rejection.
+- Build the frontend and verify both the overview panel and Relationship tab publicly.

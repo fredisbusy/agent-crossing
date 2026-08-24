@@ -5,11 +5,14 @@ import asyncio
 
 from agents.persona_loader import PersonaLoader
 from agents.planning.lifecycle import PlanItemSnapshot
+from agents.relationship_diagnostics import build_relationship_snapshot
 from api.schemas import (
     DashboardAgentResponse,
     DashboardEventResponse,
     DashboardMemoryResponse,
     DashboardReflectionStatusResponse,
+    DashboardRelationshipEvidenceResponse,
+    DashboardRelationshipResponse,
     DashboardStateResponse,
     DashboardWorldResponse,
     SpatialAgentResponse,
@@ -311,6 +314,47 @@ def _dashboard_state_response(
             continue
         reflection = runtime_agent.brain.reflection_graph.reflection
         memories = runtime_agent.memory_service.get_recent_memories(limit=memory_limit)
+        relationships: list[DashboardRelationshipResponse] = []
+        for target_agent in runtime.agents:
+            target_agent_id = str(target_agent.identity.id)
+            if target_agent_id == spatial_agent.agent_id:
+                continue
+            relationship = build_relationship_snapshot(
+                identity_stable_set=list(
+                    runtime_agent.profile.fixed.identity_stable_set
+                ),
+                memories=memories,
+                target_agent_id=target_agent_id,
+                target_name=target_agent.name,
+            )
+            relationships.append(
+                DashboardRelationshipResponse(
+                    target_agent_id=relationship.target_agent_id,
+                    target_name=relationship.target_name,
+                    affinity_score=relationship.affinity_score,
+                    measurement=relationship.measurement,
+                    summary=relationship.summary,
+                    evidence=[
+                        DashboardRelationshipEvidenceResponse(
+                            source=evidence.source,
+                            content=evidence.content,
+                            memory_id=evidence.memory_id,
+                            node_type=(
+                                evidence.node_type.value
+                                if evidence.node_type is not None
+                                else None
+                            ),
+                            importance=evidence.importance,
+                            created_at=(
+                                evidence.created_at.isoformat()
+                                if evidence.created_at is not None
+                                else None
+                            ),
+                        )
+                        for evidence in relationship.evidence
+                    ],
+                )
+            )
         agents.append(
             DashboardAgentResponse(
                 agent_id=spatial_agent.agent_id,
@@ -335,6 +379,7 @@ def _dashboard_state_response(
                     accumulated_importance=reflection.accumulated_importance,
                     threshold=reflection.config.threshold,
                 ),
+                relationships=relationships,
                 memories=[
                     DashboardMemoryResponse(
                         id=memory.id,

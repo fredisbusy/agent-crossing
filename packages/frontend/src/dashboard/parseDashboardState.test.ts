@@ -28,6 +28,25 @@ const fixture = {
       active_minute: null,
       day_plan: [],
       reflection_status: { accumulated_importance: 42, threshold: 150 },
+      relationships: [
+        {
+          target_agent_id: "Sujin",
+          target_name: "Sujin Lee",
+          affinity_score: null,
+          measurement: "not_modeled",
+          summary: "Jiho는 Sujin을 친구 이상으로 좋아한다.",
+          evidence: [
+            {
+              source: "persona",
+              content: "Jiho는 Sujin을 친구 이상으로 좋아한다.",
+              memory_id: null,
+              node_type: null,
+              importance: null,
+              created_at: null,
+            },
+          ],
+        },
+      ],
       memories: [
         {
           id: 1,
@@ -52,11 +71,20 @@ describe("parseDashboardState", () => {
       "수진을 카페에서 보았다.",
     );
     expect(parsed?.world.revision).toBe(12);
+    expect(parsed?.agents[0]?.relationships[0]?.summary).toBe(
+      "Jiho는 Sujin을 친구 이상으로 좋아한다.",
+    );
   });
 
   it("rejects malformed memories instead of rendering invented data", () => {
     const malformed = structuredClone(fixture);
     malformed.agents[0].memories[0].importance = "high" as never;
+    expect(parseDashboardState(malformed)).toBeNull();
+  });
+
+  it("rejects malformed relationship evidence", () => {
+    const malformed = structuredClone(fixture);
+    malformed.agents[0].relationships[0].evidence[0].memory_id = "one" as never;
     expect(parseDashboardState(malformed)).toBeNull();
   });
 });

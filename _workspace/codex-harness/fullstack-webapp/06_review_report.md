@@ -64,3 +64,13 @@ The cognitive runtime logged an Ollama TLS embedding connection error during sta
   selection worked, and the browser console contained no errors.
 - Known follow-up: event history and memories remain in-process and reset with the backend;
   public dashboard authentication is not yet implemented.
+
+## 2026-08-24 directional relationship summary review
+
+- Added subject-scoped, asymmetric relationship summaries with inspectable persona and
+  memory evidence.
+- Kept numeric affinity explicitly unmodeled instead of repurposing memory importance.
+- Added perspective switching and target live-state context in both overview and Relationship views.
+- Verification: 132 backend tests passed, 10 skipped; 16 frontend tests passed;
+  recursive workspace build passed. The public state endpoint returned directional
+  Jiho-to-Sujin and Sujin-to-Jiho summaries with `affinity_score: null`.

@@ -310,6 +310,12 @@ Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하�
 - 공개 응답에서는 embedding, provider `raw_response`, prompt, API key를 제외한다.
 - `/ws/world`는 계속 사용자 관찰용 최신 spatial snapshot만 전달하며 내부 판단
   trace를 포함하지 않는다.
+- 선택 agent의 관계 요약은 해당 agent 자신의 `identity_stable_set`과 private
+  memory stream에서 상대를 언급한 근거만 사용한다. 역방향 agent의 기억으로
+  관계 정보를 보완하거나 대칭 복사하지 않는다.
+- 숫자형 affinity는 별도 `RelationshipState`와 업데이트 공식이 정의되기 전까지
+  `null / not_modeled`로 반환한다. memory importance와 retrieval score는 호감도가
+  아니므로 관계 점수로 변환하지 않는다.
 
 God mode 입력:
 
