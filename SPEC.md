@@ -221,6 +221,11 @@ react 정책:
 - persona의 `current_plan_context`에서 canonical location 또는 alias를 찾는다.
 - 목적지 bounds에서 현재 위치와 가장 가까운 walkable tile을 선택한다.
 - backend가 계산한 4방향 A\* route를 한 tick에 한 tile씩 소비한다.
+- 프런트엔드 tile motion은 `grid-engine@2.48.2`에 위임하고 전역/character
+  방향 수를 모두 `NumberOfDirections.FOUR`로 고정한다.
+- 연속 snapshot은 Manhattan distance 1인 경우에만 한 tile 이동으로
+  애니메이션한다. 누락 frame으로 두 tile 이상 차이가 나면 backend 좌표로
+  즉시 재동기화하며 client-side 우회 경로를 만들지 않는다.
 - plan이 바뀌면 기존 route를 폐기하고 현재 tile에서 다시 탐색한다.
 - 공간 runtime/stream은 DB/LLM 인지 runtime의 실패와 독립적으로 부팅한다.
 
@@ -260,9 +265,9 @@ agent 필드:
 - `route_remaining`
 
 프런트엔드는 수신 JSON을 shared contract에 맞게 runtime validation한 뒤
-Zustand에 저장한다. Phaser는 `position`만 렌더링에 사용하며 충돌/경로를
-재계산하지 않는다. `dialogue`, `emoji`, cognitive plan item은 후속 social
-overlay 이벤트로 확장한다.
+Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하며
+충돌/경로를 재계산하지 않는다. `dialogue`, `emoji`, cognitive plan item은
+후속 social overlay 이벤트로 확장한다.
 
 God mode 입력:
 

@@ -17,6 +17,7 @@ Built with **React 19 + Phaser 3** (frontend) and **FastAPI** (backend).
 ## Tech Stack
 
 - Frontend: React 19, Phaser 3, Zustand, Vite
+- Grid movement: Grid Engine 2.48.2 (Phaser 3 compatible, Apache-2.0)
 - Backend: FastAPI, Pydantic, uvicorn, uv
 - AI/Memory: local LLM (MLX on Apple Silicon), PostgreSQL + pgvector, sentence-transformers
 - Monorepo: pnpm workspace
@@ -117,6 +118,12 @@ destination, finds a collision-safe four-direction A* route, and advances the
 agent by one tile every spatial tick. `ws://localhost:8001/ws/world` broadcasts
 the latest authoritative snapshot; Zustand validates and stores it, and Phaser
 animates the pixel agents to those coordinates.
+
+Phaser delegates tile motion to Grid Engine with `NumberOfDirections.FOUR`.
+Normal server updates animate exactly one horizontal or vertical tile. If the
+client reconnects after missing frames, it snaps to the latest authoritative
+tile instead of inventing a local route through collision geometry. The version
+is pinned to `2.48.2` because later Grid Engine releases target Phaser 4.
 
 Useful endpoints:
 

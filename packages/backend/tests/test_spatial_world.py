@@ -48,6 +48,23 @@ def test_spatial_runtime_advances_only_through_walkable_tiles() -> None:
     assert any(agent.current_action.startswith("at:") for agent in snapshot.agents)
 
 
+def test_spatial_runtime_never_moves_diagonally() -> None:
+    runtime = _runtime()
+    previous_positions = {
+        agent.agent_id: agent.tile_position for agent in runtime.snapshot().agents
+    }
+
+    for _ in range(20):
+        snapshot = runtime.tick()
+        for agent in snapshot.agents:
+            previous = previous_positions[agent.agent_id]
+            distance = abs(agent.tile_position.x - previous.x) + abs(
+                agent.tile_position.y - previous.y
+            )
+            assert distance in {0, 1}
+            previous_positions[agent.agent_id] = agent.tile_position
+
+
 def test_spatial_runtime_replans_when_agent_plan_changes() -> None:
     runtime = _runtime()
     _ = runtime.tick()

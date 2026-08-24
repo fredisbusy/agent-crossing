@@ -280,6 +280,15 @@
     - [x] 목표 좌표까지 유효 경로를 계산한다
     - [x] 경로 불가능 시 빈 경로 fallback을 처리한다
 
+- [x] `P2` Phaser Grid Engine 기반 4방향 이동을 적용한다
+  - Depends on: A\* pathfinding 적용
+  - DoD:
+    - [x] Phaser 3.90 호환 `grid-engine@2.48.2`를 고정한다
+    - [x] 전역/agent 이동을 `NumberOfDirections.FOUR`로 제한한다
+    - [x] 연속 server snapshot은 한 번에 한 cardinal tile만 애니메이션한다
+    - [x] 누락 snapshot은 client pathfinding 없이 authoritative tile로 재동기화한다
+    - [x] backend 회귀 테스트로 diagonal tile transition이 없음을 검증한다
+
 - [ ] `P2` agent inspector(memory/plan/reflection view)를 구현한다
   - Depends on: A\* pathfinding 적용
   - DoD:
