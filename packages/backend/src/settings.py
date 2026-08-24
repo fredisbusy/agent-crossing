@@ -25,7 +25,7 @@ _default_base_url = (
     else "https://generativelanguage.googleapis.com/v1beta"
 )
 _default_llm_model = (
-    "ollama_chat/qwen2.5:7b-instruct"
+    "ollama_chat/qwen3.8:27b-mlx"
     if LLM_BACKEND == "ollama"
     else "gemini/gemini-2.5-flash-lite"
 )

@@ -20,7 +20,7 @@ def test_generate_uses_litellm_completion_shape(monkeypatch) -> None:
         base_url="https://model.byfred.io",
         api_key="test-key",
         timeout_seconds=7.0,
-        default_generate_model="ollama_chat/qwen2.5:7b-instruct",
+        default_generate_model="ollama_chat/qwen3.8:27b-mlx",
         default_embedding_model="ollama/bge-m3",
     )
 
@@ -39,7 +39,7 @@ def test_generate_uses_litellm_completion_shape(monkeypatch) -> None:
     )
 
     assert response == '{"status":"ok"}'
-    assert captured["model"] == "ollama_chat/qwen2.5:7b-instruct"
+    assert captured["model"] == "ollama_chat/qwen3.8:27b-mlx"
     assert captured["api_base"] == "https://model.byfred.io"
     assert captured["api_key"] == "test-key"
     assert captured["timeout"] == 7.0
@@ -51,6 +51,7 @@ def test_generate_uses_litellm_completion_shape(monkeypatch) -> None:
     assert captured["temperature"] == 0.3
     assert captured["top_p"] == 0.8
     assert captured["max_tokens"] == 60
+    assert captured["drop_params"] is True
     assert captured["repeat_penalty"] == 1.2
     assert captured["presence_penalty"] == 0.4
     assert captured["frequency_penalty"] == 0.1
@@ -98,7 +99,7 @@ def test_embed_reads_litellm_embedding_vector(monkeypatch) -> None:
     monkeypatch.setattr(litellm, "embedding", fake_embedding)
     client = LiteLlmClient(
         base_url="https://model.byfred.io",
-        default_generate_model="ollama_chat/qwen2.5:7b-instruct",
+        default_generate_model="ollama_chat/qwen3.8:27b-mlx",
         default_embedding_model="ollama/bge-m3",
     )
 

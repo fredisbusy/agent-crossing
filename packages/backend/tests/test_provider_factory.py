@@ -5,7 +5,7 @@ from llm.clients.provider_factory import build_provider_client
 def test_build_provider_client_returns_litellm_client() -> None:
     client = build_provider_client(
         timeout_seconds=4.0,
-        generation_model="ollama_chat/qwen2.5:7b-instruct",
+        generation_model="ollama_chat/qwen3.8:27b-mlx",
         embedding_model="ollama/bge-m3",
         base_url="https://model.byfred.io",
         api_key="test-key",

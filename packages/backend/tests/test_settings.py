@@ -55,7 +55,7 @@ def test_settings_ollama_backend_uses_byfred_gateway() -> None:
     assert settings_payload == {
         "LLM_BACKEND": "ollama",
         "LLM_BASE_URL": "https://model.byfred.io",
-        "LLM_MODEL": "ollama_chat/qwen2.5:7b-instruct",
+        "LLM_MODEL": "ollama_chat/qwen3.8:27b-mlx",
         "EMBEDDING_MODEL": "ollama/bge-m3",
         "LLM_API_KEY": "",
     }

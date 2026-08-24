@@ -75,6 +75,7 @@ class LiteLlmClient:
         if self.api_key:
             kwargs["api_key"] = self.api_key
         if selected_model.startswith(("ollama/", "ollama_chat/")):
+            kwargs["drop_params"] = True
             if final_options.repeat_penalty is not None:
                 kwargs["repeat_penalty"] = final_options.repeat_penalty
             if final_options.presence_penalty is not None:
