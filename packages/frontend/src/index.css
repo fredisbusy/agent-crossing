@@ -151,6 +151,9 @@ button {
   z-index: 10;
 }
 .top-hud {
+  --hud-h: 42px;
+  --hud-border-w: 3px;
+  --hud-radius: 3px;
   top: 18px;
   left: 18px;
   right: 18px;
@@ -160,9 +163,20 @@ button {
   pointer-events: none;
 }
 .game-brand,
-.time-chip {
-  border: 3px solid #e8d49d;
+.time-chip,
+.dashboard-link,
+.session-menu-button,
+.inspector-toggle {
+  height: var(--hud-h);
+  border-width: var(--hud-border-w);
+  border-style: solid;
+  border-radius: var(--hud-radius);
   outline: 2px solid #24392c;
+  box-sizing: border-box;
+}
+.game-brand,
+.time-chip {
+  border-color: #e8d49d;
   background: #f5e7bf;
   color: #293c30;
   box-shadow: 5px 5px 0 rgba(25, 45, 33, 0.55);
@@ -179,10 +193,8 @@ button {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
-  padding: 7px 9px;
-  border: 2px solid #cdb984;
-  outline: 2px solid #24392c;
+  padding: 0 9px;
+  border-color: #cdb984;
   background: rgba(245, 231, 191, 0.7);
   color: #4d5a4f;
   box-shadow: 3px 3px 0 rgba(25, 45, 33, 0.4);
@@ -198,9 +210,8 @@ button {
   align-items: center;
   gap: 6px;
   max-width: 180px;
-  padding: 8px 10px;
-  border: 3px solid #d9c78f;
-  outline: 2px solid #24392c;
+  padding: 0 10px;
+  border-color: #d9c78f;
   background: #a45657;
   color: #fff3cf;
   box-shadow: 4px 4px 0 rgba(25, 45, 33, 0.55);
@@ -405,13 +416,14 @@ button {
   align-items: center;
   min-width: 224px;
   gap: 9px;
-  padding: 8px 12px;
+  padding: 0 12px;
 }
 .pixel-leaf {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  flex: 0 0 auto;
+  width: calc(var(--hud-h) - 12px);
+  height: calc(var(--hud-h) - 12px);
   background: #4f8b50;
   color: #fff4bd;
   font-size: 18px;
@@ -431,8 +443,9 @@ button {
 .time-chip {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 3px;
-  padding: 6px 11px;
+  padding: 0 11px;
   font-size: 10px;
 }
 .time-chip-main {
@@ -478,12 +491,10 @@ button {
 
 .inspector-toggle {
   pointer-events: auto;
-  width: 38px;
-  height: 38px;
+  width: var(--hud-h);
   display: grid;
   place-items: center;
-  border: 3px solid #d9c78f;
-  outline: 2px solid #24392c;
+  border-color: #d9c78f;
   background: #2d4b37;
   color: #fff0bd;
   box-shadow: 4px 4px 0 rgba(13, 29, 20, 0.55);
@@ -724,6 +735,8 @@ button {
     width: 100dvw;
   }
   .top-hud {
+    --hud-h: 36px;
+    --hud-border-w: 2px;
     top: calc(8px + env(safe-area-inset-top));
     left: calc(8px + env(safe-area-inset-left));
     right: calc(8px + env(safe-area-inset-right));
@@ -732,11 +745,9 @@ button {
   .game-brand {
     flex: 0 0 auto;
     min-width: 0;
-    width: 30px;
-    height: 30px;
+    width: var(--hud-h);
     gap: 0;
     padding: 0;
-    border-width: 2px;
     box-shadow: 3px 3px 0 rgba(25, 45, 33, 0.4);
     justify-content: center;
     opacity: 0.85;
@@ -745,8 +756,8 @@ button {
     display: none;
   }
   .pixel-leaf {
-    width: 100%;
-    height: 100%;
+    width: calc(var(--hud-h) - 8px);
+    height: calc(var(--hud-h) - 8px);
     font-size: 13px;
   }
   .time-chip {
@@ -756,7 +767,7 @@ button {
     align-items: center;
     gap: 6px;
     margin-left: 0;
-    padding: 5px 8px;
+    padding: 0 8px;
     overflow: hidden;
   }
   .time-chip-main {
@@ -791,9 +802,7 @@ button {
     gap: 6px;
   }
   .dashboard-link {
-    width: 36px;
-    height: 36px;
-    min-height: 36px;
+    width: var(--hud-h);
     justify-content: center;
     padding: 0;
   }
@@ -801,8 +810,7 @@ button {
     display: none;
   }
   .session-menu-button {
-    width: 40px;
-    height: 40px;
+    width: var(--hud-h);
     justify-content: center;
     padding: 0;
   }
@@ -831,10 +839,6 @@ button {
   }
   .session-save-list article button {
     width: 100%;
-  }
-  .inspector-toggle {
-    width: 44px;
-    height: 44px;
   }
   .game-inspector {
     top: 72px;
