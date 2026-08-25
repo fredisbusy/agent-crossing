@@ -30,7 +30,7 @@ Framing reference (for style, not output format):
 
 ## Requirements
 
-- Return 5 to 8 plan items in `items`.
+- Return $item_count_requirement plan items in `items`.
 - Each item must include all required fields: `start_time`, `end_time`, `location`, `action_content`.
 - `start_time` and `end_time` must be ISO 8601 datetime strings with minute precision (`seconds=00`).
 - `end_time` must be later than `start_time`.

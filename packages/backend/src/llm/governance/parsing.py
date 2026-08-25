@@ -74,6 +74,7 @@ def try_parse_day_plan(
     *,
     min_items: int = 5,
     max_items: int = 8,
+    min_duration: int = 1,
     reference_date: datetime.date | None = None,
 ) -> DayPlanParseResult:
     payload = parse_json_object(response_text)
@@ -89,19 +90,50 @@ def try_parse_day_plan(
     normalized = _normalize_plan_items(
         raw_items=cast(list[object], raw_items),
         item_factory=DayPlanItem,
-        min_duration=1,
+        min_duration=min_duration,
         require_exact_minute=True,
         reference_date=reference_date,
         action_content_max_chars=DAY_ACTION_MAX_CHARS,
         location_max_chars=DAY_LOCATION_MAX_CHARS,
     )
-    if len(normalized) > max_items:
-        normalized = normalized[:max_items]
     if len(normalized) < min_items:
         raise DayPlanParseError("insufficient_day_plan_items")
 
     normalized.sort(key=lambda item: item.start_time)
+    normalized = _compact_day_plan_items(normalized, max_items=max_items)
     return DayPlanParseResult(items=normalized)
+
+
+def _compact_day_plan_items(
+    items: list[DayPlanItem], *, max_items: int
+) -> list[DayPlanItem]:
+    """Merge the shortest continuous draft strokes without inventing content."""
+    compacted = list(items)
+    while len(compacted) > max_items:
+        candidates: list[tuple[int, int, int]] = []
+        for index, (first, second) in enumerate(zip(compacted, compacted[1:])):
+            if first.end_time != second.start_time:
+                continue
+            location_penalty = 0 if first.location == second.location else 1
+            combined_duration = first.duration_minutes + second.duration_minutes
+            candidates.append((location_penalty, combined_duration, index))
+        if not candidates:
+            raise DayPlanParseError("too_many_non_contiguous_day_plan_items")
+        _, _, merge_index = min(candidates)
+        first = compacted[merge_index]
+        second = compacted[merge_index + 1]
+        dominant = (
+            first if first.duration_minutes >= second.duration_minutes else second
+        )
+        compacted[merge_index : merge_index + 2] = [
+            DayPlanItem(
+                start_time=first.start_time,
+                end_time=second.end_time,
+                location=dominant.location,
+                action_content=dominant.action_content,
+            )
+        ]
+    return compacted
 
 
 def try_parse_hour_plan(

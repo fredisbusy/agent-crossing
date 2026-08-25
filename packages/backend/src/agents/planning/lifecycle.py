@@ -14,16 +14,7 @@ from .models import (
     MinutePlanItem,
 )
 from persistence.contracts import PlanItemSave, PlanningStateSave
-
-CANONICAL_LOCATIONS: tuple[str, ...] = (
-    "브라이어 코브 > 지호의 집",
-    "브라이어 코브 > 수진의 집",
-    "브라이어 코브 > 허니컵 카페",
-    "브라이어 코브 > 스토리하우스 도서관",
-    "브라이어 코브 > 버드나무 시장",
-    "브라이어 코브 > 달맞이꽃 공원",
-    "브라이어 코브 > 마을 광장",
-)
+from planning_locations import CANONICAL_LOCATIONS
 
 
 class LifePlanner(Protocol):

@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 MAX_STRUCTURED_GENERATION_ATTEMPTS = 2
 MAX_STRUCTURED_OUTPUT_TOKENS = 8192
+MAX_STRUCTURED_RETRY_RESPONSE_CHARS = 4000
 
 
 def _coerce_text(value: object) -> str | None:
@@ -49,6 +50,35 @@ def _coerce_float_vector(value: object) -> list[float] | None:
             return None
         vector.append(float(item))
     return vector
+
+
+def _structured_retry_messages(
+    *,
+    original_messages: list[dict[str, str]],
+    invalid_response: str,
+    error: ValidationError,
+) -> list[dict[str, str]]:
+    issues = []
+    for issue in error.errors(include_url=False, include_input=False):
+        location = ".".join(str(part) for part in issue["loc"])
+        issues.append(f"{location or 'response'}: {issue['msg']}")
+    validation_summary = "; ".join(issues)
+    return [
+        *original_messages,
+        {
+            "role": "assistant",
+            "content": invalid_response[:MAX_STRUCTURED_RETRY_RESPONSE_CHARS],
+        },
+        {
+            "role": "user",
+            "content": (
+                "The previous JSON violated the required schema. Correct the "
+                "validation issues below and return one complete replacement JSON "
+                "document only. Do not explain the correction.\n"
+                f"Validation issues: {validation_summary}"
+            ),
+        },
+    ]
 
 
 @dataclass(frozen=True)
@@ -181,8 +211,14 @@ class LiteLlmClient:
                 except ValidationError as exc:
                     last_validation_error = str(exc)
                     if attempt_index + 1 < generation_attempts:
+                        kwargs["messages"] = _structured_retry_messages(
+                            original_messages=messages,
+                            invalid_response=text,
+                            error=exc,
+                        )
                         logger.warning(
-                            "Structured LLM output failed schema validation; retrying"
+                            "Structured LLM output failed schema validation; retrying "
+                            "with validation feedback"
                         )
                         continue
                     raise LiteLlmStructuredOutputError(

@@ -215,6 +215,11 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
 - day `location`은 최대 120자로 제한하며 schema에 선언되지 않은 추가 필드는 허용하지 않음
 - active day/hourly/minute 항목은 모두 현재 world clock을 포함해야 하며, 미래 항목을 현재 항목처럼 선택하지 않는다
 - day plan만 하루 전체를 미리 생성하고, hourly/minute plan은 near future만 just-in-time으로 재귀 분해한다
+- day-plan provider 초안은 최대 16개까지 제한적으로 수용할 수 있다. 8개를 초과하면
+  전체 시간창의 연속성을 먼저 검증한 뒤 가장 짧은 인접 항목을 결정론적으로 병합해
+  5~8 broad strokes로 canonicalize한다. gap/overlap이나 비-canonical 장소는 병합하지 않는다.
+- 자정까지 남은 시간이 25분 미만이면 가능한 5분 슬롯 수에 맞춰 1~4개의 tail plan을
+  생성하고, 자정 전환 뒤 새 날짜의 정상 5~8개 day plan을 생성한다.
 - hourly plan은 현재 시점의 active day-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다
 - minute plan은 현재 시점의 active hourly-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다
 

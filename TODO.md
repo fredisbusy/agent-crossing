@@ -164,6 +164,7 @@
     - [x] 논문식 fixed-duration task decomposition으로 minute plan의 시간·장소를 runtime이 조립한다
     - [x] 논문 구현처럼 minute duration 초과분은 끝에서 자르고 부족분은 마지막 항목을 늘려 시간 경계를 맞춘다
     - [x] day/hourly 고정 시간창의 시작·끝·연속성을 semantic retry로 검증한다
+    - [x] 8개 초과의 연속 day-plan 초안을 5~8 broad strokes로 병합하고 자정 직전 tail plan을 지원한다
     - [x] hourly/minute 위치를 authoritative parent plan에서 상속한다
 
 ### 3-B. Tick react 판정과 부분 재계획

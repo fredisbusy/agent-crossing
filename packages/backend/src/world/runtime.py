@@ -696,12 +696,19 @@ class WorldRuntime:
                         agent_id=saved.agent_id,
                         state=saved.planning,
                     )
-                    schedule = self.planning_coordinator.ensure_current(
-                        agent=_as_life_agent(agent),
-                        now=self.current_time,
-                        generate=False,
-                    )
-                    self.spatial_runtime.set_schedule(schedule)
+                    try:
+                        schedule = self.planning_coordinator.ensure_current(
+                            agent=_as_life_agent(agent),
+                            now=self.current_time,
+                            generate=False,
+                        )
+                    except PlanningGenerationError:
+                        # A failed generation can persist an intentionally empty
+                        # cache. Restore the rest of the session and let scheduler
+                        # startup regenerate the authoritative hierarchy.
+                        pass
+                    else:
+                        self.spatial_runtime.set_schedule(schedule)
             self.session.restore_state(state.conversation)
             self.spatial_runtime.restore_state(
                 revision=state.revision,

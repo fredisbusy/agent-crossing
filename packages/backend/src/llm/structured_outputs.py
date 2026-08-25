@@ -1,6 +1,8 @@
+from functools import lru_cache
 from typing import Annotated, ClassVar, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
+from planning_locations import CanonicalLocation
 
 
 DAY_ACTION_MAX_CHARS = 50
@@ -20,12 +22,6 @@ DayActionText: TypeAlias = Annotated[
     str,
     StringConstraints(
         strip_whitespace=True, min_length=1, max_length=DAY_ACTION_MAX_CHARS
-    ),
-]
-DayLocationText: TypeAlias = Annotated[
-    str,
-    StringConstraints(
-        strip_whitespace=True, min_length=1, max_length=DAY_LOCATION_MAX_CHARS
     ),
 ]
 HourlyActionText: TypeAlias = Annotated[
@@ -93,12 +89,36 @@ class StrictStructuredOutput(BaseModel):
 class DayPlanOutputItem(StrictStructuredOutput):
     start_time: str = Field(min_length=16, max_length=35)
     end_time: str = Field(min_length=16, max_length=35)
-    location: DayLocationText
+    location: CanonicalLocation
     action_content: DayActionText
 
 
 class DayPlanOutput(StrictStructuredOutput):
     items: list[DayPlanOutputItem] = Field(min_length=5, max_length=8)
+
+
+class DayPlanDraftOutput(StrictStructuredOutput):
+    """Bounded provider draft; semantic parsing compacts it to 5-8 strokes."""
+
+    items: list[DayPlanOutputItem] = Field(min_length=5, max_length=16)
+
+
+@lru_cache(maxsize=8)
+def day_plan_output_model(
+    *, min_items: int, max_items: int
+) -> type[BaseModel]:
+    if not 1 <= min_items <= max_items <= 8:
+        raise ValueError("day-plan schema bounds must satisfy 1 <= min <= max <= 8")
+    if min_items == 5 and max_items == 8:
+        return DayPlanOutput
+    return create_model(
+        f"DayPlanOutput{min_items}To{max_items}",
+        __base__=StrictStructuredOutput,
+        items=(
+            list[DayPlanOutputItem],
+            Field(min_length=min_items, max_length=max_items),
+        ),
+    )
 
 
 class HourlyPlanOutputItem(StrictStructuredOutput):

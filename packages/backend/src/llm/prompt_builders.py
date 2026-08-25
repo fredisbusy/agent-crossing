@@ -170,11 +170,19 @@ def build_day_plan_prompt(
     yesterday_date: datetime.datetime,
     yesterday_summary: str,
     today_date: datetime.datetime,
+    planning_window_end: datetime.datetime | None = None,
+    min_items: int = 5,
+    max_items: int = 8,
 ) -> str:
     """Build a persona-grounded prompt for daily structured plan generation."""
     traits_text = ", ".join(trait.strip() for trait in innate_traits if trait.strip())
-    planning_window_end = datetime.datetime.combine(
+    final_planning_window_end = planning_window_end or datetime.datetime.combine(
         today_date.date() + datetime.timedelta(days=1), datetime.time.min
+    )
+    item_count_requirement = (
+        f"exactly {min_items}"
+        if min_items == max_items
+        else f"{min_items} to {max_items}"
     )
     return render_template(
         "day_plan_broad_strokes_instruction.md",
@@ -186,7 +194,8 @@ def build_day_plan_prompt(
         yesterday_summary=yesterday_summary.strip(),
         today_date_text=_format_date_text(today_date),
         planning_window_start=today_date.isoformat(timespec="minutes"),
-        planning_window_end=planning_window_end.isoformat(timespec="minutes"),
+        planning_window_end=final_planning_window_end.isoformat(timespec="minutes"),
+        item_count_requirement=item_count_requirement,
         json_shape=DAY_PLAN_JSON_SHAPE,
         action_max_chars=str(DAY_ACTION_MAX_CHARS),
         location_max_chars=str(DAY_LOCATION_MAX_CHARS),

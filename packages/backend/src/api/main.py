@@ -130,7 +130,10 @@ async def on_startup() -> None:
                 if activated is None:
                     raise RuntimeError("saved session disappeared during startup")
                 app.state.current_session_id = summary.id
-                should_start_scheduler = saved_state.scheduler_was_running
+                should_start_scheduler = (
+                    saved_state.scheduler_was_running
+                    or saved_state.planning_error is not None
+                )
             else:
                 initial_state = runtime.export_save_state(scheduler_was_running=True)
                 summary = await asyncio.to_thread(

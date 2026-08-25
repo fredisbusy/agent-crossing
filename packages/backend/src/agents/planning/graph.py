@@ -14,7 +14,12 @@ from llm.governance import (
     try_parse_hour_plan_decomposition,
     try_parse_minute_task_decomposition,
 )
-from llm.structured_outputs import DayPlanOutput, HourlyPlanOutput, MinutePlanOutput
+from llm.structured_outputs import (
+    DayPlanDraftOutput,
+    HourlyPlanOutput,
+    MinutePlanOutput,
+    day_plan_output_model,
+)
 from typing_extensions import TypedDict
 
 from .models import (
@@ -41,6 +46,19 @@ MINUTE_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
     top_p=1.0,
     num_predict=3072,
 )
+
+
+def _day_plan_item_bounds(
+    request: DayPlanBroadStrokesRequest,
+) -> tuple[int, int]:
+    planning_end = request.planning_window_end or datetime.datetime.combine(
+        request.today_date.date() + datetime.timedelta(days=1), datetime.time.min
+    )
+    remaining_five_minute_slots = max(
+        1, int((planning_end - request.today_date).total_seconds() // 300)
+    )
+    max_items = min(8, remaining_five_minute_slots)
+    return min(5, max_items), max_items
 
 
 class PlanningGraphError(RuntimeError):
@@ -282,6 +300,7 @@ class PlanningGraphRunner:
         state: DayPlanningGraphState,
     ) -> dict[str, str]:
         request = state["request"]
+        min_items, max_items = _day_plan_item_bounds(request)
         prompt = prompt_builders.build_day_plan_prompt(
             agent_name=request.agent_name,
             age=request.age,
@@ -290,6 +309,9 @@ class PlanningGraphRunner:
             yesterday_date=request.yesterday_date,
             yesterday_summary=request.yesterday_summary,
             today_date=request.today_date,
+            planning_window_end=request.planning_window_end,
+            min_items=min_items,
+            max_items=max_items,
         )
         return {"base_prompt": prompt, "current_prompt": prompt}
 
@@ -297,11 +319,19 @@ class PlanningGraphRunner:
         self,
         state: DayPlanningGraphState,
     ) -> dict[str, str]:
+        min_items, max_items = _day_plan_item_bounds(state["request"])
         return {
             "response_text": self.planning_client.complete_planning_prompt(
                 prompt=state["current_prompt"],
                 options=DAY_PLAN_GENERATE_OPTIONS,
-                response_model=DayPlanOutput,
+                response_model=(
+                    DayPlanDraftOutput
+                    if max_items == 8
+                    else day_plan_output_model(
+                        min_items=min_items,
+                        max_items=max_items,
+                    )
+                ),
             )
         }
 
@@ -310,8 +340,12 @@ class PlanningGraphRunner:
         state: DayPlanningGraphState,
     ) -> dict[str, object]:
         try:
+            min_items, max_items = _day_plan_item_bounds(state["request"])
             parsed = try_parse_day_plan(
                 state["response_text"],
+                min_items=min_items,
+                max_items=max_items,
+                min_duration=5,
                 reference_date=state["request"].today_date.date(),
             )
             planning_end = state["request"].planning_window_end

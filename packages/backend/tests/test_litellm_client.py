@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import litellm
@@ -7,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from llm.clients.litellm_client import LiteLlmClient
 from llm.clients.types import LlmGenerateOptions
+from llm.structured_outputs import DayPlanOutput
 
 
 class StatusOutput(BaseModel):
@@ -221,6 +223,60 @@ def test_generate_retries_output_that_violates_text_length_schema(
 
     assert response == '{"status":"ok"}'
     assert len(calls) == 2
+    assert calls[1]["messages"][-2] == {
+        "role": "assistant",
+        "content": '{"status":"far too long for schema"}',
+    }
+    correction = calls[1]["messages"][-1]
+    assert correction["role"] == "user"
+    assert "status: String should have at most 12 characters" in correction["content"]
+    assert "replacement JSON document only" in correction["content"]
+
+
+def test_generate_tells_day_plan_retry_to_reduce_items_to_schema_maximum(
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+
+    def day_plan(count: int) -> str:
+        return json.dumps(
+            {
+                "items": [
+                    {
+                        "start_time": "2026-08-25T06:00:00",
+                        "end_time": "2026-08-25T07:00:00",
+                        "location": "브라이어 코브 > 지호의 집",
+                        "action_content": f"하루 일과 {index + 1}을 준비한다.",
+                    }
+                    for index in range(count)
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    responses = [
+        {"choices": [{"message": {"content": day_plan(10)}}]},
+        {"choices": [{"message": {"content": day_plan(8)}}]},
+    ]
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        calls.append(dict(kwargs))
+        return responses.pop(0)
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LiteLlmClient(
+        default_generate_model="ollama_chat/qwen3.8:27b-mlx",
+        default_embedding_model="ollama/bge-m3",
+    )
+
+    response = client.generate(
+        prompt="Return 5 to 8 day-plan items",
+        response_model=DayPlanOutput,
+    )
+
+    assert len(DayPlanOutput.model_validate_json(response).items) == 8
+    correction = calls[1]["messages"][-1]["content"]
+    assert "items: List should have at most 8 items" in correction
 
 
 def test_generate_omits_timeout_when_local_model_has_no_deadline(monkeypatch) -> None:

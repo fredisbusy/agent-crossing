@@ -15,6 +15,8 @@ from llm.clients.types import LlmGenerateOptions
 class StubPlanningClient:
     def __init__(self) -> None:
         self.call_labels: list[str] = []
+        self.prompts: list[str] = []
+        self.response_models: list[type[BaseModel]] = []
         self.responses_by_label: dict[str, list[str]] = {
             "day": [
                 json.dumps(
@@ -104,6 +106,8 @@ class StubPlanningClient:
         else:
             raise AssertionError(f"Unknown planning prompt: {prompt[:120]!r}")
         self.call_labels.append(label)
+        self.prompts.append(prompt)
+        self.response_models.append(response_model)
         return self.responses_by_label[label].pop(0)
 
 
@@ -217,6 +221,98 @@ def test_day_plan_retries_until_it_covers_the_authoritative_window() -> None:
     assert client.call_labels == ["day", "day"]
     assert items[0].start_time == datetime.datetime(2026, 2, 13, 6, 25)
     assert items[-1].end_time == datetime.datetime(2026, 2, 14)
+
+
+def test_day_plan_uses_single_tail_item_for_last_five_minutes() -> None:
+    client = StubPlanningClient()
+    client.responses_by_label["day"] = [
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "start_time": "2026-08-25T23:55:00",
+                        "end_time": "2026-08-26T00:00:00",
+                        "location": "브라이어 코브 > 지호의 집",
+                        "action_content": "잠들기 전 하루를 정리한다.",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+    ]
+    request = DayPlanBroadStrokesRequest(
+        agent_name="Jiho Park",
+        age=31,
+        innate_traits=["차분함"],
+        persona_background="브라이어 코브 주민",
+        yesterday_date=datetime.datetime(2026, 8, 24, 23, 55),
+        yesterday_summary="평소 일과를 보냈다.",
+        today_date=datetime.datetime(2026, 8, 25, 23, 55),
+        planning_window_end=datetime.datetime(2026, 8, 26),
+    )
+
+    items = PlanningGraphRunner(planning_client=client).generate_day_plan(request)
+
+    assert len(items) == 1
+    assert "Return exactly 1 plan items" in client.prompts[0]
+    items_schema = client.response_models[0].model_json_schema()["properties"][
+        "items"
+    ]
+    assert items_schema["minItems"] == 1
+    assert items_schema["maxItems"] == 1
+
+
+def test_day_plan_compacts_continuous_provider_draft_to_eight_items() -> None:
+    client = StubPlanningClient()
+    boundaries = [0, 2, 4, 6, 8, 10, 12, 14, 16, 20, 24]
+
+    def timestamp(hour: int) -> str:
+        if hour == 24:
+            return "2026-08-26T00:00:00"
+        return f"2026-08-25T{hour:02d}:00:00"
+
+    client.responses_by_label["day"] = [
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "start_time": timestamp(start),
+                        "end_time": timestamp(end),
+                        "location": "브라이어 코브 > 마을 광장",
+                        "action_content": f"일과 {index + 1}을 수행한다.",
+                    }
+                    for index, (start, end) in enumerate(
+                        zip(boundaries, boundaries[1:])
+                    )
+                ]
+            },
+            ensure_ascii=False,
+        )
+    ]
+    request = DayPlanBroadStrokesRequest(
+        agent_name="Jiho Park",
+        age=31,
+        innate_traits=["차분함"],
+        persona_background="브라이어 코브 주민",
+        yesterday_date=datetime.datetime(2026, 8, 24),
+        yesterday_summary="평소 일과를 보냈다.",
+        today_date=datetime.datetime(2026, 8, 25),
+        planning_window_end=datetime.datetime(2026, 8, 26),
+    )
+
+    items = PlanningGraphRunner(planning_client=client).generate_day_plan(request)
+
+    assert len(items) == 8
+    assert items[0].start_time == request.today_date
+    assert items[-1].end_time == request.planning_window_end
+    assert all(
+        first.end_time == second.start_time
+        for first, second in zip(items, items[1:])
+    )
+    items_schema = client.response_models[0].model_json_schema()["properties"][
+        "items"
+    ]
+    assert items_schema["maxItems"] == 16
 
 
 def test_hourly_plan_retries_when_it_misses_the_current_world_time() -> None:
