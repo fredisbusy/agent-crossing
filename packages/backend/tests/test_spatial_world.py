@@ -1,3 +1,5 @@
+import datetime
+
 from world.spatial import SpatialAgentSeed, SpatialWorldRuntime
 from world.world_map import MapPoint, load_world_map
 
@@ -146,3 +148,52 @@ def test_planning_error_clears_non_authoritative_plan_and_stops_movement() -> No
     assert all(agent.destination is None for agent in snapshot.agents)
     assert all(agent.current_action == "planning_error" for agent in snapshot.agents)
     assert all(agent.plan == "" for agent in snapshot.agents)
+
+
+def test_position_history_is_recorded_only_on_change_once_clock_is_known() -> None:
+    runtime = _runtime()
+    now = datetime.datetime(2026, 8, 25, 8, 0)
+
+    # No game-clock time set yet: ticking must not grow the history log.
+    _ = runtime.tick()
+    assert runtime.export_position_history() == []
+
+    for offset in range(5):
+        runtime.update_world_state(
+            current_time=now + datetime.timedelta(minutes=offset),
+            turn=offset,
+            scheduler_running=False,
+        )
+        _ = runtime.tick()
+
+    history = runtime.export_position_history()
+    assert history
+    jiho_entries = [entry for entry in history if entry.agent_id == "jiho"]
+    assert jiho_entries
+    # Every recorded entry is a genuine tile/destination/action change.
+    for previous, current in zip(jiho_entries, jiho_entries[1:]):
+        assert (
+            previous.tile_position != current.tile_position
+            or previous.destination_path != current.destination_path
+            or previous.current_action != current.current_action
+        )
+    assert all(entry.occurred_at is not None for entry in history)
+
+
+def test_position_history_round_trips_through_restore() -> None:
+    runtime = _runtime()
+    now = datetime.datetime(2026, 8, 25, 8, 0)
+    for offset in range(3):
+        runtime.update_world_state(
+            current_time=now + datetime.timedelta(minutes=offset),
+            turn=offset,
+            scheduler_running=False,
+        )
+        _ = runtime.tick()
+    exported = runtime.export_position_history()
+    assert exported
+
+    other = _runtime()
+    other.restore_position_history(exported)
+
+    assert other.export_position_history() == exported

@@ -296,3 +296,45 @@ class SessionCognitiveLogRecord(Base):
     action_summary: Mapped[str] = mapped_column(Text, nullable=False)
     decision_process: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     governance_trace: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class SessionPositionHistoryRecord(Base):
+    """One row per *changed* tile position (§ replay/reconstruction).
+
+    Written only when an agent's tile actually moves (or its destination/
+    current_action changes), not on every real-time world tick — see
+    `world.spatial.PositionHistoryBuffer`. Reconstructing an agent's
+    position at an arbitrary game time is: the latest row with
+    `occurred_at <= target_time` for that `character_id`.
+    """
+
+    __tablename__ = "session_position_history"
+    __table_args__ = (
+        Index(
+            "session_position_history_character_time_idx",
+            "character_id",
+            "occurred_at",
+        ),
+        Index(
+            "session_position_history_session_time_idx",
+            "session_id",
+            "occurred_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("session_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    agent_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    turn: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    occurred_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    tile_x: Mapped[int] = mapped_column(Integer, nullable=False)
+    tile_y: Mapped[int] = mapped_column(Integer, nullable=False)
+    destination_path: Mapped[str | None] = mapped_column(Text)
+    current_action: Mapped[str] = mapped_column(Text, nullable=False)

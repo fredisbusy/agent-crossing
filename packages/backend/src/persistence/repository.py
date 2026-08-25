@@ -4,6 +4,7 @@ import datetime
 import uuid
 from dataclasses import dataclass
 
+from pydantic import ValidationError
 from db.models import (
     GameSessionRecord,
     GameSessionStatus,
@@ -15,6 +16,7 @@ from db.models import (
     SessionMemoryCitationRecord,
     SessionMemoryRecord,
     SessionPlanItemRecord,
+    SessionPositionHistoryRecord,
 )
 from db.session import SessionLocal
 from persistence.contracts import RuntimeSaveState
@@ -24,6 +26,17 @@ from sqlalchemy.orm import Session
 
 class SaveVersionConflictError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class PositionHistoryPoint:
+    agent_id: str
+    turn: int
+    occurred_at: datetime.datetime
+    tile_x: int
+    tile_y: int
+    destination_path: str | None
+    current_action: str
 
 
 @dataclass(frozen=True)
@@ -52,18 +65,22 @@ class GameSessionRepository:
             return [_summary(record) for record in records]
 
     def latest_session(self) -> tuple[SessionSummary, RuntimeSaveState] | None:
-        with SessionLocal() as db:
-            record = db.scalar(
+        with SessionLocal.begin() as db:
+            records = db.scalars(
                 select(GameSessionRecord)
                 .order_by(
                     (GameSessionRecord.status == GameSessionStatus.ACTIVE).desc(),
                     GameSessionRecord.saved_at.desc(),
                 )
-                .limit(1)
-            )
-            if record is None:
-                return None
-            return _summary(record), RuntimeSaveState.model_validate(record.snapshot)
+            ).all()
+            for record in records:
+                try:
+                    state = RuntimeSaveState.model_validate(record.snapshot)
+                except ValidationError:
+                    record.status = GameSessionStatus.ERROR
+                    continue
+                return _summary(record), state
+        return None
 
     def get(self, session_id: uuid.UUID) -> tuple[SessionSummary, RuntimeSaveState] | None:
         with SessionLocal() as db:
@@ -87,7 +104,7 @@ class GameSessionRepository:
                 revision=state.revision,
                 parse_failures=state.parse_failures,
                 silent_turns=state.silent_turns,
-                last_dialogue_end_at=state.last_dialogue_end_time,
+                last_dialogue_end_at=None,
                 scheduler_was_running=state.scheduler_was_running,
                 planning_error=state.planning_error,
                 schema_version=state.schema_version,
@@ -132,7 +149,7 @@ class GameSessionRepository:
             record.revision = state.revision
             record.parse_failures = state.parse_failures
             record.silent_turns = state.silent_turns
-            record.last_dialogue_end_at = state.last_dialogue_end_time
+            record.last_dialogue_end_at = None
             record.scheduler_was_running = state.scheduler_was_running
             record.planning_error = state.planning_error
             record.schema_version = state.schema_version
@@ -145,6 +162,74 @@ class GameSessionRepository:
             db.flush()
             summary = _summary(record)
         return summary
+
+    def position_at(
+        self,
+        *,
+        session_id: uuid.UUID,
+        agent_id: str,
+        at_time: datetime.datetime,
+    ) -> PositionHistoryPoint | None:
+        """Reconstruct where `agent_id` was at (or just before) `at_time`.
+
+        Returns the latest recorded position change with
+        `occurred_at <= at_time`, i.e. the position the agent held
+        throughout `[occurred_at, next change)`.
+        """
+        with SessionLocal() as db:
+            record = db.scalar(
+                select(SessionPositionHistoryRecord)
+                .where(
+                    SessionPositionHistoryRecord.session_id == session_id,
+                    SessionPositionHistoryRecord.agent_id == agent_id,
+                    SessionPositionHistoryRecord.occurred_at <= at_time,
+                )
+                .order_by(SessionPositionHistoryRecord.occurred_at.desc())
+                .limit(1)
+            )
+            if record is None:
+                return None
+            return PositionHistoryPoint(
+                agent_id=record.agent_id,
+                turn=record.turn,
+                occurred_at=record.occurred_at,
+                tile_x=record.tile_x,
+                tile_y=record.tile_y,
+                destination_path=record.destination_path,
+                current_action=record.current_action,
+            )
+
+    def position_history(
+        self,
+        *,
+        session_id: uuid.UUID,
+        agent_id: str | None = None,
+        limit: int = 500,
+    ) -> list[PositionHistoryPoint]:
+        """Chronological position-change log for replay/reconstruction UIs."""
+        bounded_limit = max(1, min(limit, 5000))
+        with SessionLocal() as db:
+            query = select(SessionPositionHistoryRecord).where(
+                SessionPositionHistoryRecord.session_id == session_id
+            )
+            if agent_id is not None:
+                query = query.where(SessionPositionHistoryRecord.agent_id == agent_id)
+            query = query.order_by(
+                SessionPositionHistoryRecord.occurred_at.asc()
+            ).limit(bounded_limit)
+            records = db.scalars(query).all()
+            return [
+                PositionHistoryPoint(
+                    agent_id=record.agent_id,
+                    turn=record.turn,
+                    occurred_at=record.occurred_at,
+                    tile_x=record.tile_x,
+                    tile_y=record.tile_y,
+                    destination_path=record.destination_path,
+                    current_action=record.current_action,
+                )
+                for record in records
+            ]
 
     def activate(self, *, session_id: uuid.UUID) -> SessionSummary | None:
         now = datetime.datetime.now(datetime.UTC)
@@ -173,6 +258,11 @@ def _mark_all_saved(db: Session) -> None:
 
 
 def _delete_projection(db: Session, *, session_id: uuid.UUID) -> None:
+    db.execute(
+        delete(SessionPositionHistoryRecord).where(
+            SessionPositionHistoryRecord.session_id == session_id
+        )
+    )
     db.execute(
         delete(SessionCognitiveLogRecord).where(
             SessionCognitiveLogRecord.session_id == session_id
@@ -286,27 +376,45 @@ def _write_projection(
                         position=position,
                     )
                 )
-    conversation = state.conversation
-    db.add(
-        SessionDialogueStateRecord(
-            session_id=session_id,
-            is_active=conversation.is_active,
-            turn_index=conversation.turn_index,
-            dialogue_turn_window=conversation.dialogue_turn_window,
-            dialogue_target_turns=conversation.dialogue_target_turns,
-            dialogue_turns_taken=conversation.dialogue_turns_taken,
-            dialogue_goal=conversation.dialogue_goal,
-            history=[list(item) for item in conversation.history],
-            history_by_agent={
-                agent: [list(item) for item in history]
-                for agent, history in conversation.dialogue_history_by_agent.items()
-            },
-            incoming_queues_by_agent={
-                agent: list(queue)
-                for agent, queue in conversation.incoming_utterances_by_agent.items()
-            },
+    if state.conversations:
+        conversation = state.conversations[0]
+        db.add(
+            SessionDialogueStateRecord(
+                session_id=session_id,
+                is_active=conversation.is_active,
+                turn_index=conversation.turn_index,
+                dialogue_turn_window=conversation.dialogue_turn_window,
+                dialogue_target_turns=conversation.dialogue_target_turns,
+                dialogue_turns_taken=conversation.dialogue_turns_taken,
+                dialogue_goal=conversation.dialogue_goal,
+                history=[list(item) for item in conversation.history],
+                history_by_agent={
+                    agent: [list(item) for item in history]
+                    for agent, history in conversation.dialogue_history_by_agent.items()
+                },
+                incoming_queues_by_agent={
+                    agent: list(queue)
+                    for agent, queue in conversation.incoming_utterances_by_agent.items()
+                },
+            )
         )
-    )
+    for entry in state.position_history:
+        character_id = character_ids.get(entry.agent_id)
+        if character_id is None:
+            continue
+        db.add(
+            SessionPositionHistoryRecord(
+                session_id=session_id,
+                character_id=character_id,
+                agent_id=entry.agent_id,
+                turn=entry.turn,
+                occurred_at=entry.occurred_at,
+                tile_x=entry.tile_position.x,
+                tile_y=entry.tile_position.y,
+                destination_path=entry.destination_path,
+                current_action=entry.current_action,
+            )
+        )
     for event in state.dashboard_events:
         db.add(
             SessionCognitiveLogRecord(

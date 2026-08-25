@@ -92,6 +92,22 @@ class ConversationSave(BaseModel):
     incoming_utterances_by_agent: dict[str, list[str]]
 
 
+class PositionHistorySave(BaseModel):
+    """One recorded tile-position change (§ replay/reconstruction).
+
+    Only appended when an agent's tile position (or destination/action)
+    actually changes — see `world.spatial.PositionHistoryBuffer` — not on
+    every real-time world tick.
+    """
+
+    agent_id: str
+    turn: int = Field(ge=0)
+    occurred_at: datetime.datetime
+    tile_position: PointSave
+    destination_path: str | None
+    current_action: str
+
+
 class DashboardEventSave(BaseModel):
     sequence: int = Field(gt=0)
     turn: int = Field(ge=0)
@@ -129,6 +145,10 @@ class RuntimeSaveState(BaseModel):
     conversations: list[ConversationSave]
     characters: list[CharacterSave]
     dashboard_events: list[DashboardEventSave]
+    # Optional/defaulted so snapshots saved before this field existed still
+    # validate (`Repository.latest_session()` loads old rows via
+    # `RuntimeSaveState.model_validate(record.snapshot)`).
+    position_history: list[PositionHistorySave] = Field(default_factory=list)
 
 
 _PRIVATE_TRACE_KEYS = {

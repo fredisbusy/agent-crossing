@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import threading
 import datetime
+from collections import deque
 from dataclasses import dataclass
 from typing import Literal
 
 from agents.planning.lifecycle import AgentPlanSnapshot, PlanItemSnapshot
-from persistence.contracts import CharacterMovementSave, CharacterSave, PointSave
+from persistence.contracts import (
+    CharacterMovementSave,
+    CharacterSave,
+    PointSave,
+    PositionHistorySave,
+)
 
 from .world_map import MapLocation, MapPoint, MapSpawn, WorldMap
 
@@ -47,6 +53,48 @@ class SpatialWorldSnapshot:
     planning_error: str | None
 
 
+@dataclass(frozen=True)
+class PositionHistoryEntry:
+    """One recorded tile-position change, for later replay/reconstruction."""
+
+    agent_id: str
+    turn: int
+    occurred_at: datetime.datetime
+    tile_position: MapPoint
+    destination_path: str | None
+    current_action: str
+
+
+class PositionHistoryBuffer:
+    """Thread-safe bounded log of tile-position *changes*.
+
+    Appends only when an agent's tile position, destination, or
+    current_action actually changes between ticks — not on every real-time
+    world tick (`SpatialWorldStream` polls at ~0.65s, far more often than
+    agents actually move) — to keep growth bounded while still letting a
+    caller reconstruct "where was agent X around game time T" later.
+    """
+
+    def __init__(self, *, capacity: int = 5000) -> None:
+        if capacity <= 0:
+            raise ValueError("capacity must be greater than zero")
+        self._entries: deque[PositionHistoryEntry] = deque(maxlen=capacity)
+        self._lock: threading.RLock = threading.RLock()
+
+    def append(self, entry: PositionHistoryEntry) -> None:
+        with self._lock:
+            self._entries.append(entry)
+
+    def snapshot(self) -> tuple[PositionHistoryEntry, ...]:
+        with self._lock:
+            return tuple(self._entries)
+
+    def restore(self, entries: list[PositionHistoryEntry]) -> None:
+        with self._lock:
+            capacity = self._entries.maxlen or 5000
+            self._entries = deque(entries[-capacity:], maxlen=capacity)
+
+
 @dataclass
 class _MutableAgentMovement:
     agent_id: str
@@ -80,6 +128,7 @@ class SpatialWorldRuntime:
         self._turn: int = 0
         self._scheduler_running: bool = False
         self._planning_error: str | None = None
+        self._position_history: PositionHistoryBuffer = PositionHistoryBuffer()
         for index, seed in enumerate(seeds):
             spawn = self._resolve_spawn(seed=seed, fallback_index=index)
             tile_position = MapPoint(
@@ -93,6 +142,10 @@ class SpatialWorldRuntime:
                 plan=" | ".join(seed.plan_context),
                 route=[],
             )
+            # Spawn position is recorded lazily by the first `tick()` change
+            # once a game-clock time is known (`self._current_time` is `None`
+            # until `update_world_state` runs); the deterministic spawn tile
+            # itself is always recoverable from persona seed order anyway.
 
     def set_plan(self, *, agent_id: str, plan: str) -> None:
         with self._lock:
@@ -186,10 +239,58 @@ class SpatialWorldRuntime:
                 }
                 for agent in self._agents.values():
                     occupied_tiles.discard(agent.tile_position)
+                    before_tile = agent.tile_position
+                    before_destination = (
+                        agent.destination.location_path
+                        if agent.destination is not None
+                        else None
+                    )
+                    before_action = agent.current_action
                     self._advance(agent, blocked_tiles=occupied_tiles)
                     occupied_tiles.add(agent.tile_position)
+                    self._record_position_change(
+                        agent,
+                        before_tile=before_tile,
+                        before_destination=before_destination,
+                        before_action=before_action,
+                    )
             self.revision += 1
             return self._snapshot_unlocked()
+
+    def _record_position_change(
+        self,
+        agent: _MutableAgentMovement,
+        *,
+        before_tile: MapPoint,
+        before_destination: str | None,
+        before_action: str,
+    ) -> None:
+        """Append to `self._position_history` iff `agent`'s replayable state
+        actually changed this tick (§ replay/reconstruction) — recording
+        every unchanged real-time tick would grow the log unboundedly for no
+        reconstruction benefit.
+        """
+        if self._current_time is None:
+            return
+        after_destination = (
+            agent.destination.location_path if agent.destination is not None else None
+        )
+        if (
+            before_tile == agent.tile_position
+            and before_destination == after_destination
+            and before_action == agent.current_action
+        ):
+            return
+        self._position_history.append(
+            PositionHistoryEntry(
+                agent_id=agent.agent_id,
+                turn=self._turn,
+                occurred_at=self._current_time,
+                tile_position=agent.tile_position,
+                destination_path=after_destination,
+                current_action=agent.current_action,
+            )
+        )
 
     def snapshot(self) -> SpatialWorldSnapshot:
         with self._lock:
@@ -219,6 +320,42 @@ class SpatialWorldRuntime:
                 plan=agent.plan,
                 cognitive_kind=agent.cognitive_kind,
                 cognitive_text=agent.cognitive_text,
+            )
+
+    def export_position_history(self) -> list[PositionHistorySave]:
+        """Return the buffered tile-position change log for persistence."""
+        with self._lock:
+            entries = self._position_history.snapshot()
+        return [
+            PositionHistorySave(
+                agent_id=entry.agent_id,
+                turn=entry.turn,
+                occurred_at=entry.occurred_at,
+                tile_position=PointSave(
+                    x=entry.tile_position.x, y=entry.tile_position.y
+                ),
+                destination_path=entry.destination_path,
+                current_action=entry.current_action,
+            )
+            for entry in entries
+        ]
+
+    def restore_position_history(self, entries: list[PositionHistorySave]) -> None:
+        with self._lock:
+            self._position_history.restore(
+                [
+                    PositionHistoryEntry(
+                        agent_id=entry.agent_id,
+                        turn=entry.turn,
+                        occurred_at=entry.occurred_at,
+                        tile_position=MapPoint(
+                            x=entry.tile_position.x, y=entry.tile_position.y
+                        ),
+                        destination_path=entry.destination_path,
+                        current_action=entry.current_action,
+                    )
+                    for entry in entries
+                ]
             )
 
     def restore_state(
