@@ -342,6 +342,16 @@ react 정책:
   발화를 상대 agent의 observation memory로 저장하며, day plan 생성이
   `PlanningCoordinator._generate_day_plan`을 통해 최근 관련 기억을 retrieval 후보로
   포함해 실제 계획에 반영한다(§3.4.3 coordination 패턴, 특정 시나리오에 하드코딩하지 않음).
+- 관계 영향에는 별도 수치 가중치 공식이 없다. 논문 원문(§4.3.1)은 관계/맥락 영향을
+  "What is [observer]'s relationship with the [observed entity]?" /
+  "[Observed entity] is [action status of the observed entity]" 두 retrieval
+  질의의 답을 요약해 프롬프트에 넣는 방식으로만 정의한다("The context summary is
+  generated through two prompts that retrieve memories via the queries ... and
+  their answers summarized together."). §7.1.1/§7.1.2의 네트워크 밀도 `eta`는 평가
+  지표일 뿐 계획 우선순위 가중치가 아니다. 따라서 위 두 요약을 retrieval
+  candidate/persona_background에 반영하는 현재 구현(`EncounterGate`,
+  `_recent_planning_relevant_memories`)이 논문 스펙을 충족하는 전부이며, 전용
+  `RelationshipState` 가중치 공식을 추가로 설계할 필요는 없다.
 - 정보 확산 측정 지표: seed fact 인지 agent 비율 (미구현, §5-A)
 
 관계 형성 지표:
