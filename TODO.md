@@ -633,7 +633,7 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
 
 ### 5-A. 정보 확산/관계/협업 지표 (§7.1 Emergent Social Behaviors)
 
-- [ ] `P2` 정보 확산 실험을 자동 측정한다 (§7.1.1, 예: Sam의 후보 출마 소식이
+- [x] `P2` 정보 확산 실험을 자동 측정한다 (§7.1.1, 예: Sam의 후보 출마 소식이
       1명→8명(32%)으로 확산)
   - Depends on: §3-C 대화 결과를 plan 업데이트에 반영
   - Implemented 2026-08-25 (부분): `agents/evaluation/interview.py`의
@@ -658,10 +658,21 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
           `InterviewAnswer.aware`
     - [x] 실험 실행별 인지 agent 비율을 비교 가능한 포맷으로 저장한다 —
           `DiffusionResult`(aware_agent_names/total_agent_count/rate)
-    - [ ] 남은 것: 실제 다중 agent 시뮬레이션 실행에 이 판정기를 배선해
-          seed fact 주입 → tick 진행 → 종료 시점 일괄 interview를 자동
-          실행하는 러너(§7의 "25 agent, 2 game-day" 시나리오에 해당하는
-          축소판)가 아직 없다 — 위 primitive들은 단위 테스트로만 검증됨.
+    - [x] 실제 다중 agent 시뮬레이션 실행에 이 판정기를 배선한다(§7의
+          "25 agent, 2 game-day" 시나리오에 해당하는 축소판) —
+          Implemented 2026-08-25: `run_diffusion_experiment.py`가
+          `build_world_runtime` + 실제 `SpatialWorldRuntime`으로 마을을
+          띄우고(`_start_dialogue_for_real_encounter`는 spatial runtime
+          없이는 no-op이라 반드시 필요), seed agent에게
+          `create_observation_from_text`로 사실을 주입한 뒤
+          `start_scheduler()`로 지정한 시간(`run_duration_seconds`) 동안
+          실제 tick/조우/대화/planning을 진행시키고, `pause_scheduler()`
+          후 전 agent에게 `InterviewGate.ask`로 일괄 interview해
+          `compute_diffusion_rate`로 확산율을 계산·JSON으로 출력한다.
+          로컬 LLM(gemma4:26b) 대상 20초 축소 실행으로 종단 검증
+          완료 — seed 보유 agent만 `aware=True`로 정확히 판정되고
+          나머지는 근거 없음으로 올바르게 걸러짐(`tests/test_run_diffusion_experiment.py`는
+          LLM 없이 도는 순수 로직(`_require_agent`, JSON 직렬화)만 커버).
 
 - [ ] `P2` 관계 형성 지표를 계산한다 (§7.1.1, 시뮬레이션 시작~종료 밀도
       0.167 → 0.74 증가가 논문 기준 결과)
