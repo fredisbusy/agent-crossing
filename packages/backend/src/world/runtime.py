@@ -352,6 +352,36 @@ class WorldRuntime:
     def _run_plan_disruption_check(
         self, *, agent: SimAgent, observation_content: str
     ) -> None:
+        """Store the tick-perceived observation as a memory, then judge it.
+
+        Runs off `_advance_world_tick`'s fast no-LLM loop (see
+        `_dispatch_tick_plan_disruption_check`), so it's safe to do both the
+        embedding/importance-scoring LLM calls of `create_observation_from_text`
+        and the disruption-gate call here. Mirrors the god-mode injection
+        endpoint's store-then-evaluate sequence (`api/main.py`
+        `post_god_mode_perception`) so organic tick observations feed
+        retrieval/reflection the same way injected ones do (§4 Perceive→Store).
+        """
+        from agents.memory.memory_manager import ObservationContext
+
+        try:
+            current_plan_context = agent.profile.extended.current_plan_context
+            agent.memory_service.create_observation_from_text(
+                content=observation_content,
+                now=self.current_time,
+                context=ObservationContext(
+                    agent_name=agent.name,
+                    identity_stable_set=list(agent.profile.fixed.identity_stable_set),
+                    current_plan=(
+                        current_plan_context[0] if current_plan_context else None
+                    ),
+                ),
+            )
+        except Exception:
+            logger.exception(
+                "tick-level observation memory write failed for agent=%s", agent.name
+            )
+
         try:
             self.evaluate_plan_disruption(
                 agent=agent, observation_content=observation_content

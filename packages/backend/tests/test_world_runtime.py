@@ -586,20 +586,24 @@ def _encounter_test_runtime(
         name="Jiho",
         identity=DummyIdentity(id="jiho"),
         profile=SimpleNamespace(
-            extended=SimpleNamespace(current_plan_context=[])
+            fixed=SimpleNamespace(identity_stable_set=[]),
+            extended=SimpleNamespace(current_plan_context=[]),
         ),
         memory_service=SimpleNamespace(
-            get_retrieval_memories=lambda *args, **kwargs: []
+            get_retrieval_memories=lambda *args, **kwargs: [],
+            create_observation_from_text=lambda *args, **kwargs: None,
         ),
     )
     agent2 = SimpleNamespace(
         name="Sujin",
         identity=DummyIdentity(id="sujin"),
         profile=SimpleNamespace(
-            extended=SimpleNamespace(current_plan_context=[])
+            fixed=SimpleNamespace(identity_stable_set=[]),
+            extended=SimpleNamespace(current_plan_context=[]),
         ),
         memory_service=SimpleNamespace(
-            get_retrieval_memories=lambda *args, **kwargs: []
+            get_retrieval_memories=lambda *args, **kwargs: [],
+            create_observation_from_text=lambda *args, **kwargs: None,
         ),
     )
     agents = cast(list[SimAgent], [agent1, agent2])
@@ -684,6 +688,35 @@ def test_tick_plan_disruption_dispatches_on_changed_observation() -> None:
     assert runtime._plan_react_thread is not None
     runtime._plan_react_thread.join(timeout=1)
 
+    assert len(gate.calls) == 1
+
+
+def test_tick_plan_disruption_stores_observation_before_judging() -> None:
+    """TODO.md §4-A: tick 관찰을 판정 전에 MemoryObject로 저장한다 (store 절반)."""
+    gate = StubPlanReactGate()
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(agent_id="jiho", current_action="idle"),
+            FakeAgentSnapshot(agent_id="sujin", current_action="moving_to:cafe"),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        plan_react_gate=gate, spatial_runtime=spatial_runtime
+    )
+    runtime.session.finish_dialogue()
+
+    stored: list[str] = []
+    cast(
+        SimpleNamespace, runtime._initiator
+    ).memory_service.create_observation_from_text = lambda *, content, **kwargs: (
+        stored.append(content)
+    )
+
+    runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
+    assert runtime._plan_react_thread is not None
+    runtime._plan_react_thread.join(timeout=1)
+
+    assert stored == ["Sujin가 moving_to:cafe 상태이다."]
     assert len(gate.calls) == 1
 
 

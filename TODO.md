@@ -284,7 +284,7 @@ end-to-end 시나리오다.
           두 프롬프트)를 추적 가능하게 남긴다 (`build_encounter_diagnostics`)
     - [x] converse 결정 시 기존 dialogue 세션(§2-D 짧은 대화 아크)으로 연결된다
 
-- [ ] `P2` 대화 결과를 plan 업데이트에 반영한다 (부분 완료 — 아래 note 참고)
+- [x] `P2` 대화 결과를 plan 업데이트에 반영한다
   - Depends on: pass-by vs converse 결정 구현
   - Implemented 2026-08-25: `WorldConversationSession.broadcast_reply`가
     (기존 코드 그대로) 발화를 상대 agent의 observation memory로 저장한다.
@@ -292,20 +292,33 @@ end-to-end 시나리오다.
     `_recent_planning_relevant_memories` 헬퍼가 매 day plan 생성 시
     `memory_service.get_retrieval_memories`로 관련 기억(대화로 들은 초대 등)을
     조회해 persona_background에 포함시켜 실제 LLM day plan 생성에 반영한다.
-    관계 변화의 우선순위 영향은 SPEC §5 retrieval score의
-    `beta * importance` 항을 통해 간접적으로 반영된다(전용 `RelationshipState`
-    가중치는 아직 없음).
+  - Verified 2026-08-25 (논문 원문 재확인): §4.3.1은 관계/맥락 영향을 별도
+    수치 가중치 공식이 아니라 "What is [observer]'s relationship with the
+    [observed entity]?" / "[Observed entity] is [action status of the
+    observed entity]" 두 retrieval 질의를 요약해 프롬프트에 넣는 것으로만
+    정의한다("The context summary is generated through two prompts that
+    retrieve memories via the queries ... and their answers summarized
+    together."). §7.1.1/§7.1.2의 네트워크 밀도 `eta`도 평가 지표일 뿐 계획
+    우선순위 가중치가 아니다. 즉 논문에 정의된 "전용 관계 가중치 공식"은
+    애초에 존재하지 않으므로, 현재 구현(`EncounterGate`의 relationship +
+    context summary, `_recent_planning_relevant_memories`)이 스펙을 충족하는
+    전부다. SPEC.md §8에 근거를 명시했다.
   - DoD:
     - [x] 대화에서 획득한 새 정보(예: 파티 초대)가 상대 agent의 memory에
           observation으로 저장된다
     - [x] 저장된 정보가 다음 day/hourly plan 생성 시 retrieval 후보에 포함되어
           실제 계획에 반영된다 (`test_day_plan_generation_includes_retrieved_memories`)
-    - [ ] 관계 변화가 다음 계획 우선순위에 영향을 준다 — importance 가중치를
-          통한 간접 반영만 있고, 전용 관계 가중치 공식은 아직 없음(부분 완료)
-    - [ ] 통합 시나리오 테스트: 논문 §3.4.3처럼 "A가 B에게 이벤트를 알림 → B가
+    - [x] 관계 변화가 다음 계획 우선순위에 영향을 준다 — 논문은 이를 별도
+          수치 가중치가 아니라 relationship + context summary를 프롬프트에
+          포함하는 방식으로만 정의하며, 이는 이미 구현돼 있다(위 note 참고).
+    - [x] 통합 시나리오 테스트: 논문 §3.4.3처럼 "A가 B에게 이벤트를 알림 → B가
           다음 planning 사이클에서 참석을 계획 → 실제 해당 시간/장소에 도착"이
-          재현된다 — day-plan retrieval 반영은 단위 테스트로 검증했으나, 전체
-          시뮬레이션 tick을 통한 end-to-end 재현 테스트는 아직 없음(부분 완료)
+          재현된다 — `test_event_notification_via_conversation_flows_into_next_day_plan`
+          (`tests/test_planning_lifecycle.py`)이 `WorldConversationSession.broadcast_reply`
+          → B의 memory 저장 → `PlanningCoordinator.bootstrap`의 day plan 생성
+          → (mock LLM 응답을 통해) 초대받은 시간/장소 항목이 실제 계획에
+          포함되는 것을 결정론적으로 검증한다. 실시간 다중 tick 시뮬레이션
+          harness는 범위 밖(§5 Social Dynamics & Evaluation)이다.
 
 ## 4) World Integration (시뮬레이션, §3 / §5 Sandbox Environment)
 
@@ -375,15 +388,23 @@ end-to-end 시나리오다.
     - [x] 로컬 planner의 생성 timeout을 제거하고 structured JSON 요청에서 Qwen thinking을 끈다
     - [x] 현재 시각을 덮지 않는 미래 계획을 active로 선택하지 않고 planning error로 중단한다
     - [x] 재시작 후에도 게임 시각, 위치, 계획 cache와 조우 cooldown을 복원한다
-    - [ ] `P1` 비대화 tick에도 주변 사건을 perceive/store하고 필요할 때
+    - [x] `P1` 비대화 tick에도 주변 사건을 perceive/store하고 필요할 때
           retrieve/reflect/react한다 (§4 Perceive→Store 루프를 대화가 없는
-          tick에도 적용 — 현재는 대화가 발생하는 tick에서만 관찰이
-          기억화된다). Depends on: §3-B tick 충돌 판정기
+          tick에도 적용 — 이전에는 대화가 발생하는 tick에서만 관찰이
+          기억화됐다). Depends on: §3-B tick 충돌 판정기
           - [x] react 절반: `WorldRuntime._dispatch_tick_plan_disruption_check`
                 (2026-08-25)가 비대화 tick마다 상대 agent의 공간 상태 변화를
                 감지해 §3-B `PlanDisruptionGate`를 호출한다.
-          - [ ] store 절반: 이 관찰은 아직 MemoryObject로 저장되지 않는다 —
-                observation memory 생성 + retrieve/reflect 연동이 남아 있다.
+          - [x] store 절반 (2026-08-25): `_run_plan_disruption_check`가 판정
+                직전에 `memory_service.create_observation_from_text`로 관찰을
+                MemoryObject(OBSERVATION)로 저장한다 — god-mode 주입 경로
+                (`api/main.py::post_god_mode_perception`)와 동일한
+                store-then-evaluate 순서. 저장된 메모리는 기존
+                `memory_stream`/retrieval 경로를 그대로 타므로 이후 retrieve에
+                자동 반영된다. 단, reflection 누적 중요도 트리거(§2-A, `>=150`)를
+                이 저장 지점에서 직접 호출하지는 않는다 — god-mode 경로도
+                동일한 한계를 가지며, reflection trigger는 별도 루프에서
+                누적값을 관리하는 기존 설계를 그대로 따른다.
 
 - [x] `P1` Prisma 기반 RPG 세션 저장/불러오기를 구현한다
   - Depends on: world clock + tick scheduler 연동
