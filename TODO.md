@@ -1,6 +1,7 @@
 # Agent Crossing Project TODO
 
-논문(Generative Agents, 2023) 스펙을 위에서 아래로 읽으면서,
+논문(Generative Agents: Interactive Simulacra of Human Behavior, UIST '23,
+arXiv:2304.03442) 스펙을 위에서 아래로 읽으면서,
 기능을 작은 단위로 하나씩 구현하기 위한 실행 보드.
 
 ## 사용 규칙
@@ -10,6 +11,26 @@
 - 체크 기준: 항목 아래 `DoD`를 모두 만족하면 `[x]`
 - 의존성: `Depends on`이 완료되기 전에는 시작하지 않음
 - 기준 문서: 알고리즘/상수/계약은 `SPEC.md` + `AGENTS.md`와 동기화
+- 논문 참조: 각 섹션 제목에 대응하는 논문 절 번호(`§`)를 표기해 코드-논문 매핑을 유지
+
+## 2026-08-25 논문 원문 대조 결과 (PDF 직접 검토)
+
+TODO 문서가 아니라 논문 PDF 원문(§3~§8)을 직접 읽고 코드베이스와 대조했다.
+개별 agent의 인지 컴포넌트(memory/retrieval §4.1, reflection §4.2, day→hour→minute
+planning 생성 §4.3)는 논문 수식·구조와 거의 1:1로 구현되어 있다. 반면 논문을
+"논문답게" 만드는 두 축은 아직 구현 전이다.
+
+1. **tick 단위 react-and-replan 루프** (§4.3.1 Reacting and Updating Plans) —
+   관찰이 현재 계획을 방해하는지 판단하고, 방해 시 현재 시점 이후 구간만
+   재계획하는 논문의 핵심 메커니즘. 현재 §3-B 전체가 미구현.
+2. **창발적 사회 동역학과 그 검증** (§3.4 Emergent Social Behaviors, §7 End-to-end
+   Evaluation, §6 Controlled Evaluation) — encounter 시 pass-by/converse 결정,
+   대화→plan 반영(coordination 예시: Valentine's party), 정보 확산/관계망 밀도
+   η/coordination 성공률 측정, interview evaluator(25문항)와 ablation. 현재
+   §3-C, §5 전체와 §6 interview evaluator가 미구현.
+
+아래 §3-B, §3-C, §5, §4-A/§4-B의 남은 항목은 이 대조 결과를 반영해 논문 절
+번호와 함께 재작성되었다.
 
 ---
 
@@ -29,7 +50,7 @@
 - [x] 로컬 LLM + 벡터 DB PoC 통과 (MLX/Vector DB)
 - [x] `P0` 메모리 영속 스토어 전환 확정 (PostgreSQL + pgvector)
 
-## 1) Memory Stream & Retrieval (논문 핵심 1)
+## 1) Memory Stream & Retrieval (논문 핵심 1, §4.1)
 
 - [x] `P0` MemoryObject 스키마를 코드와 1:1로 맞춘다
   - Depends on: 없음
@@ -64,7 +85,7 @@
     - [x] 중요 이벤트(high importance)가 retrieval 상위에 노출되는지 확인한다
     - [x] `pnpm test:backend` 또는 `uv run pytest`가 통과한다
 
-## 2) Reflection Loop (논문 핵심 2)
+## 2) Reflection Loop (논문 핵심 2, §4.2)
 
 ### 2-A. Trigger와 누적값 관리
 
@@ -150,9 +171,9 @@
     - [x] reaction trace 머지 로직을 governance 계층 유틸로 이동한다
     - [x] diagnostics 포맷팅(`action_summary`, `decision_process` 등)을 별도 모듈로 분리한다
 
-## 3) Planning & Re-planning (논문 핵심 3)
+## 3) Planning & Re-planning (논문 핵심 3, §4.3)
 
-### 3-A. 계층형 계획 생성
+### 3-A. 계층형 계획 생성 (§4.3 Approach)
 
 - [x] `P1` day plan 생성기(5~8 broad strokes)를 구현한다
   - Depends on: Reflection Loop 핵심 완료
@@ -180,35 +201,65 @@
     - [x] 8개 초과의 연속 day-plan 초안을 5~8 broad strokes로 병합하고 자정 직전 tail plan을 지원한다
     - [x] hourly/minute 위치를 authoritative parent plan에서 상속한다
 
-### 3-B. Tick react 판정과 부분 재계획
+### 3-B. Tick react 판정과 부분 재계획 (§4.3.1 Reacting and Updating Plans)
+
+논문 원문(Klaus/이젤 예시): "we prompt the language model with these
+observations to decide whether the agent should continue with its existing
+plan, or react." `agents/reaction/graph.py`의 `should_react`는 이미 조우 중인
+대화를 이어갈지 판단하는 dialogue-level 게이트(§2-D 짧은 대화 아크)이며,
+§4.3.1이 말하는 "매 tick 모든 관찰에 대해 현재 계획을 계속할지 판단"하는
+plan-disruption 게이트와는 범위가 다르다. 후자는 별도 구현이 필요하다.
 
 - [ ] `P1` tick마다 이벤트-계획 충돌 판정기를 구현한다
   - Depends on: minute plan 생성기 구현
   - DoD:
-    - [ ] 관찰 이벤트가 현재 계획을 방해/우선하는지 판정한다
-    - [ ] 판정 결과(reason/code)를 로그 가능 형태로 남긴다
+    - [ ] 논문 예시(스탠딩/painting 중 easel 관찰은 무반응, 아버지가 아들의
+          짧은 산책을 목격하면 반응)처럼 관찰의 방해도를 판정한다
+    - [ ] 판정 프롬프트가 `[Agent's Summary Description]` + 현재 시각 +
+          agent status + observation을 입력으로 사용한다 (§4.3.1 예시 prompt)
+    - [ ] 판정 결과(continue/react, reason/code)를 로그 가능 형태로 남긴다
+    - [ ] 판정과 기존 reaction 2-call 파이프라인(§2-D, `agents/reaction/`)의
+          경계를 정리한다 — 이 판정이 reaction 여부의 상위 게이트가 된다
 
 - [ ] `P1` react 발생 시 이후 구간만 재수립한다
   - Depends on: tick 충돌 판정기 구현
   - DoD:
-    - [ ] 현재 시점 이전 계획은 보존한다
-    - [ ] 현재 시점 이후 계획만 재생성한다
+    - [ ] 현재 시점 이전 계획(day/hourly/minute)은 보존한다
+    - [ ] 현재 시점 이후 계획만 재생성한다 (§4.3.1: "We then regenerate the
+          agent's existing plan from the time when the reaction takes place")
+    - [ ] 재수립된 구간이 원래 day plan의 canonical location/시간창 제약을
+          위반하지 않는다 (SPEC.md §7과 정합)
+    - [ ] 회귀 테스트: 방해 없는 tick에서는 기존 계획이 재생성되지 않는다
 
-### 3-C. 대화 연계 planning
+### 3-C. 대화 연계 planning (§4.3.1 마지막 문단, §3.4.3 Coordination)
+
+논문 원문: "if the action indicates an interaction between agents, we
+generate their dialogue" — 즉 조우 판정과 대화 생성은 3-B의 react 판정에
+종속된 하위 분기다. Isabella의 Valentine's Day party 예시(§3.4.3, Figure 9)가
+이 전체 체인(초대 확산 → 상대방 plan에 반영 → 실제 참석)의 논문 기준
+end-to-end 시나리오다.
 
 - [ ] `P2` 조우 시 pass-by vs converse 결정을 구현한다
   - Depends on: react 발생 시 이후 구간만 재수립
   - DoD:
     - [ ] 조우 이벤트 입력으로 행동 선택(pass-by/converse)을 반환한다
-    - [ ] 결정 근거(관계/맥락)를 추적 가능하게 남긴다
+    - [ ] 결정 근거(관계/맥락 요약, §4.3 예시의 relationship + context summary
+          두 프롬프트)를 추적 가능하게 남긴다
+    - [ ] converse 결정 시 기존 dialogue 세션(§2-D 짧은 대화 아크)으로 연결된다
 
 - [ ] `P2` 대화 결과를 plan 업데이트에 반영한다
   - Depends on: pass-by vs converse 결정 구현
   - DoD:
-    - [ ] 대화에서 획득한 새 정보가 memory/plan에 반영된다
+    - [ ] 대화에서 획득한 새 정보(예: 파티 초대)가 상대 agent의 memory에
+          observation으로 저장된다
+    - [ ] 저장된 정보가 다음 day/hourly plan 생성 시 retrieval 후보에 포함되어
+          실제 계획(예: 파티 참석 일정)에 반영된다
     - [ ] 관계 변화가 다음 계획 우선순위에 영향을 준다
+    - [ ] 통합 시나리오 테스트: 논문 §3.4.3처럼 "A가 B에게 이벤트를 알림 → B가
+          다음 planning 사이클에서 참석을 계획 → 실제 해당 시간/장소에 도착"이
+          재현된다
 
-## 4) World Integration (시뮬레이션)
+## 4) World Integration (시뮬레이션, §3 / §5 Sandbox Environment)
 
 - [x] `P1` simulation harness에서 world 상태/이벤트 로직을 분리한다
   - Depends on: 없음
@@ -276,7 +327,10 @@
     - [x] 로컬 planner의 생성 timeout을 제거하고 structured JSON 요청에서 Qwen thinking을 끈다
     - [x] 현재 시각을 덮지 않는 미래 계획을 active로 선택하지 않고 planning error로 중단한다
     - [x] 재시작 후에도 게임 시각, 위치, 계획 cache와 조우 cooldown을 복원한다
-    - [ ] 비대화 tick에도 주변 사건을 perceive/store하고 필요할 때 retrieve/reflect/react한다
+    - [ ] `P1` 비대화 tick에도 주변 사건을 perceive/store하고 필요할 때
+          retrieve/reflect/react한다 (§4 Perceive→Store 루프를 대화가 없는
+          tick에도 적용 — 현재는 대화가 발생하는 tick에서만 관찰이
+          기억화된다). Depends on: §3-B tick 충돌 판정기
 
 - [x] `P1` Prisma 기반 RPG 세션 저장/불러오기를 구현한다
   - Depends on: world clock + tick scheduler 연동
@@ -394,62 +448,101 @@
     - [x] 선택 agent의 관점에서 다른 agent와의 비대칭 관계 요약과 근거를 표시한다
     - [x] 정식 호감도 모델이 없는 동안 memory importance를 거짓 호감 점수로 변환하지 않는다
 
-- [ ] `P2` God mode 입력으로 perception event를 주입한다
+- [ ] `P2` God mode 입력으로 perception event를 주입한다 (§3.2 User Controls,
+      §8.1 "Isabella's apartment: kitchen: stove is burning" 예시)
   - Depends on: agent inspector 구현
   - DoD:
-    - [ ] 사용자 입력으로 임의 perception event를 backend에 전달한다
-    - [ ] 주입 이벤트가 다음 tick 의사결정에 반영된다
+    - [ ] 사용자 입력(자연어 상태 변경 문장)으로 임의 perception event를
+          backend에 전달한다
+    - [ ] 주입 이벤트가 다음 tick에서 observation memory로 저장되고
+          §3-B 판정기를 거쳐 의사결정에 반영된다
+    - [ ] 사용자가 agent의 "inner voice"(directive)로 개입하는 입력과, 환경
+          상태 변경으로 개입하는 입력을 구분한다 (§3.1.2)
 
-## 5) Social Dynamics & Evaluation (논문 검증)
+## 5) Social Dynamics & Evaluation (논문 검증, §3.4 / §6 / §7)
 
-### 5-A. 정보 확산/관계/협업 지표
+논문은 아키텍처를 두 방식으로 검증한다: (A) §6 controlled evaluation —
+interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evaluation —
+25 agent, 2 game-day 시뮬레이션에서 정보 확산/관계 형성/coordination을
+측정. 이 프로젝트는 두 검증 모두 자동화된 형태로 존재하지 않는다.
 
-- [ ] `P2` 정보 확산 실험을 자동 측정한다
-  - Depends on: 대화 결과를 plan 업데이트에 반영
+### 5-A. 정보 확산/관계/협업 지표 (§7.1 Emergent Social Behaviors)
+
+- [ ] `P2` 정보 확산 실험을 자동 측정한다 (§7.1.1, 예: Sam의 후보 출마 소식이
+      1명→8명(32%)으로 확산)
+  - Depends on: §3-C 대화 결과를 plan 업데이트에 반영
   - DoD:
-    - [ ] seed fact 주입 후 인지한 agent 비율을 계산한다
-    - [ ] 실험 실행별 결과를 비교 가능한 포맷으로 저장한다
+    - [ ] seed fact를 특정 agent에게만 초기 memory로 주입한다
+    - [ ] 시뮬레이션 종료 시점에 각 agent를 "interview"하여(§7.1 질문 형식:
+          "Did you know that...?") 인지 여부를 yes/no로 판정한다
+    - [ ] 답변이 실제 memory stream 근거(해당 정보를 들은 dialogue)에서
+          나왔는지 검증해 hallucination을 걸러낸다 (§7.1 방법론)
+    - [ ] 실험 실행별 인지 agent 비율을 비교 가능한 포맷으로 저장한다
 
-- [ ] `P2` 관계 형성 지표를 계산한다
+- [ ] `P2` 관계 형성 지표를 계산한다 (§7.1.1, 시뮬레이션 시작~종료 밀도
+      0.167 → 0.74 증가가 논문 기준 결과)
   - Depends on: 정보 확산 실험 자동 측정
   - DoD:
+    - [ ] 각 agent 쌍에게 "Do you know of `<name>`?"을 interview로 물어
+          상호 인지(mutual acknowledgement)를 무방향 그래프 간선으로 기록한다
     - [ ] 네트워크 밀도 `eta = 2|E| / (|V|(|V|-1))`를 계산한다
-    - [ ] 시간 경과에 따른 밀도 변화를 기록한다
+    - [ ] 시뮬레이션 시작 시점과 종료 시점의 밀도를 모두 기록해 변화량을 남긴다
 
-- [ ] `P2` 협업/조율 지표를 계산한다
+- [ ] `P2` 협업/조율 지표를 계산한다 (§7.1.2 Valentine's Day party 사례:
+      초대받은 12명 중 5명 참석)
   - Depends on: 관계 형성 지표 계산
   - DoD:
-    - [ ] 이벤트 초대 대비 실제 도착 agent 수를 측정한다
-    - [ ] 이벤트별 성공률을 집계한다
+    - [ ] 이벤트 초대 확산 경로(누가 누구에게 언제 알렸는지)를 기록한다
+    - [ ] 이벤트 시각·장소에 실제 도착한 agent 수를 초대받은 agent 수 대비로
+          측정한다
+    - [ ] 불참 agent에게 사유를 interview로 물어 근거를 남긴다 (§7.1.2:
+          "너무 바빠서" 등 conflict 사유)
 
-### 5-B. Interview evaluator + Ablation
+### 5-B. Interview evaluator + Ablation (§6 Controlled Evaluation)
 
-- [ ] `P2` interview evaluator(25문항) 실행기를 구현한다
+- [ ] `P2` interview evaluator(25문항, 5카테고리 x 5문항) 실행기를 구현한다
+      (§6.1: self-knowledge, memory, plans, reactions, reflections)
   - Depends on: Reflection Loop 핵심 완료
   - DoD:
-    - [ ] 카테고리(self-knowledge, memory, plans, reactions, reflections)를 모두 평가한다
-    - [ ] 문항별 점수와 근거를 저장한다
+    - [ ] 5개 카테고리 각각 5개 질문(총 25개)을 정의한다 — 논문 Appendix B
+          형식을 참고하되 이 프로젝트의 한국어 페르소나에 맞게 재작성한다
+    - [ ] 질문마다 agent의 memory stream을 조회해 답변을 생성한다
+    - [ ] 문항별 점수와 근거(사용된 memory id)를 저장한다
 
 - [ ] `P2` interview 자동 채점/결과 포맷을 확정한다
   - Depends on: interview evaluator 실행기 구현
   - DoD:
     - [ ] 총점/카테고리 점수/실패 케이스를 한 포맷으로 저장한다
     - [ ] 반복 실행 간 비교가 가능하다
+    - [ ] 논문처럼 순위 기반 비교가 필요하면 TrueSkill 등 상대 평가 대신,
+          이 프로젝트 규모에 맞는 절대 점수 채점을 우선한다 (인간 평가자
+          100명 리크루트는 범위 밖)
 
-- [ ] `P2` ablation 실험 플래그를 추가한다
+- [ ] `P2` ablation 실험 플래그를 추가한다 (§6.2 conditions: no-observation,
+      no-reflection-no-planning, no-reflection, full architecture)
   - Depends on: interview 자동 채점/결과 포맷 확정
   - DoD:
-    - [ ] `no-observation`, `no-reflection`, `no-planning` 모드를 제공한다
-    - [ ] baseline 대비 성능 차이를 동일 리포트 포맷으로 출력한다
+    - [ ] `no-observation`(memory stream 자체 비활성화), `no-reflection`,
+          `no-planning` 모드를 각각 독립 플래그로 제공한다
+    - [ ] 각 ablation은 전체 아키텍처와 동일한 memory 접근 시점까지 재생하고
+          해당 컴포넌트만 차단한다 (§6.2: "동일 시점까지의 memory에 동등하게
+          접근" — 시뮬레이션을 매 ablation마다 다시 실행하지 않음)
+    - [ ] baseline(full architecture) 대비 성능 차이를 동일 리포트 포맷으로
+          출력한다
 
 ---
 
 ## Milestones
 
 - [x] M1: Infra & PoC 완료
-- [ ] M2: Single-agent believable daily life
-  - 조건: 1) Memory/Retrieval P0 완료 + 2) Reflection P1 완료 + 3) Planning P1 완료
+- [ ] M2: Single-agent believable daily life (§4 전체 인지 루프가 개별
+      agent 단위로 닫혀 있는 상태)
+  - 조건: 1) Memory/Retrieval P0 완료 + 2) Reflection P1 완료 +
+    3) Planning §3-A 완료 + **4) §3-B tick react/부분 재계획 완료**
+  - 상태: 1~3 완료, 4 미완료 — tick react 판정이 없으면 §4.3.1이 규정하는
+    "관찰이 계획을 방해하면 반응" 루프가 닫히지 않아 M2 미달성
 - [ ] M3: Two-agent social interaction + information diffusion
-  - 조건: 대화 연계 planning + 정보 확산 실험
-- [ ] M4: Multi-agent town simulation + user intervention
-  - 조건: World integration + Social/Evaluation 핵심 항목 완료
+  - 조건: §3-C 대화 연계 planning + §5-A 정보 확산/관계/협업 지표 자동 측정
+- [ ] M4: Multi-agent town simulation + user intervention + 논문 수준 검증
+  - 조건: World integration(§4) 완료 + §5-A/§5-B Social Dynamics & Evaluation
+    핵심 항목 완료 + God mode(§4-B 마지막 항목) 완료
