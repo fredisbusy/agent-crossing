@@ -34,7 +34,7 @@
 - [x] `P0` MemoryObject 스키마를 코드와 1:1로 맞춘다
   - Depends on: 없음
   - DoD:
-    - [x] 기본 메모리 객체/스트림을 구현한다 (`packages/backend/src/memory/memory_object.py`, `packages/backend/src/memory/memory_stream.py`)
+    - [x] 기본 메모리 객체/스트림을 구현한다 (`packages/backend/src/agents/memory/memory_object.py`, `packages/backend/src/agents/memory/memory_stream.py`)
     - [x] 필수 필드(`id`, `content`, `created_at`, `last_accessed`, `importance`, `node_type`)를 저장/조회 경로에 반영한다
     - [x] 확장 필드(`citations`, `embedding`)를 지원한다
     - [x] 필드 이름 충돌(`content/creation_timestamp` vs `content/created_at`)을 하나로 정리한다
@@ -130,12 +130,17 @@
     - [x] 2차 호출에서 `utterance`를 생성하고 semantic/overlap guard를 적용한다
     - [x] 단위 테스트로 retry/parse-fallback 경로를 검증한다
 
-- [x] `P1` Brain/Governance/Diagnostics 경계를 분리한다
+- [ ] `P1` Brain/Governance/Diagnostics 경계를 분리한다
   - Depends on: reaction 2-call 파이프라인 분리
+  - Regressed 2026-08-25: `docs/architecture-analysis/02_design.md` §1.3 코드 분석 결과
+    `ActionLoopResult`(`agents/brain/types.py:64,66`)가 `reaction_trace`
+    (`raw_response`/`parse_error`/retry count 포함)와 `diagnostics`
+    (`model_thought`/`self_critique`/`decision_process` 포함) 필드를 그대로
+    갖고 있음을 확인. AGENTS.md §9 위반 — 아래 DoD는 실제로 미충족.
   - DoD:
-    - [x] ActionLoopResult에서 디버그/관측성 필드를 분리하고 핵심 행동 필드만 유지한다
-    - [x] reaction trace 머지 로직을 governance 계층 유틸로 이동한다
-    - [x] diagnostics 포맷팅(`action_summary`, `decision_process` 등)을 별도 모듈로 분리한다
+    - [ ] ActionLoopResult에서 디버그/관측성 필드를 분리하고 핵심 행동 필드만 유지한다
+    - [ ] reaction trace 머지 로직을 governance 계층 유틸로 이동한다
+    - [ ] diagnostics 포맷팅(`action_summary`, `decision_process` 등)을 별도 모듈로 분리한다
 
 ## 3) Planning & Re-planning (논문 핵심 3)
 
