@@ -9,6 +9,7 @@ import uuid
 from agents.persona_loader import PersonaLoader
 from agents.planning.lifecycle import PlanItemSnapshot
 from agents.relationship_diagnostics import build_relationship_snapshot
+from agents.memory.memory_manager import ObservationContext
 from api.schemas import (
     DashboardAgentResponse,
     DashboardEventResponse,
@@ -18,6 +19,8 @@ from api.schemas import (
     DashboardRelationshipResponse,
     DashboardStateResponse,
     DashboardWorldResponse,
+    GodModePerceptionRequest,
+    GodModePerceptionResponse,
     SessionCreateRequest,
     SessionListResponse,
     SessionSaveRequest,
@@ -840,6 +843,62 @@ async def post_world_path(request: WorldPathRequest) -> WorldPathResponse:
     return WorldPathResponse(
         reachable=bool(path),
         path=[WorldMapPointResponse(x=point.x, y=point.y) for point in path],
+    )
+
+
+@app.post(
+    "/world/god-mode/perception",
+    response_model=GodModePerceptionResponse,
+)
+async def post_god_mode_perception(
+    request: GodModePerceptionRequest,
+) -> GodModePerceptionResponse:
+    """§3.2 User Controls / §8.1: inject a natural-language environment
+    perception event into a single agent's memory stream. This is scoped
+    to environment-state injection only, not "inner voice"/directive input
+    (SPEC.md §3.1.2, out of scope here) — the injected observation still
+    passes through the normal §4.3.1 continue-vs-react gate on the agent's
+    next tick.
+    """
+    runtime = _require_runtime()
+    content = request.content.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="content must not be blank")
+
+    target_agent = next(
+        (
+            agent
+            for agent in runtime.agents
+            if str(agent.identity.id) == request.agent_id
+        ),
+        None,
+    )
+    if target_agent is None:
+        raise HTTPException(status_code=404, detail="agent not found")
+
+    now = runtime.state().current_time
+    current_plan_context = target_agent.profile.extended.current_plan_context
+    memory = await asyncio.to_thread(
+        target_agent.memory_service.create_observation_from_text,
+        content=content,
+        now=now,
+        context=ObservationContext(
+            agent_name=target_agent.name,
+            identity_stable_set=list(target_agent.profile.fixed.identity_stable_set),
+            current_plan=current_plan_context[0] if current_plan_context else None,
+        ),
+    )
+    if runtime.plan_react_gate is not None:
+        await asyncio.to_thread(
+            runtime.evaluate_plan_disruption,
+            agent=target_agent,
+            observation_content=content,
+        )
+
+    return GodModePerceptionResponse(
+        agent_id=request.agent_id,
+        memory_id=memory.id,
+        created_at=memory.created_at.isoformat(),
     )
 
 

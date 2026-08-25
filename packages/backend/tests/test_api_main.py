@@ -316,3 +316,114 @@ async def test_world_tick_start_and_stop_return_scheduler_state() -> None:
     assert started.tick_interval_seconds == 1.5
     assert started.cognitive_active is False
     assert started.effective_time_step_seconds == 300
+
+
+class FakeGodModeMemoryService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, datetime.datetime, object]] = []
+
+    def create_observation_from_text(self, *, content, now, context, importance=None):
+        self.calls.append((content, now, context))
+        return _GodModeMemory(id=42, content=content, created_at=now)
+
+
+@dataclass(frozen=True)
+class _GodModeMemory:
+    id: int
+    content: str
+    created_at: datetime.datetime
+
+
+@dataclass
+class GodModeAgent:
+    name: str
+    identity: object
+    profile: object
+    memory_service: FakeGodModeMemoryService
+
+
+class GodModeRuntime:
+    def __init__(self, *, agents, current_time, plan_react_gate=None):
+        self.agents = agents
+        self._current_time = current_time
+        self.plan_react_gate = plan_react_gate
+
+    def state(self):
+        return DummyState(
+            turn=0,
+            current_time=self._current_time,
+            parse_failures=0,
+            silent_turns=0,
+            history_size=0,
+            scheduler_running=False,
+            tick_interval_seconds=1.0,
+        )
+
+
+def _god_mode_agent(memory_service: FakeGodModeMemoryService) -> GodModeAgent:
+    from agents.agent import AgentIdentity, AgentProfile, ExtendedPersona, FixedPersona
+
+    return GodModeAgent(
+        name="Jiho",
+        identity=AgentIdentity(id="jiho", name="Jiho", age=29, traits=["차분함"]),
+        profile=AgentProfile(
+            fixed=FixedPersona(identity_stable_set=[]),
+            extended=ExtendedPersona(lifestyle_and_routine=[], current_plan_context=[]),
+        ),
+        memory_service=memory_service,
+    )
+
+
+@pytest.mark.anyio
+async def test_post_god_mode_perception_stores_observation_for_target_agent() -> None:
+    from api.main import post_god_mode_perception
+    from api.schemas import GodModePerceptionRequest
+
+    memory_service = FakeGodModeMemoryService()
+    agent = _god_mode_agent(memory_service)
+    api_main.app.state.world_runtime = GodModeRuntime(
+        agents=[agent],
+        current_time=datetime.datetime(2026, 8, 24, 10, 0),
+    )
+
+    response = await post_god_mode_perception(
+        GodModePerceptionRequest(
+            agent_id="jiho", content="주방 스토브에 불이 났다."
+        )
+    )
+
+    assert response.agent_id == "jiho"
+    assert response.memory_id == 42
+    assert memory_service.calls[0][0] == "주방 스토브에 불이 났다."
+
+
+@pytest.mark.anyio
+async def test_post_god_mode_perception_rejects_unknown_agent() -> None:
+    from api.main import post_god_mode_perception
+    from api.schemas import GodModePerceptionRequest
+
+    api_main.app.state.world_runtime = GodModeRuntime(
+        agents=[_god_mode_agent(FakeGodModeMemoryService())],
+        current_time=datetime.datetime(2026, 8, 24, 10, 0),
+    )
+
+    with pytest.raises(HTTPException):
+        await post_god_mode_perception(
+            GodModePerceptionRequest(agent_id="unknown", content="아무 일도 없다.")
+        )
+
+
+@pytest.mark.anyio
+async def test_post_god_mode_perception_rejects_blank_content() -> None:
+    from api.main import post_god_mode_perception
+    from api.schemas import GodModePerceptionRequest
+
+    api_main.app.state.world_runtime = GodModeRuntime(
+        agents=[_god_mode_agent(FakeGodModeMemoryService())],
+        current_time=datetime.datetime(2026, 8, 24, 10, 0),
+    )
+
+    with pytest.raises(HTTPException):
+        await post_god_mode_perception(
+            GodModePerceptionRequest(agent_id="jiho", content="   ")
+        )

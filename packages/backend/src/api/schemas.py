@@ -133,6 +133,24 @@ class WorldObservationResponse(BaseModel):
     nearby_interactables: list[WorldMapInteractableResponse]
 
 
+class GodModePerceptionRequest(BaseModel):
+    """§3.2 User Controls / §8.1 God mode: injects an arbitrary natural-language
+    perception event into the world as an observation for a single agent
+    (e.g. "Isabella's apartment: kitchen: stove is burning"). This is
+    environment-state injection, not an "inner voice"/directive input
+    (SPEC.md §3.1.2) — the agent still decides how to react to it.
+    """
+
+    agent_id: str
+    content: str
+
+
+class GodModePerceptionResponse(BaseModel):
+    agent_id: str
+    memory_id: int
+    created_at: str
+
+
 class WorldPathRequest(BaseModel):
     start: WorldMapPointResponse
     goal: WorldMapPointResponse
