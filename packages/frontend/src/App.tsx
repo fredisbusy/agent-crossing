@@ -5,7 +5,7 @@ import {
   Eye,
   MapPin,
   Radio,
-  BrainCircuit,
+  LayoutDashboard,
   Users,
   X,
 } from "lucide-react";
@@ -50,10 +50,17 @@ function GameTextOverlay() {
   );
 }
 
+function isMobileViewport(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 720px)").matches
+  );
+}
+
 function App() {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(() => !isMobileViewport());
   const connectionStatus = useGameStore((state) => state.connectionStatus);
   const liveAgents = useGameStore((state) => state.agents);
   const revision = useGameStore((state) => state.revision);
@@ -62,7 +69,6 @@ function App() {
   const planningError = useGameStore((state) => state.planningError);
   const selectedAgentId = useGameStore((state) => state.selectedAgentId);
   const selectAgent = useGameStore((state) => state.selectAgent);
-  const sceneContext = useGameStore((state) => state.sceneContext);
   const interactionNotice = useGameStore((state) => state.interactionNotice);
   const dismissInteractionNotice = useGameStore(
     (state) => state.dismissInteractionNotice,
@@ -140,7 +146,7 @@ function App() {
 
   function handleResidentSelect(agentId: string): void {
     selectAgent(agentId);
-    if (window.matchMedia("(max-width: 720px)").matches) {
+    if (isMobileViewport()) {
       setInspectorOpen(false);
     }
   }
@@ -153,53 +159,68 @@ function App() {
       <header className="game-hud top-hud">
         <div className="game-brand">
           <span className="pixel-leaf">✦</span>
-          <div>
+          <div className="game-brand-copy">
             <strong>AGENT CROSSING</strong>
             <small>{getMapProperty("name", "브라이어 코브")}</small>
           </div>
         </div>
-        <div className="clock-chip">
-          <Clock3 size={14} />
-          <strong>
-            {currentTime
-              ? new Intl.DateTimeFormat("ko-KR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: false,
-                }).format(new Date(currentTime))
-              : "--:--"}
-          </strong>
-          <span>
-            {currentTime
-              ? new Date(currentTime).toLocaleDateString("ko-KR")
-              : "DAY --"}
-          </span>
+        <div className="time-chip">
+          <div className="time-chip-main">
+            <Clock3 size={14} />
+            <strong>
+              {currentTime
+                ? new Intl.DateTimeFormat("ko-KR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false,
+                  }).format(new Date(currentTime))
+                : "--:--"}
+            </strong>
+            <span>
+              {currentTime
+                ? new Date(currentTime).toLocaleDateString("ko-KR")
+                : "DAY --"}
+            </span>
+          </div>
+          <div
+            className={`time-chip-status ${planningError ? "offline" : connectionStatus}`}
+          >
+            <Radio size={11} />
+            <span>
+              {planningError
+                ? "일정 오류"
+                : connectionStatus === "live"
+                  ? schedulerRunning
+                    ? "하루 진행 중"
+                    : "일시 정지"
+                  : connectionStatus === "connecting"
+                    ? "연결 중"
+                    : "오프라인"}
+            </span>
+            {!planningError && connectionStatus === "live" ? (
+              <span className="time-chip-tick">· 틱 {revision}</span>
+            ) : null}
+          </div>
         </div>
-        <div
-          className={`connection-chip ${planningError ? "offline" : connectionStatus}`}
-        >
-          <Radio size={13} />{" "}
-          {planningError
-            ? "일정 오류"
-            : connectionStatus === "live"
-              ? `${schedulerRunning ? "하루 진행 중" : "일시 정지"} · 틱 ${revision}`
-              : connectionStatus === "connecting"
-                ? "연결 중"
-                : "오프라인"}
+        <div className="hud-actions">
+          <a
+            className="dashboard-link"
+            href="/dashboard"
+            aria-label="대시보드로 이동"
+          >
+            <LayoutDashboard size={13} />
+            <span>DASHBOARD</span>
+          </a>
+          <SessionMenu />
+          <button
+            className="inspector-toggle"
+            onClick={() => setInspectorOpen((open) => !open)}
+            aria-label="주민 관찰 패널 열기 또는 닫기"
+          >
+            {inspectorOpen ? <X size={18} /> : <Users size={18} />}
+          </button>
         </div>
-        <a className="dashboard-link" href="/dashboard">
-          <BrainCircuit size={13} /> DASHBOARD
-        </a>
-        <SessionMenu />
       </header>
-
-      <button
-        className="inspector-toggle"
-        onClick={() => setInspectorOpen((open) => !open)}
-        aria-label="주민 관찰 패널 열기 또는 닫기"
-      >
-        {inspectorOpen ? <X size={18} /> : <Users size={18} />}
-      </button>
 
       <aside
         className={`game-inspector ${inspectorOpen ? "open" : ""}`}
@@ -286,30 +307,6 @@ function App() {
           </button>
         </section>
       ) : null}
-
-      <footer className="control-hint">
-        {sceneContext.kind === "world" ? (
-          <>
-            <span className="desktop-control-hint">
-              <kbd>DRAG</kbd> 카메라 이동 <i /> <kbd>WHEEL</kbd> 확대·축소 <i />
-              <kbd>CLICK NPC</kbd> 따라가기
-            </span>
-            <span className="mobile-control-hint">
-              <kbd>DRAG</kbd> 카메라 이동 <i /> <kbd>PINCH</kbd> 확대·축소 <i />
-              <kbd>TAP NPC</kbd> 따라가기
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="desktop-control-hint">
-              <kbd>CLICK NPC</kbd> 따라가기 <i /> <kbd>ESC / E</kbd> 나가기
-            </span>
-            <span className="mobile-control-hint">
-              <kbd>TAP NPC</kbd> 따라가기 <i /> <kbd>TAP EXIT</kbd> 나가기
-            </span>
-          </>
-        )}
-      </footer>
     </main>
   );
 }
