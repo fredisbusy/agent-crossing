@@ -71,6 +71,7 @@ def _state(*, turn: int = 7) -> RuntimeSaveState:
         planning_error=None,
         last_dialogue_end_time=None,
         conversation=ConversationSave(
+            participant_agent_names=("박지호", "김수진"),
             is_active=False,
             turn_index=0,
             dialogue_turn_window=None,

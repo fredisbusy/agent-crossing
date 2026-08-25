@@ -90,6 +90,56 @@ def test_dialogue_turn_window_must_be_positive_if_provided() -> None:
         _ = WorldConversationSession(agents=agents, dialogue_turn_window=0)
 
 
+def test_session_requires_exactly_two_agents() -> None:
+    """세션은 항상 정확히 한 쌍의 대화다 (N-agent 확장의 페어와이즈 전제)."""
+    agents = cast(
+        list[SimAgent],
+        [DummyAgent(name="Jiho"), DummyAgent(name="Sujin"), DummyAgent(name="Minji")],
+    )
+
+    with pytest.raises(ValueError):
+        _ = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+
+    with pytest.raises(ValueError):
+        _ = WorldConversationSession(
+            agents=cast(list[SimAgent], [DummyAgent(name="Jiho")]),
+            dialogue_turn_window=None,
+        )
+
+
+def test_export_state_round_trips_into_a_fresh_session_for_the_same_pair() -> None:
+    agents = cast(list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")])
+    session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+    session.dialogue_goal = "산책 이야기"
+    session.dialogue_turns_taken = 2
+
+    saved = session.export_state()
+    assert saved.participant_agent_names == ("Jiho", "Sujin")
+
+    restored = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+    restored.restore_state(saved)
+
+    assert restored.dialogue_goal == "산책 이야기"
+    assert restored.dialogue_turns_taken == 2
+
+
+def test_restore_state_rejects_mismatched_participants() -> None:
+    original_agents = cast(
+        list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")]
+    )
+    saved = WorldConversationSession(
+        agents=original_agents, dialogue_turn_window=None
+    ).export_state()
+
+    other_pair = cast(
+        list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Minji")]
+    )
+    session = WorldConversationSession(agents=other_pair, dialogue_turn_window=None)
+
+    with pytest.raises(ValueError, match="participants"):
+        session.restore_state(saved)
+
+
 def test_build_turn_world_context_rotates_locations() -> None:
     context = build_turn_world_context(
         speaker_name="Jiho",

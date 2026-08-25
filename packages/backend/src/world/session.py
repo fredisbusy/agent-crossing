@@ -69,8 +69,10 @@ class WorldConversationSession:
         dialogue_turn_window: int | None,
         dialogue_target_turns: int = DEFAULT_DIALOGUE_TARGET_TURNS,
     ):
-        if len(agents) < 2:
-            raise ValueError("At least two agents are required")
+        if len(agents) != 2:
+            raise ValueError(
+                "A dialogue session is always between exactly two agents"
+            )
         if dialogue_turn_window is not None and dialogue_turn_window < 1:
             raise ValueError("dialogue_turn_window must be at least 1")
         if dialogue_target_turns < 2:
@@ -220,6 +222,7 @@ class WorldConversationSession:
 
     def export_state(self) -> ConversationSave:
         return ConversationSave(
+            participant_agent_names=(self.agents[0].name, self.agents[1].name),
             is_active=self.is_active,
             turn_index=self.turn_index,
             dialogue_turn_window=self.dialogue_turn_window,
@@ -239,6 +242,8 @@ class WorldConversationSession:
 
     def restore_state(self, state: ConversationSave) -> None:
         known_agents = {agent.name for agent in self.agents}
+        if set(state.participant_agent_names) != known_agents:
+            raise ValueError("saved dialogue participants do not match this session")
         if set(state.dialogue_history_by_agent) != known_agents:
             raise ValueError("dialogue history agent roster does not match runtime")
         if set(state.incoming_utterances_by_agent) != known_agents:

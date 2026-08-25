@@ -80,6 +80,7 @@ class CharacterSave(CharacterMovementSave):
 
 
 class ConversationSave(BaseModel):
+    participant_agent_names: tuple[str, str]
     is_active: bool
     turn_index: int = Field(ge=0)
     dialogue_turn_window: int | None
