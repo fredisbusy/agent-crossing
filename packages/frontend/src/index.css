@@ -154,9 +154,9 @@ button {
   --hud-h: 42px;
   --hud-border-w: 3px;
   --hud-radius: 3px;
-  top: 18px;
-  left: 18px;
-  right: 18px;
+  top: max(18px, calc(env(safe-area-inset-top) + 12px));
+  left: max(18px, calc(env(safe-area-inset-left) + 12px));
+  right: max(18px, calc(env(safe-area-inset-right) + 12px));
   display: flex;
   align-items: center;
   gap: 10px;
@@ -737,9 +737,9 @@ button {
   .top-hud {
     --hud-h: 36px;
     --hud-border-w: 2px;
-    top: calc(8px + env(safe-area-inset-top));
-    left: calc(8px + env(safe-area-inset-left));
-    right: calc(8px + env(safe-area-inset-right));
+    top: max(12px, calc(env(safe-area-inset-top) + 8px));
+    left: max(8px, calc(env(safe-area-inset-left) + 8px));
+    right: max(8px, calc(env(safe-area-inset-right) + 8px));
     gap: 6px;
   }
   .game-brand {
