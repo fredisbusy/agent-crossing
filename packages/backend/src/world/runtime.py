@@ -701,7 +701,7 @@ class WorldRuntime:
                     else self.engine.config.turn_time_step_seconds
                 )
             )
-            if self.planning_coordinator is not None and not cognitive_active:
+            if self.planning_coordinator is not None:
                 self._sync_or_schedule_plan_generation(planning_time)
             self._start_dialogue_for_real_encounter(planning_time)
             self._dispatch_tick_plan_disruption_check(planning_time)
@@ -726,11 +726,22 @@ class WorldRuntime:
         (all agents needing regeneration run concurrently there, not one at a time).
         Agents whose plan is mid-regeneration simply keep their last known schedule
         for this tick.
+
+        SPEC.md §7 ("cognitive 구간에는 참여 agent의 현재 공간 계획과 목적지를
+        유지") only freezes the plan/destination of the agents *actually in an
+        active dialogue session* (`_engaged_agent_ids`), not every agent in the
+        world. Agents outside any session must keep receiving schedule updates
+        (and therefore keep walking toward their canonical destination) even
+        while some other pair is talking — otherwise a single long-running
+        conversation anywhere in the village freezes everyone's movement.
         """
         assert self.planning_coordinator is not None
+        engaged_agent_ids = self._engaged_agent_ids()
         schedules: list[AgentPlanSnapshot] = []
         needs_generation = False
         for agent in self.agents:
+            if str(agent.identity.id) in engaged_agent_ids:
+                continue
             try:
                 schedules.append(
                     self.planning_coordinator.ensure_current(
