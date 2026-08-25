@@ -181,8 +181,9 @@ planning 생성 §4.3)는 논문 수식·구조와 거의 1:1로 구현되어 �
 - [x] `P1` day plan 생성기(5~8 broad strokes)를 구현한다
   - Depends on: Reflection Loop 핵심 완료
   - DoD:
-    - [x] day plan 항목 수가 5~8 범위를 만족한다
+    - [x] day plan 항목 수가 5~16 범위를 만족한다
     - [x] 각 항목에 `start_time`, `end_time`, `location`, `action_content`가 포함된다
+    - [x] `P1` (2026-08-25) day-plan 단일 항목을 180분 이하로 제한해 장시간 한 장소 고정 계획을 차단한다 — 생성 prompt, semantic parser, 16개 provider 초안의 canonical 병합에 동일 상한을 적용하고 초과 응답은 재시도한다.
 
 - [x] `P1` hourly plan 생성기를 구현한다
   - Depends on: day plan 생성기 구현

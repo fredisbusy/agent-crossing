@@ -5,7 +5,11 @@ import numpy as np
 from typing_extensions import TypedDict
 
 from llm import prompt_builders
-from llm.clients.types import LlmGenerateOptions
+from llm.clients.types import (
+    LlmGenerateOptions,
+    LlmOutputTruncatedError,
+    LlmStructuredOutputError,
+)
 from llm.guardrails.similarity import (
     EmbeddingEncoder,
     SEMANTIC_HARD_BLOCK_THRESHOLD,
@@ -27,6 +31,7 @@ from .contracts import (
     GenerateClient,
     ReactionDecision,
     ReactionDecisionInput,
+    ReactionDecisionTrace,
     ReactionIntent,
     ReactionUtterance,
 )
@@ -38,10 +43,6 @@ REACTION_INTENT_GENERATE_OPTIONS = LlmGenerateOptions(
     repeat_penalty=1.1,
     presence_penalty=0.2,
     frequency_penalty=0.4,
-    # One judgment call per dialogue turn deciding whether/how to react; worth the
-    # reasoning budget. Utterance generation below stays fast since it can loop
-    # several times per turn on semantic/overlap retries.
-    reasoning_effort="low",
 )
 
 REACTION_UTTERANCE_GENERATE_OPTIONS = LlmGenerateOptions(
@@ -219,12 +220,15 @@ class ReactionGraphRunner:
         self,
         state: ReactionGraphState,
     ) -> dict[str, ReactionIntent]:
-        response = self.generation_client.generate(
-            prompt=state["intent_prompt"],
-            system=state["system_prompt"],
-            options=REACTION_INTENT_GENERATE_OPTIONS,
-            response_model=ReactionIntentOutput,
-        )
+        try:
+            response = self.generation_client.generate(
+                prompt=state["intent_prompt"],
+                system=state["system_prompt"],
+                options=REACTION_INTENT_GENERATE_OPTIONS,
+                response_model=ReactionIntentOutput,
+            )
+        except (LlmOutputTruncatedError, LlmStructuredOutputError) as error:
+            return {"intent": self._generation_failure_intent(error=error)}
         intent = parse_reaction_intent(response)
         if state["input"].language == "ko":
             intent = replace(
@@ -315,12 +319,22 @@ class ReactionGraphRunner:
         self,
         state: ReactionGraphState,
     ) -> dict[str, object]:
-        response = self.generation_client.generate(
-            prompt=state["working_prompt"],
-            system=state["system_prompt"],
-            options=REACTION_UTTERANCE_GENERATE_OPTIONS,
-            response_model=ReactionUtteranceOutput,
-        )
+        try:
+            response = self.generation_client.generate(
+                prompt=state["working_prompt"],
+                system=state["system_prompt"],
+                options=REACTION_UTTERANCE_GENERATE_OPTIONS,
+                response_model=ReactionUtteranceOutput,
+            )
+        except (LlmOutputTruncatedError, LlmStructuredOutputError) as error:
+            utterance_result = self._generation_failure_utterance(error=error)
+            return {
+                "utterance_result": utterance_result,
+                "decision": self._build_reaction_decision(
+                    intent=state["intent"],
+                    utterance_result=utterance_result,
+                ),
+            }
         utterance_result = parse_reaction_utterance(response)
         if state["input"].language == "ko":
             utterance_result = replace(
@@ -515,6 +529,46 @@ class ReactionGraphRunner:
                 )
             )
         }
+
+    @staticmethod
+    def _generation_failure_trace(
+        *, error: LlmOutputTruncatedError | LlmStructuredOutputError
+    ) -> ReactionDecisionTrace:
+        failure = (
+            "provider_output_truncated"
+            if isinstance(error, LlmOutputTruncatedError)
+            else "provider_structured_output_invalid"
+        )
+        return ReactionDecisionTrace(
+            raw_response="",
+            parse_success=False,
+            parse_error=failure,
+            fallback_reason=failure,
+        )
+
+    @classmethod
+    def _generation_failure_intent(
+        cls,
+        *,
+        error: LlmOutputTruncatedError | LlmStructuredOutputError,
+    ) -> ReactionIntent:
+        return ReactionIntent(
+            should_react=False,
+            reason="fallback",
+            trace=cls._generation_failure_trace(error=error),
+        )
+
+    @classmethod
+    def _generation_failure_utterance(
+        cls,
+        *,
+        error: LlmOutputTruncatedError | LlmStructuredOutputError,
+    ) -> ReactionUtterance:
+        return ReactionUtterance(
+            utterance="",
+            reason="fallback",
+            trace=cls._generation_failure_trace(error=error),
+        )
 
     @staticmethod
     def _build_reaction_decision(

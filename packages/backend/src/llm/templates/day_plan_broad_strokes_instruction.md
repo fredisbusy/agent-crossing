@@ -36,6 +36,7 @@ Framing reference (for style, not output format):
 - `end_time` must be later than `start_time`.
 - Use the same calendar date as `Today is ...`; only the final `end_time` may be midnight on the next date.
 - This is a broad-strokes day plan. Use natural human time spans and allow non-hour boundaries like `5:30 pm` when they fit the routine.
+- Every item must last at most $day_plan_max_duration_minutes minutes. Split work, study, errands, leisure, and rest into separate time blocks so the resident changes activity or location through the day; never make an all-day or workday-sized single block.
 - Keep chronological flow from morning to night.
 - The first item must start exactly at the fixed planning-window start.
 - Every item must start exactly when the previous item ends; gaps and overlaps are invalid.

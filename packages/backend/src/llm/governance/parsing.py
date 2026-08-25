@@ -22,6 +22,7 @@ from llm.clients.types import JsonObject
 from llm.structured_outputs import (
     DAY_ACTION_MAX_CHARS,
     DAY_LOCATION_MAX_CHARS,
+    DAY_PLAN_MAX_DURATION_MINUTES,
     HOURLY_ACTION_MAX_CHARS,
     MINUTE_ACTION_MAX_CHARS,
 )
@@ -84,6 +85,7 @@ def try_parse_day_plan(
     max_items: int = 8,
     min_duration: int = 1,
     reference_date: datetime.date | None = None,
+    repair_excessive_duration: bool = False,
 ) -> DayPlanParseResult:
     payload = parse_json_object(response_text)
     if payload is None:
@@ -106,14 +108,49 @@ def try_parse_day_plan(
     )
     if len(normalized) < min_items:
         raise DayPlanParseError("insufficient_day_plan_items")
+    if any(item.duration_minutes > DAY_PLAN_MAX_DURATION_MINUTES for item in normalized):
+        if not repair_excessive_duration:
+            raise DayPlanParseError("day_plan_item_duration_exceeds_maximum")
+        normalized = _split_excessive_day_plan_items(normalized)
 
     normalized.sort(key=lambda item: item.start_time)
-    normalized = _compact_day_plan_items(normalized, max_items=max_items)
+    normalized = _compact_day_plan_items(
+        normalized,
+        max_items=max_items,
+        max_duration=DAY_PLAN_MAX_DURATION_MINUTES,
+    )
     return DayPlanParseResult(items=normalized)
 
 
+def _split_excessive_day_plan_items(items: list[DayPlanItem]) -> list[DayPlanItem]:
+    """Repair a repeatedly noncompliant long block into bounded work and break slots."""
+    repaired: list[DayPlanItem] = []
+    for item in items:
+        cursor = item.start_time
+        remaining = item.duration_minutes
+        break_location = (
+            "브라이어 코브 > 허니컵 카페"
+            if item.location == "브라이어 코브 > 마을 광장"
+            else "브라이어 코브 > 마을 광장"
+        )
+        while remaining > DAY_PLAN_MAX_DURATION_MINUTES:
+            work_minutes = min(DAY_PLAN_MAX_DURATION_MINUTES, remaining - 30)
+            work_end = cursor + datetime.timedelta(minutes=work_minutes)
+            repaired.append(DayPlanItem(cursor, work_end, item.location, item.action_content))
+            cursor = work_end
+            break_end = cursor + datetime.timedelta(minutes=30)
+            repaired.append(
+                DayPlanItem(cursor, break_end, break_location, "중간에 잠시 휴식하며 다음 일정을 준비한다.")
+            )
+            cursor = break_end
+            remaining -= work_minutes + 30
+        if remaining:
+            repaired.append(DayPlanItem(cursor, item.end_time, item.location, item.action_content))
+    return repaired
+
+
 def _compact_day_plan_items(
-    items: list[DayPlanItem], *, max_items: int
+    items: list[DayPlanItem], *, max_items: int, max_duration: int
 ) -> list[DayPlanItem]:
     """Merge the shortest continuous draft strokes without inventing content."""
     compacted = list(items)
@@ -122,8 +159,10 @@ def _compact_day_plan_items(
         for index, (first, second) in enumerate(zip(compacted, compacted[1:])):
             if first.end_time != second.start_time:
                 continue
-            location_penalty = 0 if first.location == second.location else 1
             combined_duration = first.duration_minutes + second.duration_minutes
+            if combined_duration > max_duration:
+                continue
+            location_penalty = 0 if first.location == second.location else 1
             candidates.append((location_penalty, combined_duration, index))
         if not candidates:
             raise DayPlanParseError("too_many_non_contiguous_day_plan_items")

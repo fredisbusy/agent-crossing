@@ -7,6 +7,7 @@ import pytest
 from agents.agent import AgentIdentity, AgentProfile, ExtendedPersona, FixedPersona
 from agents.planning.lifecycle import PlanningCoordinator, PlanningGenerationError
 from agents.planning.models import DayPlanItem, HourlyPlanItem, MinutePlanItem
+from persistence.contracts import PlanItemSave, PlanningStateSave
 
 
 class FakePlanner:
@@ -23,15 +24,27 @@ class FakePlanner:
         return [
             DayPlanItem(
                 start_time=datetime.datetime.combine(date, datetime.time(6)),
-                end_time=datetime.datetime.combine(date, datetime.time(12)),
+                end_time=datetime.datetime.combine(date, datetime.time(9)),
                 location="브라이어 코브 > 스토리하우스 도서관",
                 action_content="도서관 오전 업무를 한다.",
             ),
             DayPlanItem(
+                start_time=datetime.datetime.combine(date, datetime.time(9)),
+                end_time=datetime.datetime.combine(date, datetime.time(12)),
+                location="브라이어 코브 > 스토리하우스 도서관",
+                action_content="도서관 오전 업무를 이어간다.",
+            ),
+            DayPlanItem(
                 start_time=datetime.datetime.combine(date, datetime.time(12)),
-                end_time=datetime.datetime.combine(date, datetime.time(18)),
+                end_time=datetime.datetime.combine(date, datetime.time(15)),
                 location="브라이어 코브 > 마을 광장",
                 action_content="오후 일과를 보낸다.",
+            ),
+            DayPlanItem(
+                start_time=datetime.datetime.combine(date, datetime.time(15)),
+                end_time=datetime.datetime.combine(date, datetime.time(18)),
+                location="브라이어 코브 > 마을 광장",
+                action_content="오후 일과를 마무리한다.",
             ),
         ]
 
@@ -170,6 +183,47 @@ def test_invalid_generated_day_plan_raises_instead_of_installing_fallback() -> N
         PlanningCoordinator().bootstrap(
             agent=agent, now=datetime.datetime(2026, 8, 24, 6, 5)
         )
+
+
+def test_restore_discards_legacy_day_plan_with_an_excessive_duration() -> None:
+    planner = FakePlanner()
+    agent = FakeAgent(
+        identity=AgentIdentity(id="jiho", name="Jiho Park", age=29, traits=["차분함"]),
+        profile=AgentProfile(
+            fixed=FixedPersona(identity_stable_set=[]),
+            extended=ExtendedPersona(lifestyle_and_routine=[], current_plan_context=[]),
+        ),
+        brain=FakeBrain(planner=planner),
+    )
+    coordinator = PlanningCoordinator()
+    now = datetime.datetime(2026, 8, 24, 6, 5)
+    coordinator.restore_state(
+        agent_id="jiho",
+        state=PlanningStateSave(
+            plan_date=now.date(),
+            day_items=[
+                PlanItemSave(
+                    start_time=datetime.datetime(2026, 8, 24, 8),
+                    end_time=datetime.datetime(2026, 8, 24, 17),
+                    location="브라이어 코브 > 스토리하우스 도서관",
+                    action_content="도서 자료를 정리한다.",
+                )
+            ],
+            hourly_items=[],
+            minute_items=[],
+            hourly_parent_key=None,
+            minute_parent_key=None,
+            last_replan_reason="restored",
+        ),
+    )
+
+    snapshot = coordinator.ensure_current(agent=agent, now=now)
+
+    assert planner.day_calls == 1
+    assert all(
+        (item.end_time - item.start_time).total_seconds() <= 180 * 60
+        for item in snapshot.day_plan
+    )
 
 
 def test_future_minute_plan_raises_instead_of_resetting_progress_to_zero() -> None:
@@ -376,17 +430,35 @@ def test_event_notification_via_conversation_flows_into_next_day_plan() -> None:
         planner_b.day_calls += 1
         planner_b.last_day_plan_request = request
         return [
-            DayPlanItem(
-                start_time=datetime.datetime.combine(day, datetime.time(6)),
-                end_time=datetime.datetime.combine(day, datetime.time(18)),
-                location="브라이어 코브 > 스토리하우스 도서관",
-                action_content="평소처럼 도서관 업무를 한다.",
-            ),
-            DayPlanItem(
-                start_time=datetime.datetime.combine(day, datetime.time(18)),
-                end_time=datetime.datetime.combine(day, datetime.time(20)),
-                location="브라이어 코브 > 허니컵 카페",
-                action_content="지호와 만나기로 한 약속에 간다.",
+                DayPlanItem(
+                    start_time=datetime.datetime.combine(day, datetime.time(6)),
+                    end_time=datetime.datetime.combine(day, datetime.time(9)),
+                    location="브라이어 코브 > 스토리하우스 도서관",
+                    action_content="평소처럼 도서관 업무를 한다.",
+                ),
+                DayPlanItem(
+                    start_time=datetime.datetime.combine(day, datetime.time(9)),
+                    end_time=datetime.datetime.combine(day, datetime.time(12)),
+                    location="브라이어 코브 > 스토리하우스 도서관",
+                    action_content="오전 도서관 업무를 이어간다.",
+                ),
+                DayPlanItem(
+                    start_time=datetime.datetime.combine(day, datetime.time(12)),
+                    end_time=datetime.datetime.combine(day, datetime.time(15)),
+                    location="브라이어 코브 > 달맞이꽃 공원",
+                    action_content="점심 후 공원을 산책한다.",
+                ),
+                DayPlanItem(
+                    start_time=datetime.datetime.combine(day, datetime.time(15)),
+                    end_time=datetime.datetime.combine(day, datetime.time(18)),
+                    location="브라이어 코브 > 수진의 집",
+                    action_content="저녁 약속 전 집에서 준비한다.",
+                ),
+                DayPlanItem(
+                    start_time=datetime.datetime.combine(day, datetime.time(18)),
+                    end_time=datetime.datetime.combine(day, datetime.time(20)),
+                    location="브라이어 코브 > 허니컵 카페",
+                    action_content="지호와 만나기로 한 약속에 간다.",
             ),
         ]
 

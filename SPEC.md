@@ -174,7 +174,7 @@ Backend 레이어 책임:
 
 계획 계층:
 
-1. Day plan: 하루 거시 일정(5~8 broad strokes)
+1. Day plan: 하루 거시 일정(5~16 broad strokes)
 2. Hourly plan: **현재 시점이 속한 day plan 항목**을 시간 단위로 세분화한 근미래 계획
 3. Minute plan: **현재 시점이 속한 hourly plan 항목**을 기본 5~15분 단위로 세분화한 실행 액션
 
@@ -184,7 +184,7 @@ Minute decomposition은 Park et al.의 Generative Agents 구현처럼 상위 tas
 `start_time`, `end_time`, `location`은 runtime이 연속적으로 조립한다.
 
 제품 runtime의 day plan은 생성 시점부터 다음 자정까지를 고정 planning window로
-사용하며 5~8개 항목이 빈틈·겹침 없이 전체 구간을 덮어야 한다. hourly plan도
+사용하며 5~16개 항목이 빈틈·겹침 없이 전체 구간을 덮어야 한다. hourly plan도
 active day-plan 종료까지 연속으로 덮어야 하며, 위치는 모델이 재작성하지 않고
 authoritative day-plan 위치를 상속한다. 시간창 불일치는 parsing governance의
 semantic error로 재시도하고, retry 소진 시 명시적 planning error로 중단한다.
@@ -203,8 +203,11 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
 - `duration_minutes`는 저장 필드가 아니라 `end_time - start_time`으로부터 계산되는 파생값으로 취급
 - day/hourly/minute plan 모두 초 단위 없이 minute precision 사용
 - day/hourly plan은 exact-hour 정렬을 강제하지 않으며 `5:30 pm` 같은 자연스러운 broad-strokes 시간을 허용
+- day-plan의 개별 항목은 최대 180분으로 제한한다. 장시간 업무·학습·휴식은 활동 또는 장소 전환이 드러나는 연속 블록으로 나누며, 이 상한은 prompt와 semantic parsing/초안 병합에 모두 적용한다.
 - hourly plan의 개별 항목은 최대 180분으로 제한해 minute decomposition이 과도하게 길어지지 않게 함
-- LLM이 생성하는 minute duration은 5~15분이며 5분 단위여야 함
+- LLM이 생성하는 minute duration은 5~15분이며 5분 단위여야 함. 다만 runtime이
+  현재 시점부터 상위 계획 종료까지 정확히 덮도록 조립하는 마지막 항목은 1~4분의
+  짧은 tail action 또는 5분 단위가 아닌 연장 구간일 수 있다.
 - 고정 시간창보다 총합이 짧을 때는 논문 구현처럼 마지막 항목을 종료 시각까지 늘릴 수 있어 최종 canonical 항목은 15분을 초과할 수 있음
 - minute decomposition의 duration 합계는 현재 시각부터 active hourly 종료까지의 남은 시간과 정확히 같아야 함
 - day/hourly plan은 고정 planning window의 시작과 끝을 모두 덮고 항목 사이에 gap/overlap이 없어야 함
@@ -227,7 +230,7 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
 라이브 하루 실행 규칙:
 
 - 시뮬레이션은 매 tick마다 5분씩 진행하며, 서비스 시작 시 당일 06:00에서 시작한다.
-- 평상시에는 real 1초당 game 5분을 진행하되, dialogue session 또는 cognitive task가 활성화되면 tick당 game 30초로 감속한다. 이 감속치는 여전히 "대화 한 턴이 실제로 소비하는 game-time 폭"을 모델링하는 값이며, 아래 게이팅과는 독립적인 결정이다.
+- 평상시에는 real 1초당 game 5분을 진행하되, dialogue session 또는 cognitive task가 활성화되면 tick당 game 1분으로 감속한다. 이 감속치는 논문 구현의 minute-level action loop와 minute-precision 계획 경계를 함께 지키며, 아래 게이팅과는 독립적인 결정이다.
 - world clock은 논문 §3.1.1("agents output a natural language statement... sandbox server parses... moves the agents")과 동일하게, **해당 tick에 아직 진행 중인 agent 행동 결정이 모두 끝난 뒤에만** 다음 tick으로 진행한다. 구체적으로 `_run_scheduler`는 매 tick마다 `_advance_world_tick` 실행 이후, 그 tick에서 새로 시작되었거나 이미 진행 중이던 in-flight `_cognitive_task`(대화 턴 생성)와 백그라운드 plan-disruption 스레드(`_dispatch_tick_plan_disruption_check`가 기동한 react 판정, `react_replan`으로 계획을 변형할 수 있음)를 모두 `await`/`join`한 뒤에야 다음 tick의 `_advance_world_tick`으로 넘어간다. `tick_interval_seconds`의 `asyncio.sleep`은 이 gate 뒤에 오는 순수 real-time pacing이며, 더 이상 "행동 완료를 기다리지 않고 시간이 흘러가는" 자유 실행 타이머가 아니다.
 - cognitive 구간에는 참여 agent의 현재 공간 계획과 목적지를 유지하고, 대화 완료 또는 실패 후 최신 game clock에 맞춰 계획 실행을 재개한다.
 - `WorldRuntime.step()`(수동 `tick()` 진입점, 테스트에서 주로 사용)은 원래부터 동기적으로 `engine.step()` 완료까지 반환하지 않으므로 이미 이 gating 규칙을 만족한다. 별도 조정이 필요했던 대상은 `_run_scheduler`/`_advance_world_tick` 뿐이다.

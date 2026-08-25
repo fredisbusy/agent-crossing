@@ -129,12 +129,12 @@ class MinutePlanItem:
 class DayPlan:
     """하루 계획 전체를 나타내는 모델."""
 
-    """하루 계획을 구성하는 항목 목록(5~8개)."""
+    """하루 계획을 구성하는 항목 목록(5~16개)."""
     items: list[DayPlanItem]
 
     def __post_init__(self) -> None:
-        if len(self.items) < 5 or len(self.items) > 8:
-            raise ValueError("day plan must contain between 5 and 8 items")
+        if len(self.items) < 5 or len(self.items) > 16:
+            raise ValueError("day plan must contain between 5 and 16 items")
 
 
 @dataclass(frozen=True)

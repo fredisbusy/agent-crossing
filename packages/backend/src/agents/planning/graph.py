@@ -71,7 +71,7 @@ def _day_plan_item_bounds(
     remaining_five_minute_slots = max(
         1, int((planning_end - request.today_date).total_seconds() // 300)
     )
-    max_items = min(8, remaining_five_minute_slots)
+    max_items = min(16, remaining_five_minute_slots)
     return min(5, max_items), max_items
 
 
@@ -341,7 +341,7 @@ class PlanningGraphRunner:
                 options=DAY_PLAN_GENERATE_OPTIONS,
                 response_model=(
                     DayPlanDraftOutput
-                    if max_items == 8
+                    if max_items == 16
                     else day_plan_output_model(
                         min_items=min_items,
                         max_items=max_items,
@@ -362,6 +362,7 @@ class PlanningGraphRunner:
                 max_items=max_items,
                 min_duration=5,
                 reference_date=state["request"].today_date.date(),
+                repair_excessive_duration=state["attempt_count"] >= MAX_PARSE_RETRIES,
             )
             planning_end = state["request"].planning_window_end
             if planning_end is not None:
@@ -390,6 +391,14 @@ class PlanningGraphRunner:
         self,
         state: DayPlanningGraphState,
     ) -> dict[str, object]:
+        duration_repair = ""
+        if state["parse_error"] == "day_plan_item_duration_exceeds_maximum":
+            duration_repair = (
+                "\n\nCRITICAL REPAIR: Every day-plan item must be 180 minutes "
+                "or shorter. Replace any workday-sized block with separate morning, "
+                "midday, afternoon, and evening items; include a break or errand at a "
+                "different canonical location between long work periods."
+            )
         return {
             "attempt_count": state["attempt_count"] + 1,
             "current_prompt": _build_plan_retry_prompt(
@@ -398,7 +407,8 @@ class PlanningGraphRunner:
                 json_shape=prompt_builders.DAY_PLAN_JSON_SHAPE,
                 previous_error=state["parse_error"],
                 previous_response=state["response_text"],
-            ),
+            )
+            + duration_repair,
         }
 
     def _build_hourly_plan_prompt(

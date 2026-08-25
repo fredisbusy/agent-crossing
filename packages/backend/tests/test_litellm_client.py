@@ -6,7 +6,7 @@ from typing import Any
 import litellm
 from pydantic import BaseModel, ConfigDict, Field
 
-from llm.clients.litellm_client import LiteLlmClient
+from llm.clients.litellm_client import LiteLlmClient, LiteLlmOutputTruncatedError
 from llm.clients.types import LlmGenerateOptions
 from llm.structured_outputs import DayPlanOutput
 
@@ -210,6 +210,83 @@ def test_generate_retries_truncated_structured_output_with_larger_budget(
 
     assert response == '{"status":"ok"}'
     assert [call["max_tokens"] for call in calls] == [64, 192]
+
+
+def test_generate_retries_max_tokens_terminated_reaction_output(monkeypatch) -> None:
+    calls: list[dict[str, Any]] = []
+    responses = [
+        {
+            "choices": [
+                {
+                    "finish_reason": "max_tokens",
+                    "message": {"content": '{"utterance":"안녕'},
+                }
+            ]
+        },
+        {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"content": '{"status":"ok"}'},
+                }
+            ]
+        },
+    ]
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        calls.append(dict(kwargs))
+        return responses.pop(0)
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LiteLlmClient(
+        default_generate_model="ollama_chat/qwen3.8:27b-mlx",
+        default_embedding_model="ollama/bge-m3",
+    )
+
+    response = client.generate(
+        prompt="Return status",
+        options=LlmGenerateOptions(num_predict=512),
+        response_model=StatusOutput,
+    )
+
+    assert response == '{"status":"ok"}'
+    assert [call["max_tokens"] for call in calls] == [512, 1024]
+    assert all(call["reasoning_effort"] == "none" for call in calls)
+
+
+def test_generate_never_returns_terminally_truncated_json(monkeypatch) -> None:
+    calls: list[dict[str, Any]] = []
+    response = {
+        "choices": [
+            {
+                "finish_reason": "length",
+                "message": {"content": '{"status":"'},
+            }
+        ]
+    }
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        calls.append(dict(kwargs))
+        return response
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LiteLlmClient(
+        default_generate_model="ollama_chat/qwen3.8:27b-mlx",
+        default_embedding_model="ollama/bge-m3",
+    )
+
+    try:
+        client.generate(
+            prompt="Return status",
+            options=LlmGenerateOptions(num_predict=512),
+            response_model=StatusOutput,
+        )
+    except LiteLlmOutputTruncatedError as error:
+        assert "finish_reason=length" in str(error)
+    else:
+        raise AssertionError("terminally truncated JSON must not be returned")
+
+    assert [call["max_tokens"] for call in calls] == [512, 1024]
 
 
 def test_generate_retries_output_that_violates_text_length_schema(

@@ -433,6 +433,7 @@ def test_day_plan_prompt_contains_persona_and_json_shape() -> None:
     assert "Today is Friday February 13 2026" in prompt
     assert "Draft Eddy Lin's structured day plan." in prompt
     assert "Use the same calendar date as `Today is ...`" in prompt
+    assert "Every item must last at most 180 minutes." in prompt
     assert "Framing reference (for style, not output format):" in prompt
     assert "Return strict JSON only with this exact shape and no extra text:" in prompt
     assert '"items": [' in prompt
@@ -1348,6 +1349,102 @@ def test_generate_day_plan_retries_once_on_truncated_json() -> None:
     assert len(items) == 6
     assert items[0].action_content == "Wake up"
     assert client.calls == 2
+
+
+def test_generate_day_plan_retries_when_single_item_is_too_long() -> None:
+    client = StubGenerationClient(
+        responses=[
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "start_time": "2026-02-13T08:00:00",
+                            "end_time": "2026-02-13T17:00:00",
+                            "location": "브라이어 코브 > 스토리하우스 도서관",
+                            "action_content": "Organize books and recommend titles.",
+                        },
+                        {
+                            "start_time": "2026-02-13T17:00:00",
+                            "end_time": "2026-02-13T18:00:00",
+                            "location": "브라이어 코브 > 허니컵 카페",
+                            "action_content": "Have dinner.",
+                        },
+                        {
+                            "start_time": "2026-02-13T18:00:00",
+                            "end_time": "2026-02-13T19:00:00",
+                            "location": "브라이어 코브 > 달맞이꽃 공원",
+                            "action_content": "Take an evening walk.",
+                        },
+                        {
+                            "start_time": "2026-02-13T19:00:00",
+                            "end_time": "2026-02-13T20:00:00",
+                            "location": "브라이어 코브 > 지호의 집",
+                            "action_content": "Write a journal entry.",
+                        },
+                        {
+                            "start_time": "2026-02-13T20:00:00",
+                            "end_time": "2026-02-13T21:00:00",
+                            "location": "브라이어 코브 > 지호의 집",
+                            "action_content": "Prepare for sleep.",
+                        },
+                    ]
+                }
+            ),
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "start_time": "2026-02-13T08:00:00",
+                            "end_time": "2026-02-13T10:00:00",
+                            "location": "브라이어 코브 > 스토리하우스 도서관",
+                            "action_content": "Organize returned books.",
+                        },
+                        {
+                            "start_time": "2026-02-13T10:00:00",
+                            "end_time": "2026-02-13T12:00:00",
+                            "location": "브라이어 코브 > 스토리하우스 도서관",
+                            "action_content": "Recommend books to visitors.",
+                        },
+                        {
+                            "start_time": "2026-02-13T12:00:00",
+                            "end_time": "2026-02-13T14:00:00",
+                            "location": "브라이어 코브 > 허니컵 카페",
+                            "action_content": "Have lunch and rest.",
+                        },
+                        {
+                            "start_time": "2026-02-13T14:00:00",
+                            "end_time": "2026-02-13T16:00:00",
+                            "location": "브라이어 코브 > 달맞이꽃 공원",
+                            "action_content": "Read outdoors.",
+                        },
+                        {
+                            "start_time": "2026-02-13T16:00:00",
+                            "end_time": "2026-02-13T18:00:00",
+                            "location": "브라이어 코브 > 지호의 집",
+                            "action_content": "Plan tomorrow's tasks.",
+                        },
+                    ]
+                }
+            ),
+        ]
+    )
+    service = LlmGateway(client)
+
+    items = service.generate_day_plan(
+        agent_name="Eddy Lin",
+        age=19,
+        innate_traits=["friendly"],
+        persona_background="Music theory student focusing on composition.",
+        yesterday_date=datetime.datetime(2026, 2, 12),
+        yesterday_summary="Kept a regular schedule.",
+        today_date=datetime.datetime(2026, 2, 13),
+    )
+
+    assert client.calls == 2
+    assert all(item.duration_minutes <= 180 for item in items)
+    assert "CRITICAL REPAIR: Every day-plan item must be 180 minutes" in str(
+        client.call_kwargs[1]["prompt"]
+    )
 
 
 def test_generate_day_plan_retries_once_on_schema_validation_error() -> None:

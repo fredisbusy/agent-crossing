@@ -3,6 +3,7 @@ from typing import Annotated, ClassVar, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
 from planning_locations import CanonicalLocation
+from planning_constraints import DAY_PLAN_MAX_DURATION_MINUTES
 
 
 DAY_ACTION_MAX_CHARS = 50
@@ -94,7 +95,7 @@ class DayPlanOutputItem(StrictStructuredOutput):
 
 
 class DayPlanOutput(StrictStructuredOutput):
-    items: list[DayPlanOutputItem] = Field(min_length=5, max_length=8)
+    items: list[DayPlanOutputItem] = Field(min_length=5, max_length=16)
 
 
 class DayPlanDraftOutput(StrictStructuredOutput):
@@ -107,9 +108,9 @@ class DayPlanDraftOutput(StrictStructuredOutput):
 def day_plan_output_model(
     *, min_items: int, max_items: int
 ) -> type[BaseModel]:
-    if not 1 <= min_items <= max_items <= 8:
-        raise ValueError("day-plan schema bounds must satisfy 1 <= min <= max <= 8")
-    if min_items == 5 and max_items == 8:
+    if not 1 <= min_items <= max_items <= 16:
+        raise ValueError("day-plan schema bounds must satisfy 1 <= min <= max <= 16")
+    if min_items == 5 and max_items == 16:
         return DayPlanOutput
     return create_model(
         f"DayPlanOutput{min_items}To{max_items}",
@@ -237,6 +238,7 @@ class InterviewOutput(StrictStructuredOutput):
 __all__ = [
     "DAY_ACTION_MAX_CHARS",
     "DAY_LOCATION_MAX_CHARS",
+    "DAY_PLAN_MAX_DURATION_MINUTES",
     "DayPlanOutput",
     "HOURLY_ACTION_MAX_CHARS",
     "HourlyPlanOutput",

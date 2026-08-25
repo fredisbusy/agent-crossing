@@ -6,18 +6,23 @@ import litellm
 from pydantic import BaseModel, ValidationError
 from settings import EMBEDDING_DIMENSION
 
-from .types import LlmGenerateOptions
+from .types import (
+    LlmGenerationError,
+    LlmGenerateOptions,
+    LlmOutputTruncatedError,
+    LlmStructuredOutputError,
+)
 
 
-class LiteLlmClientError(RuntimeError):
+class LiteLlmClientError(LlmGenerationError):
     pass
 
 
-class LiteLlmOutputTruncatedError(LiteLlmClientError):
+class LiteLlmOutputTruncatedError(LlmOutputTruncatedError, LiteLlmClientError):
     pass
 
 
-class LiteLlmStructuredOutputError(LiteLlmClientError):
+class LiteLlmStructuredOutputError(LlmStructuredOutputError, LiteLlmClientError):
     pass
 
 
@@ -108,7 +113,7 @@ class LiteLlmClient:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        structured_output = response_model is not None
+        structured_output = format_json or response_model is not None
         kwargs: dict[str, Any] = {
             "model": selected_model,
             "messages": messages,

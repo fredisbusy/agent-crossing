@@ -15,6 +15,7 @@ from .models import (
 )
 from persistence.contracts import PlanItemSave, PlanningStateSave
 from planning_locations import CANONICAL_LOCATIONS
+from planning_constraints import DAY_PLAN_MAX_DURATION_MINUTES
 
 
 class LifePlanner(Protocol):
@@ -146,19 +147,30 @@ class PlanningCoordinator:
             )
 
     def restore_state(self, *, agent_id: str, state: PlanningStateSave) -> None:
+        restored_day_items = [_restore_day_item(item) for item in state.day_items]
+        if not _day_plan_items_are_valid(restored_day_items):
+            restored_day_items = []
         with self._lock:
             self._states[agent_id] = _AgentPlanState(
-                plan_date=state.plan_date,
-                day_items=[_restore_day_item(item) for item in state.day_items],
+                plan_date=state.plan_date if restored_day_items else None,
+                day_items=restored_day_items,
                 hourly_items=[
                     _restore_hourly_item(item) for item in state.hourly_items
-                ],
+                ]
+                if restored_day_items
+                else [],
                 minute_items=[
                     _restore_minute_item(item) for item in state.minute_items
-                ],
-                hourly_parent_key=state.hourly_parent_key,
-                minute_parent_key=state.minute_parent_key,
-                last_replan_reason=state.last_replan_reason,
+                ]
+                if restored_day_items
+                else [],
+                hourly_parent_key=state.hourly_parent_key if restored_day_items else None,
+                minute_parent_key=state.minute_parent_key if restored_day_items else None,
+                last_replan_reason=(
+                    state.last_replan_reason
+                    if restored_day_items
+                    else "restored_day_plan_invalid"
+                ),
             )
 
     def bootstrap(
@@ -472,10 +484,7 @@ class PlanningCoordinator:
                 ),
             )
         )
-        if generated and all(
-            item.location in CANONICAL_LOCATIONS and item.duration_minutes >= 5
-            for item in generated
-        ):
+        if _day_plan_items_are_valid(generated):
             return generated
         raise PlanningGenerationError(
             f"{agent.name}: day plan is empty or contains an invalid location/time window"
@@ -507,6 +516,14 @@ def _recent_planning_relevant_memories(
     if not contents:
         return []
     return ["최근 기억(계획에 참고): " + " | ".join(contents)]
+
+
+def _day_plan_items_are_valid(items: list[DayPlanItem]) -> bool:
+    return bool(items) and all(
+        item.location in CANONICAL_LOCATIONS
+        and 5 <= item.duration_minutes <= DAY_PLAN_MAX_DURATION_MINUTES
+        for item in items
+    )
 
 
 def _snapshot(

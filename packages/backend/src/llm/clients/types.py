@@ -6,6 +6,18 @@ JsonObject: TypeAlias = dict[str, object]
 ReasoningEffort: TypeAlias = Literal["none", "low", "medium", "high"]
 
 
+class LlmGenerationError(RuntimeError):
+    """A provider generation failed after the client's recovery policy."""
+
+
+class LlmOutputTruncatedError(LlmGenerationError):
+    """A provider exhausted its output-token budget before finishing."""
+
+
+class LlmStructuredOutputError(LlmGenerationError):
+    """A structured provider response could not satisfy its schema."""
+
+
 @dataclass(frozen=True)
 class LlmGenerateOptions:
     temperature: float = 0.0

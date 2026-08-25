@@ -6,6 +6,7 @@ from agents.reaction import (
     ReactionDecisionInput,
     ReactionGraphRunner,
 )
+from llm.clients.types import LlmOutputTruncatedError, LlmStructuredOutputError
 
 
 class StubGenerationClient:
@@ -17,6 +18,28 @@ class StubGenerationClient:
         index = min(self.calls, len(self.responses) - 1)
         self.calls += 1
         return self.responses[index]
+
+
+class FailingGenerationClient:
+    def __init__(self, error: LlmOutputTruncatedError | LlmStructuredOutputError):
+        self.error = error
+        self.calls = 0
+
+    def generate(self, **_: object) -> str:
+        self.calls += 1
+        raise self.error
+
+
+class IntentThenFailingGenerationClient:
+    def __init__(self, error: LlmOutputTruncatedError | LlmStructuredOutputError):
+        self.error = error
+        self.calls = 0
+
+    def generate(self, **_: object) -> str:
+        self.calls += 1
+        if self.calls == 1:
+            return _intent_json(should_react=True, reason="react")
+        raise self.error
 
 
 def _intent_json(*, should_react: bool, reason: str) -> str:
@@ -92,3 +115,34 @@ def test_reaction_graph_runner_retries_partner_nudge_once() -> None:
     assert result.should_react is True
     assert result.reaction == "좋아요, 더 들려주세요."
     assert result.trace.partner_retry_count == 1
+
+
+def test_reaction_graph_runner_degrades_truncated_intent_to_parse_failure() -> None:
+    client = FailingGenerationClient(
+        LlmOutputTruncatedError("finish_reason=max_tokens")
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+
+    decision = runner.decide_reaction(_input())
+
+    assert client.calls == 1
+    assert decision.should_react is False
+    assert decision.reaction == ""
+    assert decision.trace.parse_success is False
+    assert decision.trace.parse_error == "provider_output_truncated"
+    assert decision.trace.fallback_reason == "provider_output_truncated"
+
+
+def test_reaction_graph_runner_never_emits_partial_utterance_after_truncation() -> None:
+    client = IntentThenFailingGenerationClient(
+        LlmOutputTruncatedError("finish_reason=length")
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+
+    decision = runner.decide_reaction(_input())
+
+    assert client.calls == 2
+    assert decision.should_react is True
+    assert decision.reaction == ""
+    assert decision.trace.parse_success is False
+    assert decision.trace.parse_error == "provider_output_truncated"

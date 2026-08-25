@@ -11,6 +11,7 @@ from .template_loader import render_template
 from .structured_outputs import (
     DAY_ACTION_MAX_CHARS,
     DAY_LOCATION_MAX_CHARS,
+    DAY_PLAN_MAX_DURATION_MINUTES,
     ENCOUNTER_REASON_MAX_CHARS,
     HOURLY_ACTION_MAX_CHARS,
     IMPORTANCE_REASON_MAX_CHARS,
@@ -234,6 +235,7 @@ def build_day_plan_prompt(
         json_shape=DAY_PLAN_JSON_SHAPE,
         action_max_chars=str(DAY_ACTION_MAX_CHARS),
         location_max_chars=str(DAY_LOCATION_MAX_CHARS),
+        day_plan_max_duration_minutes=str(DAY_PLAN_MAX_DURATION_MINUTES),
     )
 
 
