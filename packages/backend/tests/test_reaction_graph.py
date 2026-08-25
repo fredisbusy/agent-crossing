@@ -146,3 +146,24 @@ def test_reaction_graph_runner_never_emits_partial_utterance_after_truncation() 
     assert decision.reaction == ""
     assert decision.trace.parse_success is False
     assert decision.trace.parse_error == "provider_output_truncated"
+
+
+def test_reaction_graph_runner_never_exposes_mid_codepoint_byte_artifact() -> None:
+    # Well-formed JSON whose string content still carries a raw byte-truncation
+    # artifact (e.g. a provider stopped mid multi-byte UTF-8 character and
+    # surfaced the undecodable trailing byte as a literal "<0xEC>" placeholder).
+    garbled_utterance = "어머, 지호 씨! 네, 잠깐 바람 좀 <0xEC><0x90><0xAC>고 있었어요."
+    client = StubGenerationClient(
+        [
+            _intent_json(should_react=True, reason="react"),
+            _utterance_json(utterance=garbled_utterance, reason="reply"),
+        ]
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+
+    decision = runner.decide_reaction(_input())
+
+    assert decision.reaction == ""
+    assert garbled_utterance not in decision.reaction
+    assert decision.trace.parse_success is False
+    assert decision.trace.parse_error == "malformed_byte_artifact"

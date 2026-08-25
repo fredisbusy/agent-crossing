@@ -1,4 +1,5 @@
 import json
+import re
 import datetime
 from dataclasses import dataclass, replace
 from typing import Callable, TypeVar, cast
@@ -386,6 +387,22 @@ def _parse_iso_datetime(raw_value: object) -> datetime.datetime | None:
         return None
 
 
+# Some local inference backends (e.g. llama.cpp/Ollama under grammar-constrained
+# JSON decoding) can stop generation mid multi-byte UTF-8 codepoint. When that
+# happens the undecodable trailing byte(s) are surfaced as a literal placeholder
+# such as "<0xEC>" inside otherwise-valid text, rather than raising a decode
+# error. `finish_reason` truncation checks do not catch this because the JSON
+# itself is well-formed; we must scan the decoded string content directly.
+_BYTE_ARTIFACT_RE = re.compile(r"<0x[0-9A-Fa-f]{2}>")
+
+
+def _contains_byte_artifact(text: str) -> bool:
+    """Detect mid-codepoint truncation artifacts and the Unicode replacement
+    character, both of which indicate the provider emitted a broken/garbled
+    multi-byte character rather than genuine text."""
+    return bool(_BYTE_ARTIFACT_RE.search(text)) or "�" in text
+
+
 def parse_reaction_decision(response_text: str) -> ReactionDecision:
     default_trace = ReactionDecisionTrace(
         raw_response=response_text,
@@ -427,17 +444,22 @@ def parse_reaction_decision(response_text: str) -> ReactionDecision:
     if not isinstance(raw_reaction, str):
         raw_reaction = ""
     final_reaction = raw_utterance.strip() or raw_reaction.strip()
+    if final_reaction and _contains_byte_artifact(final_reaction):
+        return replace(
+            default_value,
+            trace=replace(default_trace, parse_error="malformed_byte_artifact"),
+        )
 
     raw_thought = parsed_json.get("thought")
-    if not isinstance(raw_thought, str):
+    if not isinstance(raw_thought, str) or _contains_byte_artifact(raw_thought):
         raw_thought = ""
 
     raw_critique = parsed_json.get("critique")
-    if not isinstance(raw_critique, str):
+    if not isinstance(raw_critique, str) or _contains_byte_artifact(raw_critique):
         raw_critique = ""
 
     raw_reason = parsed_json.get("reason")
-    if not isinstance(raw_reason, str):
+    if not isinstance(raw_reason, str) or _contains_byte_artifact(raw_reason):
         raw_reason = raw_critique or raw_thought or ""
 
     raw_end_dialogue = parsed_json.get("end_dialogue")
@@ -552,17 +574,22 @@ def parse_reaction_utterance(response_text: str) -> ReactionUtterance:
     if not isinstance(raw_reaction, str):
         raw_reaction = ""
     final_utterance = raw_utterance.strip() or raw_reaction.strip()
+    if final_utterance and _contains_byte_artifact(final_utterance):
+        return replace(
+            default_value,
+            trace=replace(default_trace, parse_error="malformed_byte_artifact"),
+        )
 
     raw_thought = parsed_json.get("thought")
-    if not isinstance(raw_thought, str):
+    if not isinstance(raw_thought, str) or _contains_byte_artifact(raw_thought):
         raw_thought = ""
 
     raw_critique = parsed_json.get("critique")
-    if not isinstance(raw_critique, str):
+    if not isinstance(raw_critique, str) or _contains_byte_artifact(raw_critique):
         raw_critique = ""
 
     raw_reason = parsed_json.get("reason")
-    if not isinstance(raw_reason, str):
+    if not isinstance(raw_reason, str) or _contains_byte_artifact(raw_reason):
         raw_reason = raw_critique or raw_thought or ""
 
     raw_end_dialogue = parsed_json.get("end_dialogue")
