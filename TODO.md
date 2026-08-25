@@ -370,7 +370,11 @@ end-to-end 시나리오다.
       디렉토리의 파일 개수만큼 로스터를 자동 구성한다
       (`run_agent_loop_simulation.py`의 `DEFAULT_CONFIG` 기본값).
       `api/main.py`의 `persona_names[:2]` 잘림도 제거했다. 검증용 3번째
-      페르소나(Minji)와 `briar-cove.tmj` spawn 포인트를 추가했다.
+      페르소나(Minji)와 `briar-cove.tmj` spawn 포인트를 추가했다. 이후
+      2026-08-25에 페르소나 3명(Jungwoo·버드나무 시장, Haeun·달맞이꽃
+      공원, Taeo·허니컵 카페 단골)을 더 추가해 마을 인구를 6명으로
+      채웠다(spawn 포인트도 각각 추가, `test_world_map.py` 스폰 목록
+      갱신).
     - `world/session.py::WorldConversationSession`이 항상 정확히 2명(한
       쌍)만 받도록 강화됐다 — "마을 전체 로스터가 도는 공용 채팅방" 모델
       대신 세션은 매번 특정 쌍 전용으로 새로 만들어진다.

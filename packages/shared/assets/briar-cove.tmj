@@ -100,7 +100,10 @@
       "objects": [
         {"id": 50, "name": "Jiho", "type": "agent_spawn", "x": 560, "y": 528, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Jiho"}, {"name": "color", "type": "color", "value": "#6b8fd6"}]},
         {"id": 51, "name": "Sujin", "type": "agent_spawn", "x": 720, "y": 416, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Sujin"}, {"name": "color", "type": "color", "value": "#d66b88"}]},
-        {"id": 91, "name": "Minji", "type": "agent_spawn", "x": 700, "y": 550, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Minji"}, {"name": "color", "type": "color", "value": "#8fd66b"}]}
+        {"id": 91, "name": "Minji", "type": "agent_spawn", "x": 700, "y": 550, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Minji"}, {"name": "color", "type": "color", "value": "#8fd66b"}]},
+        {"id": 92, "name": "Jungwoo", "type": "agent_spawn", "x": 350, "y": 780, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Jungwoo"}, {"name": "color", "type": "color", "value": "#d6a86b"}]},
+        {"id": 93, "name": "Haeun", "type": "agent_spawn", "x": 860, "y": 800, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Haeun"}, {"name": "color", "type": "color", "value": "#a86bd6"}]},
+        {"id": 94, "name": "Taeo", "type": "agent_spawn", "x": 180, "y": 270, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Taeo"}, {"name": "color", "type": "color", "value": "#6bd6c8"}]}
       ],
       "opacity": 1,
       "type": "objectgroup",
@@ -126,7 +129,7 @@
     }
   ],
   "nextlayerid": 7,
-  "nextobjectid": 92,
+  "nextobjectid": 95,
   "orientation": "orthogonal",
   "properties": [
     {"name": "id", "type": "string", "value": "briar-cove"},
