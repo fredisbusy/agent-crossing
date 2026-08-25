@@ -16,6 +16,16 @@ from agents.planning.lifecycle import (
     PlanningCoordinator,
     PlanningGenerationError,
 )
+from agents.decision_diagnostics import (
+    build_encounter_diagnostics,
+    build_plan_disruption_diagnostics,
+)
+from agents.reaction.encounter import EncounterDecisionInput, EncounterGate
+from agents.planning.react_gate import (
+    PlanDisruptionDecision,
+    PlanDisruptionGate,
+    PlanDisruptionInput,
+)
 from llm.governance import (
     ConversationMetrics,
     build_conversation_metrics,
@@ -92,6 +102,8 @@ class WorldRuntime:
         cognitive_time_step_seconds: int = 30,
         planning_coordinator: PlanningCoordinator | None = None,
         spatial_runtime: SpatialWorldRuntime | None = None,
+        encounter_gate: EncounterGate | None = None,
+        plan_react_gate: PlanDisruptionGate | None = None,
     ) -> None:
         if len(agents) != 2:
             raise ValueError("WorldRuntime currently supports exactly two agents")
@@ -122,6 +134,8 @@ class WorldRuntime:
         self._cognitive_task: asyncio.Task[None] | None = None
         self.planning_coordinator: PlanningCoordinator | None = planning_coordinator
         self.spatial_runtime: SpatialWorldRuntime | None = spatial_runtime
+        self.encounter_gate: EncounterGate | None = encounter_gate
+        self.plan_react_gate: PlanDisruptionGate | None = plan_react_gate
         self._last_dialogue_end_time: datetime.datetime | None = None
         self._dashboard_events: DashboardEventBuffer = DashboardEventBuffer()
         self.planning_error: str | None = None
@@ -197,6 +211,54 @@ class WorldRuntime:
             self._record_dashboard_event(speaker=speaker, result=step_result)
             return step_result
 
+    def evaluate_plan_disruption(
+        self, *, agent: SimAgent, observation_content: str
+    ) -> PlanDisruptionDecision | None:
+        """§4.3.1 tick-level continue-vs-react gate.
+
+        Distinct from `session`'s in-dialogue `should_react`: this judges
+        whether an arbitrary observation (e.g. a God-mode injected
+        perception event) disrupts `agent`'s existing plan enough to
+        warrant reacting. On react, only the current-time-forward segment
+        of the plan is regenerated via `PlanningCoordinator.react_replan`.
+        """
+        if self.plan_react_gate is None:
+            return None
+
+        current_plan_context = agent.profile.extended.current_plan_context
+        agent_status = current_plan_context[0] if current_plan_context else "Idle"
+        decision = self.plan_react_gate.evaluate(
+            PlanDisruptionInput(
+                agent_identity=agent.identity,
+                profile=agent.profile,
+                current_time=self.current_time,
+                agent_status=agent_status,
+                observation_content=observation_content,
+            )
+        )
+        diagnostics = build_plan_disruption_diagnostics(
+            agent_name=agent.name, decision=decision
+        )
+        logger.info(
+            "plan disruption decision agent=%s should_react=%s reason=%s",
+            agent.name,
+            diagnostics.should_react,
+            diagnostics.reason,
+        )
+        if decision.should_react and self.planning_coordinator is not None:
+            try:
+                self.planning_coordinator.react_replan(
+                    agent=_as_life_agent(agent),
+                    now=self.current_time,
+                    reason=f"tick_react:{decision.reason}",
+                )
+            except PlanningGenerationError:
+                logger.exception(
+                    "react replan failed for agent=%s; keeping previous schedule",
+                    agent.name,
+                )
+        return decision
+
     def _start_dialogue_for_real_encounter(self, now: datetime.datetime) -> None:
         cognitive_turn_in_flight = (
             self._cognitive_task is not None and not self._cognitive_task.done()
@@ -222,13 +284,64 @@ class WorldRuntime:
         both_arrived = first.current_action.startswith(("at:", "arrived_at:")) and (
             second.current_action.startswith(("at:", "arrived_at:"))
         )
-        if (
+        if not (
             both_arrived
             and first.destination is not None
             and first.destination == second.destination
             and distance <= 1
         ):
-            self.session.start_dialogue()
+            return
+
+        if not self._should_converse_on_encounter(now):
+            self._last_dialogue_end_time = now
+            return
+
+        self.session.start_dialogue()
+
+    def _should_converse_on_encounter(self, now: datetime.datetime) -> bool:
+        """§3.4/§4.3 조우 시 pass-by vs converse 결정.
+
+        `encounter_gate`가 구성되지 않은 경우 기존 동작(항상 대화)을 그대로
+        유지한다.
+        """
+        if self.encounter_gate is None:
+            return True
+
+        speaker, other = self._initiator, self._partner
+        try:
+            retrieved_memories = speaker.memory_service.get_retrieval_memories(
+                f"{other.name}와의 관계와 최근 있었던 일",
+                current_time=now,
+                top_k=3,
+            )
+        except Exception:
+            retrieved_memories = []
+
+        try:
+            decision = self.encounter_gate.evaluate(
+                EncounterDecisionInput(
+                    self_identity=speaker.identity,
+                    other_identity=other.identity,
+                    self_profile=speaker.profile,
+                    current_time=now,
+                    retrieved_memories=retrieved_memories,
+                )
+            )
+        except Exception:
+            logger.exception("encounter gate evaluation failed; defaulting to converse")
+            return True
+
+        diagnostics = build_encounter_diagnostics(
+            self_name=speaker.name, other_name=other.name, decision=decision
+        )
+        logger.info(
+            "encounter decision agent=%s other=%s should_converse=%s reason=%s",
+            speaker.name,
+            other.name,
+            diagnostics.should_converse,
+            diagnostics.reason,
+        )
+        return decision.should_converse
 
     def tick(self) -> SimulationStepResult:
         """Advance the single runtime clock by one perceive-plan-act tick."""
@@ -844,6 +957,8 @@ def build_world_runtime(
         cognitive_time_step_seconds=config.cognitive_time_step_seconds,
         planning_coordinator=PlanningCoordinator(),
         spatial_runtime=spatial_runtime,
+        encounter_gate=EncounterGate(generation_client=llm_client),
+        plan_react_gate=PlanDisruptionGate(generation_client=llm_client),
     )
     return runtime
 

@@ -3,11 +3,19 @@ import datetime
 from dataclasses import dataclass, replace
 from typing import Callable, TypeVar, cast
 
+from agents.planning.react_gate_contracts import (
+    PlanDisruptionDecision,
+    PlanDisruptionTrace,
+)
 from agents.reaction.contracts import (
     ReactionDecision,
     ReactionDecisionTrace,
     ReactionIntent,
     ReactionUtterance,
+)
+from agents.reaction.encounter_contracts import (
+    EncounterDecision,
+    EncounterDecisionTrace,
 )
 from agents.planning.models import DayPlanItem, HourlyPlanItem, MinutePlanItem
 from llm.clients.types import JsonObject
@@ -643,6 +651,100 @@ def _coerce_reference_year(
 
 def _is_exact_minute(value: datetime.datetime) -> bool:
     return value.second == 0 and value.microsecond == 0
+
+
+def parse_plan_disruption(response_text: str) -> PlanDisruptionDecision:
+    default_trace = PlanDisruptionTrace(
+        raw_response=response_text,
+        parse_success=False,
+        parse_error="json_parse_error_or_non_object",
+    )
+    parsed_json = parse_json_object(response_text)
+    repaired_once = False
+    if parsed_json is None:
+        repaired_payload = attempt_json_repair_once(response_text)
+        if repaired_payload is not None:
+            parsed_json = repaired_payload
+            repaired_once = True
+        else:
+            return PlanDisruptionDecision(
+                should_react=False,
+                reason="파싱 실패로 기존 계획을 유지함",
+                trace=default_trace,
+            )
+
+    raw_should_react = parsed_json.get("should_react")
+    if not isinstance(raw_should_react, bool):
+        return PlanDisruptionDecision(
+            should_react=False,
+            reason="파싱 실패로 기존 계획을 유지함",
+            trace=replace(default_trace, parse_error="missing_or_invalid_should_react"),
+        )
+
+    raw_reason = parsed_json.get("reason")
+    if not isinstance(raw_reason, str) or not raw_reason.strip():
+        raw_reason = "판단 근거 없음"
+
+    return PlanDisruptionDecision(
+        should_react=raw_should_react,
+        reason=raw_reason.strip(),
+        trace=PlanDisruptionTrace(
+            raw_response=response_text,
+            parse_success=True,
+            parse_error="repaired_once" if repaired_once else "",
+        ),
+    )
+
+
+def parse_encounter_decision(response_text: str) -> EncounterDecision:
+    default_trace = EncounterDecisionTrace(
+        raw_response=response_text,
+        parse_success=False,
+        parse_error="json_parse_error_or_non_object",
+    )
+    parsed_json = parse_json_object(response_text)
+    repaired_once = False
+    if parsed_json is None:
+        repaired_payload = attempt_json_repair_once(response_text)
+        if repaired_payload is not None:
+            parsed_json = repaired_payload
+            repaired_once = True
+        else:
+            return EncounterDecision(
+                should_converse=True,
+                relationship_summary="",
+                context_summary="",
+                reason="파싱 실패로 기본값(대화)을 적용함",
+                trace=default_trace,
+            )
+
+    raw_should_converse = parsed_json.get("should_converse")
+    if not isinstance(raw_should_converse, bool):
+        return EncounterDecision(
+            should_converse=True,
+            relationship_summary="",
+            context_summary="",
+            reason="파싱 실패로 기본값(대화)을 적용함",
+            trace=replace(
+                default_trace, parse_error="missing_or_invalid_should_converse"
+            ),
+        )
+
+    def _text(key: str) -> str:
+        value = parsed_json.get(key)
+        return value.strip() if isinstance(value, str) else ""
+
+    return EncounterDecision(
+        should_converse=raw_should_converse,
+        relationship_summary=_text("relationship_summary"),
+        context_summary=_text("context_summary"),
+        reason=_text("reason") or "판단 근거 없음",
+        trace=EncounterDecisionTrace(
+            raw_response=response_text,
+            parse_success=True,
+            parse_error="repaired_once" if repaired_once else "",
+        ),
+    )
 
 
 def parse_json_object(text: str) -> JsonObject | None:

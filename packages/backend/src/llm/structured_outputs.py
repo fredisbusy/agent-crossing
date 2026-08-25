@@ -174,6 +174,45 @@ class ReactionUtteranceOutput(StrictStructuredOutput):
     end_dialogue: bool
 
 
+PLAN_DISRUPTION_REASON_MAX_CHARS = 120
+ENCOUNTER_REASON_MAX_CHARS = 160
+
+PlanDisruptionReasonText: TypeAlias = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=PLAN_DISRUPTION_REASON_MAX_CHARS,
+    ),
+]
+EncounterReasonText: TypeAlias = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=ENCOUNTER_REASON_MAX_CHARS,
+    ),
+]
+
+
+class PlanDisruptionOutput(StrictStructuredOutput):
+    """§4.3.1 continue-vs-react judgment: does the observation disrupt the
+    agent's current plan enough to warrant reacting?"""
+
+    should_react: bool
+    reason: PlanDisruptionReasonText
+
+
+class EncounterOutput(StrictStructuredOutput):
+    """§3.4/§4.3 encounter judgment: pass-by or converse, grounded in a
+    relationship summary and a context summary."""
+
+    should_converse: bool
+    relationship_summary: EncounterReasonText
+    context_summary: EncounterReasonText
+    reason: EncounterReasonText
+
+
 __all__ = [
     "DAY_ACTION_MAX_CHARS",
     "DAY_LOCATION_MAX_CHARS",
@@ -194,4 +233,8 @@ __all__ = [
     "ReactionIntentOutput",
     "ReactionUtteranceOutput",
     "SalientQuestionsOutput",
+    "ENCOUNTER_REASON_MAX_CHARS",
+    "EncounterOutput",
+    "PLAN_DISRUPTION_REASON_MAX_CHARS",
+    "PlanDisruptionOutput",
 ]

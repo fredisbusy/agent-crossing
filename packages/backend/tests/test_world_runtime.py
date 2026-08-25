@@ -7,6 +7,7 @@ from typing import cast
 
 from agents.sim_agent import SimAgent
 from agents.planning.lifecycle import PlanningCoordinator
+from agents.reaction.encounter import EncounterDecision, EncounterGate
 from world.engine import (
     SimulationEngine,
     SimulationStepObservability,
@@ -524,3 +525,94 @@ def test_world_runtime_bridges_speech_and_public_thought_to_spatial_state() -> N
     assert sujin.bubble_kind == "thought"
     assert sujin.bubble_text == "지호의 안부를 반갑게 받아들인다"
     assert "더 자세한 내부 사고" not in sujin.bubble_text
+
+
+class StubEncounterGate:
+    def __init__(self, should_converse: bool) -> None:
+        self.should_converse: bool = should_converse
+        self.calls: int = 0
+
+    def evaluate(self, input: object) -> EncounterDecision:
+        _ = input
+        self.calls += 1
+        return EncounterDecision(
+            should_converse=self.should_converse,
+            relationship_summary="관계 요약",
+            context_summary="상황 요약",
+            reason="스텁 판정",
+        )
+
+
+def _encounter_test_runtime(*, encounter_gate: object | None) -> WorldRuntime:
+    agent1 = SimpleNamespace(
+        name="Jiho",
+        identity=DummyIdentity(id="jiho"),
+        profile=SimpleNamespace(),
+        memory_service=SimpleNamespace(
+            get_retrieval_memories=lambda *args, **kwargs: []
+        ),
+    )
+    agent2 = SimpleNamespace(
+        name="Sujin",
+        identity=DummyIdentity(id="sujin"),
+        profile=SimpleNamespace(),
+        memory_service=SimpleNamespace(
+            get_retrieval_memories=lambda *args, **kwargs: []
+        ),
+    )
+    agents = cast(list[SimAgent], [agent1, agent2])
+    session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+    return WorldRuntime(
+        agents=agents,
+        session=session,
+        engine=cast(
+            SimulationEngine,
+            cast(
+                object,
+                DummyEngine(
+                    result=SimulationStepResult(
+                        now=datetime.datetime(2026, 3, 4, 9, 0, 0),
+                        speaker_name="Jiho",
+                        trace={},
+                        reply="",
+                        silent_reason="",
+                        parse_failure=False,
+                        observability=SimulationStepObservability(
+                            thought="",
+                            model_thought="",
+                            self_critique="",
+                            decision_reason="",
+                            action_summary="",
+                            decision_process={},
+                        ),
+                    )
+                ),
+            ),
+        ),
+        current_time=datetime.datetime(2026, 3, 4, 9, 0, 0),
+        encounter_gate=cast(EncounterGate, encounter_gate) if encounter_gate else None,
+    )
+
+
+def test_should_converse_on_encounter_defaults_true_without_gate() -> None:
+    """TODO.md §3-C: encounter_gate가 구성되지 않으면 기존 동작(항상 대화)을 유지한다."""
+    runtime = _encounter_test_runtime(encounter_gate=None)
+
+    assert runtime._should_converse_on_encounter(runtime.current_time) is True
+
+
+def test_should_converse_on_encounter_uses_configured_gate_for_pass_by() -> None:
+    """TODO.md §3-C: 조우 시 pass-by vs converse 결정이 게이트 판정을 따른다."""
+    gate = StubEncounterGate(should_converse=False)
+    runtime = _encounter_test_runtime(encounter_gate=gate)
+
+    assert runtime._should_converse_on_encounter(runtime.current_time) is False
+    assert gate.calls == 1
+
+
+def test_should_converse_on_encounter_uses_configured_gate_for_converse() -> None:
+    gate = StubEncounterGate(should_converse=True)
+    runtime = _encounter_test_runtime(encounter_gate=gate)
+
+    assert runtime._should_converse_on_encounter(runtime.current_time) is True
+    assert gate.calls == 1

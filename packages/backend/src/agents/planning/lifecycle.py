@@ -40,6 +40,16 @@ class LifePlanner(Protocol):
     ) -> list[MinutePlanItem]: ...
 
 
+class LifeMemoryService(Protocol):
+    def get_retrieval_memories(
+        self,
+        query: str,
+        *,
+        current_time: datetime.datetime,
+        top_k: int = 3,
+    ) -> list[object]: ...
+
+
 class LifeAgent(Protocol):
     @property
     def name(self) -> str: ...
@@ -52,6 +62,9 @@ class LifeAgent(Protocol):
 
     @property
     def brain(self) -> "LifeBrain": ...
+
+    @property
+    def memory_service(self) -> LifeMemoryService | None: ...
 
 
 class LifeBrain(Protocol):
@@ -238,6 +251,80 @@ class PlanningCoordinator:
         self._states[str(agent.identity.id)] = state
         return _state_snapshot(agent=agent, state=state, now=now)
 
+    def react_replan(
+        self,
+        *,
+        agent: LifeAgent,
+        now: datetime.datetime,
+        reason: str,
+    ) -> AgentPlanSnapshot:
+        """§4.3.1: "regenerate the agent's existing plan from the time when
+        the reaction takes place". Forces a fresh hourly/minute schedule
+        for the current-and-future window while leaving the day plan (and
+        therefore its canonical location/time-window constraints, SPEC.md
+        §7) and everything before `now` untouched.
+        """
+        with self._lock:
+            agent_id = str(agent.identity.id)
+            state = self._states.get(agent_id)
+            if state is None or not state.day_items:
+                # No live plan to react against yet; fall back to a normal
+                # generate-if-missing pass instead of failing the tick.
+                return self._ensure_current(agent=agent, now=now, generate=True)
+
+            planner = agent.brain.planner
+            if planner is None:
+                raise RuntimeError(f"agent {agent_id} does not have a planner")
+
+            active_day = _require_active(
+                state.day_items, now, agent_name=agent.name, plan_level="day"
+            )
+            generated_hourly = planner.generate_hourly_plan(
+                agent_name=agent.name,
+                current_time=now,
+                day_plan_item=active_day,
+            )
+            _require_canonical_locations(
+                generated_hourly, agent_name=agent.name, plan_level="hourly"
+            )
+            hourly_items = [
+                item
+                for item in _children_within(generated_hourly, active_day)
+                if item.duration_minutes >= 5
+            ]
+            if not hourly_items:
+                raise PlanningGenerationError(
+                    f"{agent.name}: react replan hourly plan is empty or outside "
+                    "its day-plan window"
+                )
+            active_hourly = _require_active(
+                hourly_items, now, agent_name=agent.name, plan_level="hourly"
+            )
+            generated_minute = planner.generate_minute_plan(
+                agent_name=agent.name,
+                current_time=now,
+                hourly_plan_item=active_hourly,
+            )
+            _require_canonical_locations(
+                generated_minute, agent_name=agent.name, plan_level="minute"
+            )
+            minute_items = _children_within(generated_minute, active_hourly)
+            if not minute_items:
+                raise PlanningGenerationError(
+                    f"{agent.name}: react replan minute plan is empty or outside "
+                    "its hourly-plan window"
+                )
+            _ = _require_active(
+                minute_items, now, agent_name=agent.name, plan_level="minute"
+            )
+
+            state.hourly_items = hourly_items
+            state.hourly_parent_key = (active_day.start_time, active_day.end_time)
+            state.minute_items = minute_items
+            state.minute_parent_key = (active_hourly.start_time, active_hourly.end_time)
+            state.last_replan_reason = reason
+            return _state_snapshot(agent=agent, state=state, now=now)
+
     def ensure_current(
         self,
         *,
@@ -353,6 +440,7 @@ class PlanningCoordinator:
         background_parts.append(
             "사용 가능한 장소는 다음뿐이다: " + ", ".join(CANONICAL_LOCATIONS)
         )
+        background_parts.extend(_recent_planning_relevant_memories(agent=agent, now=now))
         generated = planner.generate_day_plan(
             DayPlanBroadStrokesRequest(
                 agent_name=agent.name,
@@ -375,6 +463,33 @@ class PlanningCoordinator:
         raise PlanningGenerationError(
             f"{agent.name}: day plan is empty or contains an invalid location/time window"
         )
+
+
+def _recent_planning_relevant_memories(
+    *, agent: LifeAgent, now: datetime.datetime
+) -> list[str]:
+    """§3.4.3 coordination pattern: pull retrieval candidates (including
+    observations learned through conversation, e.g. an invitation) into the
+    day-plan background so they can actually shape the generated plan.
+    """
+    memory_service = getattr(agent, "memory_service", None)
+    if memory_service is None:
+        return []
+    try:
+        retrieved = memory_service.get_retrieval_memories(
+            "오늘 하루 계획에 반영해야 할 최근 소식, 약속, 초대, 관계 변화",
+            current_time=now,
+            top_k=5,
+        )
+    except Exception:
+        return []
+    if not retrieved:
+        return []
+    contents = [getattr(memory, "content", "") for memory in retrieved]
+    contents = [content for content in contents if content]
+    if not contents:
+        return []
+    return ["최근 기억(계획에 참고): " + " | ".join(contents)]
 
 
 def _snapshot(

@@ -11,10 +11,12 @@ from .template_loader import render_template
 from .structured_outputs import (
     DAY_ACTION_MAX_CHARS,
     DAY_LOCATION_MAX_CHARS,
+    ENCOUNTER_REASON_MAX_CHARS,
     HOURLY_ACTION_MAX_CHARS,
     IMPORTANCE_REASON_MAX_CHARS,
     INSIGHT_MAX_CHARS,
     MINUTE_ACTION_MAX_CHARS,
+    PLAN_DISRUPTION_REASON_MAX_CHARS,
     QUESTION_MAX_CHARS,
     REACTION_CRITIQUE_MAX_CHARS,
     REACTION_REASON_MAX_CHARS,
@@ -32,6 +34,15 @@ REACTION_UTTERANCE_JSON_SHAPE = (
     '{"utterance": "<string>", "thought": "<string>", '
     '"critique": "<string>", "reason": "<short string>", '
     '"end_dialogue": <boolean>}'
+)
+
+PLAN_DISRUPTION_JSON_SHAPE = (
+    '{"should_react": <boolean>, "reason": "<short string>"}'
+)
+
+ENCOUNTER_JSON_SHAPE = (
+    '{"should_converse": <boolean>, "relationship_summary": "<short string>", '
+    '"context_summary": "<short string>", "reason": "<short string>"}'
 )
 
 SALIENT_QUESTIONS_JSON_SHAPE = (
@@ -431,6 +442,82 @@ def build_reaction_utterance_prompt(
         ]
     )
 
+    return "\n".join(sections)
+
+
+def build_plan_disruption_prompt(
+    *,
+    agent_identity: AgentIdentity,
+    profile: AgentProfile,
+    current_time: datetime.datetime,
+    agent_status: str,
+    observation_content: str,
+) -> str:
+    """§4.3.1 continue-vs-react prompt: summary description + time + status
+    + observation -> should the agent continue its existing plan or react?"""
+    summary_description = _build_summary_description(agent_identity, profile)
+
+    sections: list[str] = _build_reaction_base_sections(
+        agent_identity=agent_identity,
+        current_time=current_time,
+        summary_description=summary_description,
+        agent_status=agent_status,
+        observation_content=observation_content,
+    )
+    sections.extend(
+        [
+            (
+                f"Given [{agent_identity.name}]'s summary description, current time, "
+                "status, and this observation, should the agent continue with its "
+                "existing plan, or react? Only react if the observation genuinely "
+                "disrupts or conflicts with the current plan; ignore ordinary, "
+                "expected background activity."
+            ),
+            f"Keep reason within {PLAN_DISRUPTION_REASON_MAX_CHARS} characters.",
+            (
+                "Return strict JSON only with this exact shape and no extra text: "
+                f"{PLAN_DISRUPTION_JSON_SHAPE}"
+            ),
+        ]
+    )
+    return "\n".join(sections)
+
+
+def build_encounter_prompt(
+    *,
+    self_identity: AgentIdentity,
+    other_identity: AgentIdentity,
+    self_profile: AgentProfile,
+    current_time: datetime.datetime,
+    retrieved_memories: list[MemoryObject],
+) -> str:
+    """§3.4/§4.3 encounter prompt: relationship summary + context summary ->
+    pass-by vs converse decision."""
+    summary_description = _build_summary_description(self_identity, self_profile)
+    memory_summary = _summarize_retrieved_memories(retrieved_memories)
+
+    sections: list[str] = [
+        "[Agent's Summary Description]",
+        summary_description,
+        f"It is {current_time.isoformat()}.",
+        (
+            f"[{self_identity.name}] just encountered [{other_identity.name}] "
+            "nearby while following the current plan."
+        ),
+        f"Summary of relevant memories about [{other_identity.name}]:",
+        memory_summary,
+        (
+            f"First, summarize [{self_identity.name}]'s relationship with "
+            f"[{other_identity.name}] (relationship_summary). Then summarize the "
+            "immediate context of this encounter (context_summary). Finally decide: "
+            "should they pass by without stopping, or converse?"
+        ),
+        f"Keep every text field within {ENCOUNTER_REASON_MAX_CHARS} characters.",
+        (
+            "Return strict JSON only with this exact shape and no extra text: "
+            f"{ENCOUNTER_JSON_SHAPE}"
+        ),
+    ]
     return "\n".join(sections)
 
 
