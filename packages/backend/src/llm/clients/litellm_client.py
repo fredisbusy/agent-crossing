@@ -123,12 +123,16 @@ class LiteLlmClient:
             kwargs["api_base"] = self.base_url
         if self.api_key:
             kwargs["api_key"] = self.api_key
-        if "qwen" in selected_model.lower():
+        if selected_model.startswith(("ollama/", "ollama_chat/")):
             # LiteLLM maps low/medium/high to Ollama's think=true. Structured
             # planning needs the final JSON body instead of spending the output
             # budget on reasoning_content, so this defaults to "none" for structured
             # calls. Callers can override via LlmGenerateOptions.reasoning_effort for
             # low-frequency, high-stakes decisions that benefit from extra thought.
+            # Not qwen-specific: any Ollama "thinking"-capable model (e.g. gemma4)
+            # burns the same output budget on reasoning_content if this isn't set,
+            # and `drop_params=True` below makes this a safe no-op for models
+            # without a thinking mode at all.
             kwargs["reasoning_effort"] = (
                 final_options.reasoning_effort
                 if final_options.reasoning_effort is not None

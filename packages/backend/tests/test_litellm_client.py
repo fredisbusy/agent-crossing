@@ -68,6 +68,35 @@ def test_generate_uses_litellm_completion_shape(monkeypatch) -> None:
     assert captured["format"] == "json"
 
 
+def test_generate_suppresses_reasoning_for_non_qwen_ollama_thinking_model(
+    monkeypatch,
+) -> None:
+    """Not qwen-specific: any Ollama "thinking"-capable model (e.g. gemma4)
+    should skip reasoning_content for structured calls too, or it burns the
+    output budget on it and needs a retry (reproduced against a live
+    gemma4:26b before this fix: truncated at 256 tokens, ~12s; fixed: no
+    retry, ~1s)."""
+    captured: dict[str, Any] = {}
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"choices": [{"message": {"content": '{"status":"ok"}'}}]}
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LiteLlmClient(
+        default_generate_model="ollama_chat/gemma4:26b",
+        default_embedding_model="ollama/bge-m3",
+    )
+
+    _ = client.generate(
+        prompt="Return JSON",
+        options=LlmGenerateOptions(num_predict=60),
+        response_model=StatusOutput,
+    )
+
+    assert captured["reasoning_effort"] == "none"
+
+
 def test_generate_uses_strict_response_schema_without_penalties_for_non_ollama(
     monkeypatch,
 ) -> None:

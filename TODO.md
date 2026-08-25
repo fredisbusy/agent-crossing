@@ -721,6 +721,44 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
 
 ---
 
+## 2026-08-25 로컬 LLM 모델 사이징 결정 (6-agent 마을 대비)
+
+이 하드웨어(Mac Studio M2 Ultra, 64GB 통합 메모리)에서 로컬 Ollama로 실측한
+결과를 근거로 기본 모델을 `qwen3.8:27b-mlx`에서 `gemma4:26b`로 바꿨다
+(`.env`의 `LLM_MODEL`, git에는 커밋되지 않음 — `settings.py`의 하드코딩
+기본값은 그대로 두고 로컬 override만 적용).
+
+- **핵심 발견**: Ollama의 MLX 엔진(현재 Qwen3.5/3.8이 쓰는 `-mlx` 태그
+  포맷)은 아직 continuous batching을 지원하지 않는다. `OLLAMA_NUM_PARALLEL`을
+  올려도 `-mlx` 모델은 동시 요청을 완전히 직렬로 처리한다 — 실측:
+  `qwen3.5:9b-mlx`에 3개 동시 요청을 보내면 각각 끝나는 시점이 ~2.7초씩
+  정확히 벌어짐(배치 없음, 개선 0%). 반면 GGUF(llama.cpp 엔진) 모델은
+  진짜 배치가 된다 — `gemma4:26b`(Q4_K_M)에 3개 동시 요청을 보내면
+  **셋 다 정확히 같은 시각(4.72초)**에 끝남(단일 스트림 대비 총처리량
+  ~1.4배, 지연은 훨씬 크게 개선). `qwen3:14b`(GGUF)도 동일하게 배치 확인.
+  또한 Qwen3.5는 GGUF 자체가 Ollama에서 아직 아키텍처 미지원이라, "최신
+  Qwen + 진짜 동시성"은 지금 시점에 양립 불가능하다.
+- 실측 단일 스트림 처리량(이 하드웨어, `/api/generate` eval 기준):
+  `qwen3.8:27b-mlx` 35.4 tok/s(배치 불가) · `qwen3.5:9b-mlx` 77 tok/s
+  (배치 불가) · `gemma4:26b` 88.7 tok/s(배치 가능) · `qwen3:14b` 50.1
+  tok/s(배치 가능). `gemma4:26b`가 속도와 동시성 둘 다에서 앞서 최종
+  선택.
+- `OLLAMA_NUM_PARALLEL`을 `launchctl setenv`로 3에 설정하고 Ollama.app을
+  재시작해 반영했다(로컬 머신 설정, 코드/커밋과 무관).
+- **부수적으로 발견 및 수정한 버그**: `llm/clients/litellm_client.py`가
+  구조화 출력 호출에서 `reasoning_effort`(사고 과정에 출력 예산을 쓰지
+  않도록 하는 옵션)를 `"qwen" in selected_model.lower()`로만 걸어놨었다.
+  `gemma4:26b`도 "thinking" capability가 있는데 이 조건에 안 걸려
+  재현 테스트에서 256 토큰 한도를 못 채우고 재시도(약 11.9초)가
+  발생했다. 조건을 qwen 한정에서 `ollama/`/`ollama_chat/` 전체로
+  일반화했더니 재시도 없이 ~1초로 줄었다(`drop_params=True`가 이미
+  있어 thinking 미지원 모델에는 안전한 no-op). `tests/test_litellm_client.py`에
+  회귀 테스트 추가.
+- 남은 것: `world/runtime.py::_generate_plans_blocking`의 에이전트별
+  순차 planning 루프는 아직 병렬화하지 않았다 — `OLLAMA_NUM_PARALLEL`
+  설정과 GGUF 모델 전환이 전제 조건이었고 이제 갖춰졌으니, 이어서
+  다룰 만하다.
+
 ## Milestones
 
 - [x] M1: Infra & PoC 완료
