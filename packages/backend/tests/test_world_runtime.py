@@ -8,6 +8,7 @@ from typing import cast
 from agents.sim_agent import SimAgent
 from agents.planning.lifecycle import PlanningCoordinator
 from agents.reaction.encounter import EncounterDecision, EncounterGate
+from agents.planning.react_gate import PlanDisruptionDecision, PlanDisruptionGate
 from world.engine import (
     SimulationEngine,
     SimulationStepObservability,
@@ -543,11 +544,50 @@ class StubEncounterGate:
         )
 
 
-def _encounter_test_runtime(*, encounter_gate: object | None) -> WorldRuntime:
+class StubPlanReactGate:
+    def __init__(self, *, should_react: bool = False) -> None:
+        self.should_react: bool = should_react
+        self.calls: list[object] = []
+
+    def evaluate(self, input: object) -> PlanDisruptionDecision:
+        self.calls.append(input)
+        return PlanDisruptionDecision(should_react=self.should_react, reason="스텁 판정")
+
+
+class FakeAgentSnapshot:
+    def __init__(self, *, agent_id: str, current_action: str) -> None:
+        self.agent_id: str = agent_id
+        self.current_action: str = current_action
+
+
+class FakeSpatialSnapshot:
+    def __init__(self, *, agents: tuple[object, ...]) -> None:
+        self.agents: tuple[object, ...] = agents
+
+
+class FakeSpatialRuntime:
+    def __init__(self, *, agents: tuple[object, ...]) -> None:
+        self._agents: tuple[object, ...] = agents
+
+    def snapshot(self) -> FakeSpatialSnapshot:
+        return FakeSpatialSnapshot(agents=self._agents)
+
+    def update_world_state(self, **kwargs: object) -> None:
+        _ = kwargs
+
+
+def _encounter_test_runtime(
+    *,
+    encounter_gate: object | None = None,
+    plan_react_gate: object | None = None,
+    spatial_runtime: object | None = None,
+) -> WorldRuntime:
     agent1 = SimpleNamespace(
         name="Jiho",
         identity=DummyIdentity(id="jiho"),
-        profile=SimpleNamespace(),
+        profile=SimpleNamespace(
+            extended=SimpleNamespace(current_plan_context=[])
+        ),
         memory_service=SimpleNamespace(
             get_retrieval_memories=lambda *args, **kwargs: []
         ),
@@ -555,7 +595,9 @@ def _encounter_test_runtime(*, encounter_gate: object | None) -> WorldRuntime:
     agent2 = SimpleNamespace(
         name="Sujin",
         identity=DummyIdentity(id="sujin"),
-        profile=SimpleNamespace(),
+        profile=SimpleNamespace(
+            extended=SimpleNamespace(current_plan_context=[])
+        ),
         memory_service=SimpleNamespace(
             get_retrieval_memories=lambda *args, **kwargs: []
         ),
@@ -591,6 +633,12 @@ def _encounter_test_runtime(*, encounter_gate: object | None) -> WorldRuntime:
         ),
         current_time=datetime.datetime(2026, 3, 4, 9, 0, 0),
         encounter_gate=cast(EncounterGate, encounter_gate) if encounter_gate else None,
+        plan_react_gate=(
+            cast(PlanDisruptionGate, plan_react_gate) if plan_react_gate else None
+        ),
+        spatial_runtime=(
+            cast(SpatialWorldRuntime, spatial_runtime) if spatial_runtime else None
+        ),
     )
 
 
@@ -616,3 +664,97 @@ def test_should_converse_on_encounter_uses_configured_gate_for_converse() -> Non
 
     assert runtime._should_converse_on_encounter(runtime.current_time) is True
     assert gate.calls == 1
+
+
+def test_tick_plan_disruption_dispatches_on_changed_observation() -> None:
+    """TODO.md §3-B: 대화 밖 tick에서 상대 행동 변화가 관찰되면 react_gate를 호출한다."""
+    gate = StubPlanReactGate()
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(agent_id="jiho", current_action="idle"),
+            FakeAgentSnapshot(agent_id="sujin", current_action="moving_to:cafe"),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        plan_react_gate=gate, spatial_runtime=spatial_runtime
+    )
+    runtime.session.finish_dialogue()
+
+    runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
+    assert runtime._plan_react_thread is not None
+    runtime._plan_react_thread.join(timeout=1)
+
+    assert len(gate.calls) == 1
+
+
+def test_tick_plan_disruption_skips_unchanged_observation() -> None:
+    """동일한 관찰이 반복되면 게이트를 다시 호출하지 않는다 (호출량 억제)."""
+    gate = StubPlanReactGate()
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(agent_id="jiho", current_action="idle"),
+            FakeAgentSnapshot(agent_id="sujin", current_action="moving_to:cafe"),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        plan_react_gate=gate, spatial_runtime=spatial_runtime
+    )
+    runtime.session.finish_dialogue()
+
+    # First tick catches up the initiator's perception of the partner; the
+    # second catches up the partner's perception of the initiator (dispatch
+    # only starts one background check per call, mirroring the single
+    # in-flight `_plan_refresh_task` pattern used for plan generation).
+    runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
+    assert runtime._plan_react_thread is not None
+    runtime._plan_react_thread.join(timeout=1)
+    assert len(gate.calls) == 1
+
+    runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
+    assert runtime._plan_react_thread is not None
+    runtime._plan_react_thread.join(timeout=1)
+    assert len(gate.calls) == 2
+
+    # Both agents' last-perceived state is now up to date; a further tick
+    # with no spatial change dispatches nothing new.
+    runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
+    if runtime._plan_react_thread is not None:
+        runtime._plan_react_thread.join(timeout=1)
+
+    assert len(gate.calls) == 2
+
+
+def test_tick_plan_disruption_skipped_without_gate() -> None:
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(agent_id="jiho", current_action="idle"),
+            FakeAgentSnapshot(agent_id="sujin", current_action="moving_to:cafe"),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        plan_react_gate=None, spatial_runtime=spatial_runtime
+    )
+    runtime.session.finish_dialogue()
+
+    runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
+
+    assert runtime._plan_react_thread is None
+
+
+def test_tick_plan_disruption_skipped_during_active_dialogue() -> None:
+    gate = StubPlanReactGate()
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(agent_id="jiho", current_action="idle"),
+            FakeAgentSnapshot(agent_id="sujin", current_action="moving_to:cafe"),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        plan_react_gate=gate, spatial_runtime=spatial_runtime
+    )
+    assert runtime.session.is_active is True
+
+    runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
+
+    assert runtime._plan_react_thread is None
+    assert len(gate.calls) == 0

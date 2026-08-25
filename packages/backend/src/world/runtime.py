@@ -137,6 +137,8 @@ class WorldRuntime:
         self.encounter_gate: EncounterGate | None = encounter_gate
         self.plan_react_gate: PlanDisruptionGate | None = plan_react_gate
         self._last_dialogue_end_time: datetime.datetime | None = None
+        self._last_perceived_action: dict[str, str] = {}
+        self._plan_react_thread: threading.Thread | None = None
         self._dashboard_events: DashboardEventBuffer = DashboardEventBuffer()
         self.planning_error: str | None = None
 
@@ -297,6 +299,67 @@ class WorldRuntime:
             return
 
         self.session.start_dialogue()
+
+    def _dispatch_tick_plan_disruption_check(self, now: datetime.datetime) -> None:
+        """§4.3.1 organic per-tick perception (outside dialogue and god-mode).
+
+        Distinct from `evaluate_plan_disruption`'s only other caller (the
+        god-mode injection endpoint): this observes the other agent's
+        current spatial action every tick, and only when it changed since
+        the last tick does it hand the continue-vs-react judgment to a
+        background thread. This keeps `_advance_world_tick` LLM-free (its
+        documented contract) while still surfacing organic observations
+        (movement, arrival) to the gate, not just injected ones.
+
+        Runs a plain `threading.Thread` rather than `asyncio.create_task`:
+        `_advance_world_tick` itself executes inside `asyncio.to_thread`
+        (see the scheduler loop), so no event loop is running on this
+        thread and `create_task` would raise `RuntimeError`.
+        """
+        if (
+            self.plan_react_gate is None
+            or self.spatial_runtime is None
+            or self.session.is_active
+        ):
+            return
+        if self._plan_react_thread is not None and self._plan_react_thread.is_alive():
+            return
+
+        snapshots = {
+            snapshot.agent_id: snapshot
+            for snapshot in self.spatial_runtime.snapshot().agents
+        }
+        for agent, other in (
+            (self._initiator, self._partner),
+            (self._partner, self._initiator),
+        ):
+            other_snapshot = snapshots.get(str(other.identity.id))
+            if other_snapshot is None:
+                continue
+            observation = f"{other.name}가 {other_snapshot.current_action} 상태이다."
+            agent_key = str(agent.identity.id)
+            if self._last_perceived_action.get(agent_key) == observation:
+                continue
+            self._last_perceived_action[agent_key] = observation
+            self._plan_react_thread = threading.Thread(
+                target=self._run_plan_disruption_check,
+                kwargs={"agent": agent, "observation_content": observation},
+                daemon=True,
+            )
+            self._plan_react_thread.start()
+            return
+
+    def _run_plan_disruption_check(
+        self, *, agent: SimAgent, observation_content: str
+    ) -> None:
+        try:
+            self.evaluate_plan_disruption(
+                agent=agent, observation_content=observation_content
+            )
+        except Exception:
+            logger.exception(
+                "tick-level plan disruption check failed for agent=%s", agent.name
+            )
 
     def _should_converse_on_encounter(self, now: datetime.datetime) -> bool:
         """§3.4/§4.3 조우 시 pass-by vs converse 결정.
@@ -484,6 +547,7 @@ class WorldRuntime:
             if self.planning_coordinator is not None and not cognitive_active:
                 self._sync_or_schedule_plan_generation(planning_time)
             self._start_dialogue_for_real_encounter(planning_time)
+            self._dispatch_tick_plan_disruption_check(planning_time)
             self.current_time = planning_time
             if self.spatial_runtime is not None:
                 self.spatial_runtime.update_world_state(

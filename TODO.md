@@ -22,7 +22,10 @@ planning 생성 §4.3)는 논문 수식·구조와 거의 1:1로 구현되어 �
 
 1. **tick 단위 react-and-replan 루프** (§4.3.1 Reacting and Updating Plans) —
    관찰이 현재 계획을 방해하는지 판단하고, 방해 시 현재 시점 이후 구간만
-   재계획하는 논문의 핵심 메커니즘. 현재 §3-B 전체가 미구현.
+   재계획하는 논문의 핵심 메커니즘. 같은 날 안에 §3-B 판정기(`react_gate.py`)와
+   비대화 tick 자동 호출 배선(`_dispatch_tick_plan_disruption_check`)까지
+   구현됨 — 남은 것은 그 관찰을 MemoryObject로 저장하는 store 절반뿐
+   (§4-A 해당 항목).
 2. **창발적 사회 동역학과 그 검증** (§3.4 Emergent Social Behaviors, §7 End-to-end
    Evaluation, §6 Controlled Evaluation) — encounter 시 pass-by/converse 결정,
    대화→plan 반영(coordination 예시: Valentine's party), 정보 확산/관계망 밀도
@@ -229,12 +232,15 @@ plan-disruption 게이트와는 범위가 다르다. 후자는 별도 구현이 
     - [x] 판정 결과(continue/react, reason/code)를 로그 가능 형태로 남긴다
     - [x] 판정과 기존 reaction 2-call 파이프라인(§2-D, `agents/reaction/`)의
           경계를 정리한다 — 이 판정이 reaction 여부의 상위 게이트가 된다
-  - Note: 현재는 대화가 없는 일반 tick에서 주변 사건을 자동으로
-    perceive/store하는 루프가 아직 없어(위 §4-A "비대화 tick에도
-    perceive/store" 항목, 여전히 미완료), 이 게이트는 God mode 주입
-    perception(§4-B God mode 항목)과 향후 비대화 tick perceive 루프의 공용
-    상위 게이트로 노출되어 있다. 실제 매 tick 자동 호출 배선은 §4-A 해당
-    항목 완료 후 이어진다.
+  - Note (2026-08-25 갱신): `WorldRuntime._dispatch_tick_plan_disruption_check`가
+    `_advance_world_tick`(비대화 tick, LLM 호출 없음)에서 매 tick 상대
+    agent의 공간 `current_action` 변화를 diff해 변화가 있을 때만 이 게이트를
+    백그라운드 스레드로 호출하도록 배선했다(`_advance_world_tick`은
+    `asyncio.to_thread` 안에서 실행되므로 `asyncio.create_task`가 아닌
+    `threading.Thread`로 offload — 그렇지 않으면 "no running event loop"로
+    깨진다). 다만 이 관찰은 spatial 상태 텍스트일 뿐, MemoryObject로
+    저장되지는 않는다 — 아래 §4-A perceive/store 항목의 memory 저장 부분은
+    여전히 미완료.
 
 - [x] `P1` react 발생 시 이후 구간만 재수립한다
   - Depends on: tick 충돌 판정기 구현
@@ -373,6 +379,11 @@ end-to-end 시나리오다.
           retrieve/reflect/react한다 (§4 Perceive→Store 루프를 대화가 없는
           tick에도 적용 — 현재는 대화가 발생하는 tick에서만 관찰이
           기억화된다). Depends on: §3-B tick 충돌 판정기
+          - [x] react 절반: `WorldRuntime._dispatch_tick_plan_disruption_check`
+                (2026-08-25)가 비대화 tick마다 상대 agent의 공간 상태 변화를
+                감지해 §3-B `PlanDisruptionGate`를 호출한다.
+          - [ ] store 절반: 이 관찰은 아직 MemoryObject로 저장되지 않는다 —
+                observation memory 생성 + retrieve/reflect 연동이 남아 있다.
 
 - [x] `P1` Prisma 기반 RPG 세션 저장/불러오기를 구현한다
   - Depends on: world clock + tick scheduler 연동
