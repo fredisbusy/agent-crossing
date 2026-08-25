@@ -227,8 +227,10 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
 라이브 하루 실행 규칙:
 
 - 시뮬레이션은 매 tick마다 5분씩 진행하며, 서비스 시작 시 당일 06:00에서 시작한다.
-- 평상시에는 real 1초당 game 5분을 진행하되, dialogue session 또는 cognitive task가 활성화되면 tick당 game 30초로 감속한다.
+- 평상시에는 real 1초당 game 5분을 진행하되, dialogue session 또는 cognitive task가 활성화되면 tick당 game 30초로 감속한다. 이 감속치는 여전히 "대화 한 턴이 실제로 소비하는 game-time 폭"을 모델링하는 값이며, 아래 게이팅과는 독립적인 결정이다.
+- world clock은 논문 §3.1.1("agents output a natural language statement... sandbox server parses... moves the agents")과 동일하게, **해당 tick에 아직 진행 중인 agent 행동 결정이 모두 끝난 뒤에만** 다음 tick으로 진행한다. 구체적으로 `_run_scheduler`는 매 tick마다 `_advance_world_tick` 실행 이후, 그 tick에서 새로 시작되었거나 이미 진행 중이던 in-flight `_cognitive_task`(대화 턴 생성)와 백그라운드 plan-disruption 스레드(`_dispatch_tick_plan_disruption_check`가 기동한 react 판정, `react_replan`으로 계획을 변형할 수 있음)를 모두 `await`/`join`한 뒤에야 다음 tick의 `_advance_world_tick`으로 넘어간다. `tick_interval_seconds`의 `asyncio.sleep`은 이 gate 뒤에 오는 순수 real-time pacing이며, 더 이상 "행동 완료를 기다리지 않고 시간이 흘러가는" 자유 실행 타이머가 아니다.
 - cognitive 구간에는 참여 agent의 현재 공간 계획과 목적지를 유지하고, 대화 완료 또는 실패 후 최신 game clock에 맞춰 계획 실행을 재개한다.
+- `WorldRuntime.step()`(수동 `tick()` 진입점, 테스트에서 주로 사용)은 원래부터 동기적으로 `engine.step()` 완료까지 반환하지 않으므로 이미 이 gating 규칙을 만족한다. 별도 조정이 필요했던 대상은 `_run_scheduler`/`_advance_world_tick` 뿐이다.
 - day/hourly/minute 계획은 모두 planner가 생성한 authoritative 결과만 실행한다. 고정 문구나 상위 문장 복사로 계획을 대체하지 않는다.
 - 서비스 시작과 active parent 전환 시 필요한 계획 계층이 준비될 때까지 world clock을 진행하지 않는다.
 - 같은 tick에서 필요한 모든 agent 계획을 먼저 검증한 뒤 spatial schedule과 world clock을 원자적으로 갱신한다.

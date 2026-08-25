@@ -384,6 +384,12 @@ end-to-end 시나리오다.
     - [x] 생성된 day/hourly/minute 계층을 완료 시점의 world clock에 맞춰 설치한다
     - [x] 같은 tick의 다중 agent 계획을 모두 검증한 뒤 schedule과 world clock을 원자적으로 갱신한다
     - [x] local LLM cognitive 구간에는 clock을 감속하고 현재 공간 계획을 유지한다
+    - [x] `P1` (2026-08-25) world clock이 논문 §3.1.1대로 "agent 행동 결정 완료"에
+          게이팅되도록 수정한다 — `_run_scheduler`가 실시간 타이머만으로 자유
+          진행하지 않고, 매 tick의 in-flight `_cognitive_task`(대화 턴)와
+          `_dispatch_tick_plan_disruption_check`가 기동한 백그라운드 plan-react
+          스레드를 모두 완료까지 `await`/`join`한 뒤에야 다음 `_advance_world_tick`으로
+          넘어간다. `WorldRuntime.step()`은 이미 동기 호출이라 별도 수정이 필요 없었다.
     - [x] planning fallback을 제거하고 생성·검증 실패를 UI와 dashboard에 명시적으로 노출한다
     - [x] 로컬 planner의 생성 timeout을 제거하고 structured JSON 요청에서 Qwen thinking을 끈다
     - [x] 현재 시각을 덮지 않는 미래 계획을 active로 선택하지 않고 planning error로 중단한다
