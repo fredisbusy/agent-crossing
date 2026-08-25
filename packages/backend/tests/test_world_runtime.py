@@ -294,11 +294,16 @@ async def _assert_authoritative_plan_refresh_holds_world_time_until_ready() -> N
     assert coordinator.refresh_times == [planning_time, planning_time]
 
 
-def test_scheduler_clock_advances_while_cognitive_turn_is_blocked() -> None:
-    asyncio.run(_assert_scheduler_clock_advances_during_cognitive_turn())
+def test_scheduler_clock_gates_on_in_flight_cognitive_turn() -> None:
+    """§3.1.1: the world clock only advances after the in-flight cognitive
+    turn (dialogue generation) for this tick has actually finished -- it must
+    not free-run on the wall-clock timer while an agent action is still being
+    decided.
+    """
+    asyncio.run(_assert_scheduler_clock_gates_on_cognitive_turn())
 
 
-async def _assert_scheduler_clock_advances_during_cognitive_turn() -> None:
+async def _assert_scheduler_clock_gates_on_cognitive_turn() -> None:
     agents = cast(list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")])
     session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
     engine = BlockingEngine()
@@ -314,17 +319,22 @@ async def _assert_scheduler_clock_advances_during_cognitive_turn() -> None:
     assert await runtime.start_scheduler() is True
     started = await asyncio.to_thread(engine.started.wait, 1)
     assert started is True
-    await asyncio.sleep(0.05)
 
+    # While the cognitive turn is blocked inside engine.step(), the clock
+    # must stay parked at the tick that dispatched it -- no further ticks may
+    # elapse until that turn resolves.
+    blocked_time = runtime.current_time
+    await asyncio.sleep(0.05)
     assert runtime.scheduler_running is True
-    assert runtime.current_time >= initial_time + datetime.timedelta(
-        minutes=1, seconds=30
-    )
+    assert runtime.current_time == blocked_time
     assert runtime.cognitive_active is True
-    assert runtime.effective_time_step_seconds == 30
 
     engine.release.set()
-    await asyncio.sleep(0.02)
+    await asyncio.sleep(0.05)
+
+    # Once released, the gate clears and the clock is free to advance again.
+    assert runtime.current_time > blocked_time
+
     assert await runtime.stop_scheduler() is True
 
 

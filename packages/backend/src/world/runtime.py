@@ -560,6 +560,22 @@ class WorldRuntime:
                 self._cognitive_task = asyncio.create_task(
                     asyncio.to_thread(self._run_cognitive_turn)
                 )
+            # §3.1.1 gate: the world clock only advances once the agents'
+            # in-flight actions for this tick have actually finished. Wait
+            # for both the dialogue-turn cognitive task and any background
+            # plan-disruption check (which can mutate the plan via
+            # `react_replan`) before letting the loop reach the next
+            # `_advance_world_tick` call.
+            if self._cognitive_task is not None:
+                try:
+                    await self._cognitive_task
+                except Exception:
+                    logger.exception("Cognitive turn task failed")
+                finally:
+                    self._cognitive_task = None
+            plan_react_thread = self._plan_react_thread
+            if plan_react_thread is not None:
+                await asyncio.to_thread(plan_react_thread.join)
             await asyncio.sleep(self.tick_interval_seconds)
 
     def _advance_world_tick(self) -> None:
