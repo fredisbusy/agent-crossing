@@ -13,13 +13,13 @@ def test_relationship_summary_preserves_private_asymmetric_perspectives() -> Non
         identity_stable_set=jiho.identity_stable_set,
         memories=[],
         target_agent_id="sujin",
-        target_name="Sujin Lee",
+        target_name="수진",
     )
     sujin_view = build_relationship_snapshot(
         identity_stable_set=sujin.identity_stable_set,
         memories=[],
         target_agent_id="jiho",
-        target_name="Jiho Park",
+        target_name="지호",
     )
 
     assert jiho_view.affinity_score is None
@@ -32,7 +32,7 @@ def test_relationship_summary_preserves_private_asymmetric_perspectives() -> Non
 
 def test_relationship_summary_does_not_invent_unknown_relationships() -> None:
     relationship = build_relationship_snapshot(
-        identity_stable_set=["Jiho는 스토리하우스 도서관의 사서다."],
+        identity_stable_set=["지호는 스토리하우스 도서관의 사서다."],
         memories=[],
         target_agent_id="newcomer",
         target_name="New Comer",
