@@ -37,6 +37,15 @@ class PersonaLoader:
             raise PersonaLoadError(f"Persona file not found: {json_path}")
         return _parse_persona_json(json_path)
 
+    def list_names(self) -> list[str]:
+        """Persona file stems available for `load()`, in the same order
+        (sorted, `*.sample.json` excluded) as `load_all()`."""
+        return [
+            path.stem
+            for path in sorted(self.persona_dir.glob("*.json"))
+            if not path.name.endswith(".sample.json")
+        ]
+
     def load_all(self) -> list[AgentPersona]:
         json_files = sorted(
             path

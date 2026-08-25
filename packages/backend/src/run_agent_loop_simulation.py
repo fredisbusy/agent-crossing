@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from agents.persona_loader import PersonaLoader
 from llm.guardrails.similarity import (
     SEMANTIC_HARD_BLOCK_THRESHOLD,
     SEMANTIC_SOFT_PENALTY_THRESHOLD,
@@ -54,15 +55,19 @@ class LoopSimulationConfig:
     """로그 출력 모드. basic은 축약, debug는 원문 포함."""
 
 
+_DEFAULT_PERSONA_DIR = Path(__file__).resolve().parents[1] / "persona"
+
 DEFAULT_CONFIG = LoopSimulationConfig(
-    agent_persona_names=["Jiho", "Sujin"],
+    # 페르소나 디렉토리에 정의된 만큼 자동으로 로스터를 구성한다 — 3번째 이후
+    # 페르소나 파일을 추가하면 다음 실행부터 마을 인구가 그만큼 늘어난다.
+    agent_persona_names=PersonaLoader(_DEFAULT_PERSONA_DIR).list_names(),
     turns=10,
     base_url=LLM_BASE_URL,
     api_key=LLM_API_KEY or GOOGLE_AI_STUDIO_API_KEY,
     llm_model=LLM_MODEL,
     embedding_model=EMBEDDING_MODEL,
     timeout_seconds=LLM_TIMEOUT_SECONDS,
-    persona_dir=str(Path(__file__).resolve().parents[1] / "persona"),
+    persona_dir=str(_DEFAULT_PERSONA_DIR),
 )
 
 
@@ -72,8 +77,8 @@ def _run_simulation(
 ) -> None:
     language = config.language
     agent_persona_names = config.agent_persona_names
-    if len(agent_persona_names) != 2:
-        raise ValueError("This simulation currently supports exactly two agents")
+    if len(agent_persona_names) < 2:
+        raise ValueError("This simulation requires at least two agents")
 
     runtime = build_world_runtime(
         config=WorldRuntimeConfig(

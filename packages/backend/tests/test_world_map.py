@@ -19,7 +19,7 @@ def test_load_world_map_parses_semantic_layers() -> None:
     assert len(world_map.paths) == 8
     assert len(world_map.collisions) == 21
     assert len(world_map.interactables) == 6
-    assert [spawn.agent_id for spawn in world_map.spawns] == ["Jiho", "Sujin"]
+    assert [spawn.agent_id for spawn in world_map.spawns] == ["Jiho", "Sujin", "Minji"]
     location = world_map.location_at(MapPoint(640, 464))
     assert location is not None
     assert location.name == "마을 광장"

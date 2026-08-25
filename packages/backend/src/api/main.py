@@ -71,7 +71,7 @@ logger = logging.getLogger(__name__)
 
 def _runtime_config(*, persona_dir: Path, persona_names: list[str]) -> WorldRuntimeConfig:
     return WorldRuntimeConfig(
-        agent_persona_names=persona_names[:2],
+        agent_persona_names=persona_names,
         base_url=LLM_BASE_URL,
         api_key=LLM_API_KEY or GOOGLE_AI_STUDIO_API_KEY,
         llm_model=LLM_MODEL,
