@@ -54,6 +54,14 @@ from .spatial import SpatialWorldRuntime
 
 logger = logging.getLogger(__name__)
 
+# Upper bound on how many agents' plan-generation LLM calls run at once.
+# Must stay at or below the local Ollama server's configured parallel
+# request slots (`OLLAMA_NUM_PARALLEL`, currently 4 on this deployment —
+# see TODO.md's 2026-08-25 model sizing note) so that unbounded
+# fan-out (one call per agent) doesn't make the server queue requests
+# past `LLM_TIMEOUT_SECONDS` and surface as `planning_error`.
+PLAN_GENERATION_MAX_CONCURRENCY = 4
+
 
 def _as_life_agent(agent: SimAgent) -> LifeAgent:
     return cast(LifeAgent, cast(object, agent))
@@ -784,11 +792,20 @@ class WorldRuntime:
         wall-clock time because `PlanningCoordinator` now locks per agent
         rather than coordinator-wide, so different agents' LLM calls
         actually overlap instead of queuing behind one shared lock.
+
+        The pool is capped at `PLAN_GENERATION_MAX_CONCURRENCY` rather than
+        `len(self.agents)`: fanning out one LLM call per agent (6 for the
+        current village) exceeds the local Ollama server's parallel request
+        slots, which makes the server queue the overflow and risks tripping
+        `LLM_TIMEOUT_SECONDS` on the waiting requests (observed as
+        `planning_error` stalling the whole scheduler).
         """
         assert self.planning_coordinator is not None
         planning_coordinator = self.planning_coordinator
         try:
-            with ThreadPoolExecutor(max_workers=len(self.agents)) as executor:
+            with ThreadPoolExecutor(
+                max_workers=min(PLAN_GENERATION_MAX_CONCURRENCY, len(self.agents))
+            ) as executor:
                 schedules = list(
                     executor.map(
                         lambda agent: planning_coordinator.ensure_current(
@@ -906,15 +923,24 @@ class WorldRuntime:
             return
         planning_date = self.current_time
         planning_coordinator = self.planning_coordinator
-        schedules = await asyncio.gather(
-            *[
-                asyncio.to_thread(
+        # Same rationale as `_generate_plans_blocking`: cap concurrent LLM
+        # calls at `PLAN_GENERATION_MAX_CONCURRENCY` so this doesn't fan out
+        # one request per agent and overrun the Ollama server's parallel
+        # request slots (which would queue past `LLM_TIMEOUT_SECONDS`).
+        semaphore = asyncio.Semaphore(
+            min(PLAN_GENERATION_MAX_CONCURRENCY, len(self.agents))
+        )
+
+        async def _refresh_one(agent: SimAgent) -> AgentPlanSnapshot:
+            async with semaphore:
+                return await asyncio.to_thread(
                     planning_coordinator.refresh_current,
                     agent=_as_life_agent(agent),
                     now=planning_date,
                 )
-                for agent in self.agents
-            ]
+
+        schedules = await asyncio.gather(
+            *[_refresh_one(agent) for agent in self.agents]
         )
         self._set_planning_error(None)
         if self.spatial_runtime is not None:
@@ -1082,6 +1108,7 @@ class WorldRuntime:
                 ],
                 characters=characters,
                 dashboard_events=dashboard_events,
+                position_history=self.spatial_runtime.export_position_history(),
             )
 
     def restore_save_state(self, state: RuntimeSaveState) -> None:
@@ -1181,6 +1208,7 @@ class WorldRuntime:
                 planning_error=state.planning_error,
                 characters=state.characters,
             )
+            self.spatial_runtime.restore_position_history(state.position_history)
             self._dashboard_events.restore(
                 [
                     DashboardEvent(

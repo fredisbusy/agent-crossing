@@ -194,7 +194,7 @@ planning 생성 §4.3)는 논문 수식·구조와 거의 1:1로 구현되어 �
 - [x] `P1` minute plan(기본 5~15분 단위) 생성기를 구현한다
   - Depends on: hourly plan 생성기 구현
   - DoD:
-    - [x] 모델 생성 minute 단위가 5~15분 범위를 만족하고 최종 시간창 보정은 5분 단위를 유지한다
+    - [x] 모델 생성 minute 단위는 5~15분을 유지하고, 현재 시점부터 상위 계획 종료까지의 비정렬 잔여 구간은 runtime tail action으로 정확히 보정한다
     - [x] active hourly plan 항목 입력을 기준으로 near-future minute plan을 생성한다
     - [x] 현재 시점 기준 active hourly plan 항목을 선택한다
     - [x] 현재 시점 기준 다음 실행 항목을 즉시 찾을 수 있다
@@ -796,6 +796,29 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
     `threading.Barrier(2)`로 두 agent의 `ensure_current` 호출이 실제로
     겹쳐 실행되는지 직접 증명한다(한쪽이 barrier에서 기다리는 동안
     다른 쪽도 반드시 도달해야 진행되므로, 직렬이면 타임아웃으로 실패).
+
+- **무제한 병렬 fan-out이 서버 큐잉→타임아웃을 유발한 문제 수정
+  (2026-08-25 후속)**: 위 병렬화 커밋 직후, 6명 agent가 동시에
+  plan-generation LLM 호출을 쏘면 로컬 Ollama 서버가 `OLLAMA_NUM_PARALLEL`
+  슬롯을 넘는 요청을 큐잉했고, 대기 중인 요청이 `LLM_TIMEOUT_SECONDS`(당시
+  30초)를 넘겨 `planning_error`로 스케줄러 전체가 멈추는 문제가 있었다.
+  - 서버 병렬도 확인: `ps aux`로 실제 `llama-server` 프로세스의 `-np` 플래그를
+    확인한 결과 이 환경(로컬 Mac, `Ollama.app` GUI가 `launchctl setenv
+    OLLAMA_NUM_PARALLEL=3`로 기동)은 `OLLAMA_NUM_PARALLEL=3`였다(위
+    2026-08-25 모델 사이징 노트에서 같은 날 설정한 값). 이번 작업에서
+    `launchctl setenv OLLAMA_NUM_PARALLEL 4`로 올리고 `Ollama.app`을 완전히
+    재기동해(GUI 앱 프로세스 자체를 kill 후 재실행 — `ollama serve`만
+    재시작하면 부모 GUI 프로세스가 이미 로드한 구 env를 그대로 물려줘
+    반영되지 않음) 반영을 확인했다(재기동 후 `llama-server ... -np 4`로
+    뜸). 이 값은 로컬 개발 머신 설정이라 코드/커밋 대상이 아니다.
+  - `LLM_TIMEOUT_SECONDS`를 `.env`/`.env.example`에서 30 → 120으로 올려
+    실제 대기시간에 여유를 뒀다.
+  - `world/runtime.py`에 `PLAN_GENERATION_MAX_CONCURRENCY = 4`(서버
+    `OLLAMA_NUM_PARALLEL`과 동일)를 추가하고, `_generate_plans_blocking`의
+    `ThreadPoolExecutor(max_workers=len(self.agents))`를
+    `min(PLAN_GENERATION_MAX_CONCURRENCY, len(self.agents))`로, `_refresh_plans`의
+    무제한 `asyncio.gather`를 `asyncio.Semaphore(min(...))`로 감싸 동시
+    LLM 호출 수를 서버가 실제로 병렬 처리 가능한 수 이하로 제한했다.
 
 ## Milestones
 
