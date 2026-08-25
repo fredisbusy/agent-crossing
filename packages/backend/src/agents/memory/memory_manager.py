@@ -76,16 +76,25 @@ class MemoryManager:
     ) -> list[MemoryObject]:
         """
         검색 쿼리를 기반으로 관련 메모리를 반환한다.
+
+        retrieval 후보가 비어있으면(SPEC.md §3) 최근 메모리로 fallback한다.
         """
         query_embedding = self.embedding_encoder.encode(
             EmbeddingEncodingContext(text=query)
         )
 
-        return self.memory_stream.retrieve(
+        retrieved = self.memory_stream.retrieve(
             query_embedding=query_embedding,
             top_k=top_k,
             current_time=current_time,
         )
+        if retrieved:
+            return retrieved
+
+        fallback_memories = self.get_recent_memories(limit=top_k, order_by=OrderBy.DESC)
+        for memory in fallback_memories:
+            memory.last_accessed_at = current_time
+        return fallback_memories
 
     def create_observation(
         self,

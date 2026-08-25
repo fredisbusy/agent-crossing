@@ -93,8 +93,9 @@ Backend 레이어 책임:
 ### 4.2 Storage
 
 - 영속 저장소: PostgreSQL + pgvector
-- DB 스키마와 migration의 단일 기준은 `packages/database/prisma`이다.
-- Python runtime은 Prisma가 생성한 구조를 SQLAlchemy repository로 읽고 쓴다.
+- DB 스키마와 migration의 단일 기준은 `packages/backend/src/db/models.py`(SQLAlchemy)와
+  `packages/backend/alembic/`(migration)이다.
+- Python runtime은 해당 SQLAlchemy repository로 스키마를 직접 읽고 쓴다.
 - 메모리 조회 기본 정렬: score 내림차순, 동점 시 최신 생성 우선
 
 ### 4.3 게임 세션 저장 계약

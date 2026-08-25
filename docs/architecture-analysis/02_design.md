@@ -58,6 +58,10 @@ ensure_plan_context → perceive → persist_observation
 **한 가지 확인된 gap**: SPEC §3이 요구하는 "retrieval 후보가 비어있으면 최근 메모리로
 fallback"이 `MemoryStream`/`MemoryManager` 어디에도 없다. 빈 메모리 상태에서
 `_calculate_retrieval_scores`는 그냥 `[]`을 반환한다.
+> **Resolved 2026-08-25**: `MemoryManager.get_retrieval_memories`가 scorer
+> 결과가 비어있으면 `get_recent_memories`로 fallback하도록 수정
+> (`agents/memory/memory_manager.py`). `last_accessed_at` 갱신 부작용도 동일하게
+> 적용. 단위 테스트 추가(`tests/memory/test_memory_manager.py`).
 
 **Reflection 트리거는 SPEC §6과 일치**: 임계값 150(`reflection/state.py:6`), 누적→리셋
 패턴, 파이프라인 순서, reflection memory도 동일한 `MemoryStream`을 통해 retrieval
@@ -263,6 +267,11 @@ React 트리: `main.tsx`(경로 스위치: `/dashboard` vs 게임) → `App.tsx`
 `SpatialAgentState`/`SpatialWorldSnapshot`(snake_case)과 Tiled `.tmj` 원본 파싱을
 쓴다. 초기 설계의 잔재로 보이는 죽은 코드 후보(중복 위험은 아님, 아무도 재구현하지
 않았으므로).
+> **Resolved 2026-08-25**: 코드베이스 전체(frontend/shared) 재확인 후 여섯
+> 타입(`WorldAgentState`, `WorldMapPoint`, `WorldMapBounds`, `WorldLocation`,
+> `WorldInteractable`, `WorldSpawn`, `WorldMapDefinition`) 모두 정의 외
+> 참조가 없음을 확인하고 `packages/shared/src/index.ts`에서 제거.
+> `AgentPosition`은 `useWorldStream.ts`에서 실사용 중이라 유지.
 
 ### 3.6 Mock/스텁 이력
 
@@ -343,6 +352,11 @@ models.py`가 `schema.prisma`를 필드 단위로 손으로 미러링한 SQLAlch
 
 - `VectorMemory`/`vector_memories` 테이블은 세션/캐릭터와 FK 관계 없이 고립돼
   있음 — 세션 영속성 이전의 프로토타입 잔재로 추정, 죽은 코드 후보.
+  > **Resolved 2026-08-25**: 코드베이스 전체에서 정의 외 참조가 없음을 확인하고
+  > 제거. `db/models.py`에서 `VectorMemory` 클래스 삭제,
+  > `alembic/versions/0002_drop_vector_memories.py`로 테이블 drop.
+  > `SessionPlanItem.parent_id`는 항상 `None`이지만 계층형 plan 재수립
+  > (TODO.md §3-B, 진행 중)과 관련될 수 있어 삭제하지 않고 보류.
 - `GameSession.snapshot`(JSONB) vs 정규화된 자식 테이블들 간 중복 저장 여부는
   스키마만으로는 확정 불가 — 후속 확인 필요.
 
@@ -356,12 +370,12 @@ retrieval 공식, DTO 계층 분리, 프론트엔드 규칙 준수는 완벽에 
 
 | 우선순위 | 항목 | 근거 |
 |---|---|---|
-| 높음 | `ActionLoopResult`에 governance/diagnostics 필드 leak (§1.3) | AGENTS.md §9 명시적 위반, `.claude` 훅이 이미 이 패턴을 감지하도록 준비됨 — `ReactionDecisionTrace`/`ActionDiagnostics`를 별도 채널로 분리 필요 |
-| 높음 | `load_world_map()` 미캐싱 blocking I/O (§2.4) | 매 요청마다 이벤트 루프 블로킹, 정적 파일이라 캐싱이 자명한 해법 |
-| 중간 | Prisma ↔ SQLAlchemy 이중 스키마 drift (§4.5) | 코드생성 없는 수동 미러링, 임베딩 차원 4곳 하드코딩 |
-| 낮음 | Retrieval 빈 후보 시 fallback 없음 (§1.2) | SPEC §3 요구사항이지만 현재 스케일(2 에이전트)에선 실질적 영향 적음 |
-| 낮음 | `VectorMemory` 테이블, `SessionPlanItem.parentId`, shared의 `WorldMapDefinition` 계열 | 죽은 코드 후보 — 팀 확인 후 정리 |
-| 낮음 | `@app.on_event` deprecated API | FastAPI lifespan으로 교체 예정 항목, 기능상 문제 없음 |
+| ~~높음~~ | ~~`ActionLoopResult`에 governance/diagnostics 필드 leak (§1.3)~~ | Resolved 2026-08-25 — `ReactionDecision`을 별도 반환 채널로 분리 (TODO.md §2-D) |
+| ~~높음~~ | ~~`load_world_map()` 미캐싱 blocking I/O (§2.4)~~ | Resolved 2026-08-25 — startup 1회 캐싱으로 전환 |
+| ~~중간~~ | ~~Prisma ↔ SQLAlchemy 이중 스키마 drift (§4.5)~~ | Resolved 2026-08-25 — Prisma 제거, SQLAlchemy + Alembic로 일원화 |
+| ~~낮음~~ | ~~Retrieval 빈 후보 시 fallback 없음 (§1.2)~~ | Resolved 2026-08-25 — `MemoryManager.get_retrieval_memories` fallback 추가 |
+| ~~낮음~~ | ~~`VectorMemory` 테이블, shared의 `WorldMapDefinition` 계열~~ | Resolved 2026-08-25 — 죽은 코드 확인 후 제거. `SessionPlanItem.parentId`는 보류(§4.6 참고) |
+| ~~낮음~~ | ~~`@app.on_event` deprecated API~~ | Resolved 2026-08-25 — `perf(backend-api)` 커밋에서 lifespan으로 교체 |
 
 이 문서는 스냅샷이다 — 코드가 바뀌면 갱신 필요. 특히 §1.3(governance 경계)과
 §2.4(blocking I/O)는 `.claude/hooks/guard-brain-governance-fields.sh` 및

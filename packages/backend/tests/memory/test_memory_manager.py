@@ -284,3 +284,41 @@ def test_reflection_can_reference_prior_reflection_memory() -> None:
 #     )
 
 #     assert reflection_service.recorded_importance == [8]
+
+
+def test_get_retrieval_memories_falls_back_to_recent_when_stream_returns_empty() -> None:
+    """SPEC.md §3: retrieval 후보가 비어있으면 최근 메모리로 fallback한다."""
+    stream = MemoryStream()
+    service = MemoryManager(
+        memory_stream=stream,
+        importance_scorer=StubScorer(score_value=5),
+        embedding_encoder=StubEmbeddingEncoder(),
+    )
+
+    now = datetime.datetime(2026, 2, 13, 12, 0, 0)
+    embedding = np.zeros(EMBEDDING_DIMENSION)
+    older = service.create_observation(
+        content="오래된 사건",
+        now=now,
+        embedding=embedding,
+        context=ObservationContext(agent_name="Sujin Lee", identity_stable_set=[]),
+        importance=4,
+    )
+    newer = service.create_observation(
+        content="최근 사건",
+        now=now + datetime.timedelta(minutes=5),
+        embedding=embedding,
+        context=ObservationContext(agent_name="Sujin Lee", identity_stable_set=[]),
+        importance=4,
+    )
+
+    # retrieval scorer가 후보를 하나도 못 찾은 상황을 시뮬레이션한다.
+    stream.retrieve = lambda **kwargs: []  # type: ignore[method-assign]
+
+    query_time = now + datetime.timedelta(minutes=10)
+    fallback = service.get_retrieval_memories(
+        "아무 쿼리", current_time=query_time, top_k=2
+    )
+
+    assert [memory.id for memory in fallback] == [newer.id, older.id]
+    assert all(memory.last_accessed_at == query_time for memory in fallback)
