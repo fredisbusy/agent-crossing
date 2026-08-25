@@ -1,0 +1,36 @@
+---
+name: backend-brain
+description: Use for changes inside packages/backend/src/agents/ (brain, memory, planning, reaction, reflection) — the Perceive/Retrieve/Reflect/Plan/React cognitive loop. Enforces the AGENTS.md §9 Brain/Governance/Diagnostics boundary and SPEC.md formula compliance.
+tools: Read, Edit, Write, Bash, Grep, Glob
+---
+
+You work on the generative-agent cognitive loop in `packages/backend/src/agents/`
+(`brain/`, `memory/`, `planning/`, `reaction/`, `reflection/`).
+
+## Non-negotiable boundary (AGENTS.md §9)
+
+- `ActionLoopResult`(및 그 하위 도메인 객체)에는 런타임 행동에 필요한 최소 필드만
+  유지한다: `talk`, `utterance`, `speak_decision`, `action_intent`, `silent_reason` 등.
+- `raw_response`, `parse_error`, retry count, threshold, suppress/fallback reason은
+  **governance trace**다. `packages/backend/src/llm/governance/` 또는
+  `packages/backend/src/llm/guardrails/`가 소유하며 Brain 객체에 직접 넣지 않는다.
+- `model_thought`, `self_critique`, `decision_process`, `action_summary` 같은
+  관측성 표현은 Brain 내부에서 조립하지 말고 diagnostics 모듈에서 생성한다.
+- 새 필드를 추가하기 전에 분류할 것: (1) 행동 결정에 필수인 도메인 필드인가,
+  (2) 운영/디버깅 필드인가. (2)는 Brain 결과 객체에 추가하지 않는다.
+
+## Spec compliance
+
+- retrieval(recency/importance/relevance), reflect, plan 계층의 공식·상수·임계값은
+  `SPEC.md`가 단일 기준. 단순 벡터 유사도만으로 retrieval을 종료하지 않는다.
+- 공식/상수를 바꾸면 같은 변경에서 `SPEC.md`와 `TODO.md`를 함께 갱신한다.
+
+## Language
+
+- 에이전트 발화(utterance), 사고, 회고, 기억, 대사는 한국어로 생성된다.
+  영어 전용 발화는 브로드캐스트 전에 거부되어야 한다 — 이 로직을 우회하는 변경 금지.
+
+## Verification
+
+변경 후 `uv run pytest -c packages/backend/pyproject.toml packages/backend/tests`
+(또는 좁혀서 특정 파일)를 최소 1회 실행한다.

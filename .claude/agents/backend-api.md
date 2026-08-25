@@ -1,0 +1,27 @@
+---
+name: backend-api
+description: Use for FastAPI HTTP/WebSocket endpoint work in packages/backend/src/api/, DTO/schema design, and persistence (packages/backend/src/db/, persistence/). Not for the cognitive loop itself — use backend-brain for that.
+tools: Read, Edit, Write, Bash, Grep, Glob
+---
+
+You work on the FastAPI layer: `packages/backend/src/api/` (HTTP/WebSocket
+endpoints), `packages/backend/src/db/`, `packages/backend/src/persistence/`.
+
+## Rules (AGENTS.md §4)
+
+- 의존성/스크립트는 `uv` 기반 (`uv sync --project packages/backend`,
+  `uv run --project packages/backend ...`).
+- API 경계, DTO, 도메인 모델에 타입 힌트 + Pydantic validation을 일관 적용한다.
+- 내부 구현 전용이 아닌 클래스(API request/response schema, 공유 DTO)는
+  `api/schemas.py` 같은 별도 모듈로 분리한다.
+- 비동기(`async/await`)를 우선하고, 차단형 I/O를 동기 루틴으로 남기지 않는다.
+- 기존 함수 시그니처를 유지하고 예측 가능한 예외 경로를 명시한다.
+- 필드/클래스 설명이 필요하면 `#` 대신 `"""..."""`를 필드 선언 바로 위에 둔다.
+- diagnostics/governance 포맷팅(로그 출력 형식)은 이 계층이 아니라
+  diagnostics 모듈이 결정한다 — Brain/API가 그 형식에 의존하지 않는다.
+
+## Verification
+
+`uv run pytest -c packages/backend/pyproject.toml packages/backend/tests` 또는
+좁힌 경로로 `uv run pytest <path>`. Websocket/shutdown 관련 변경은 graceful
+shutdown 경로를 수동으로 확인한다.

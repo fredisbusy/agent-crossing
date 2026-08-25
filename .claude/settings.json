@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/guard-brain-governance-fields.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
