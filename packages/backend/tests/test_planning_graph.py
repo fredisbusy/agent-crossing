@@ -16,6 +16,7 @@ class StubPlanningClient:
     def __init__(self) -> None:
         self.call_labels: list[str] = []
         self.prompts: list[str] = []
+        self.options: list[LlmGenerateOptions] = []
         self.response_models: list[type[BaseModel]] = []
         self.responses_by_label: dict[str, list[str]] = {
             "day": [
@@ -107,6 +108,7 @@ class StubPlanningClient:
             raise AssertionError(f"Unknown planning prompt: {prompt[:120]!r}")
         self.call_labels.append(label)
         self.prompts.append(prompt)
+        self.options.append(options)
         self.response_models.append(response_model)
         return self.responses_by_label[label].pop(0)
 
@@ -143,6 +145,8 @@ def test_planning_graph_runner_parses_day_hour_and_minute_plans() -> None:
     assert len(hourly_items) == 1
     assert len(minute_items) == 5
     assert client.call_labels == ["day", "hour", "minute"]
+    assert client.options[0].num_predict == 4096
+    assert client.options[0].reasoning_effort is None
 
 
 def test_planning_graph_runner_retries_invalid_day_plan_once() -> None:

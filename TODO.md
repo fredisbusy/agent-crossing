@@ -43,7 +43,7 @@ planning 생성 §4.3)는 논문 수식·구조와 거의 1:1로 구현되어 �
 - [x] Frontend 런타임 부팅 (React 19 + Phaser 3 + Zustand)
 - [x] Backend 런타임 부팅 (FastAPI + uv)
 - [x] LLM provider 클라이언트 경로를 정리하고 호환 import를 유지한다 (`packages/backend/src/llm/clients`)
-- [x] Qwen 생성 호출의 추론 강도를 `low`로 고정한다
+- [x] Qwen 추론 강도를 호출 목적에 맞게 적용한다 (structured JSON은 `none`, 자유 형식 판단은 `low`)
 - [x] `P0` 모든 LLM JSON 출력을 schema-constrained generation으로 안정화한다
   - DoD:
     - [x] Pydantic 응답 모델에서 JSON Schema를 생성해 provider 호출과 사후 검증에 재사용한다

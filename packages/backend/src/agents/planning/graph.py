@@ -32,11 +32,9 @@ from .models import (
 DAY_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
     temperature=0.0,
     top_p=1.0,
-    num_predict=1024,
-    # Called once per agent per day; worth spending reasoning budget on since it
-    # frames the whole day's broad strokes, unlike the far more frequent hourly/minute
-    # decompositions below.
-    reasoning_effort="low",
+    # A daily plan has up to eight timestamped items. Give its complete structured
+    # JSON document room to finish, while leaving Qwen thinking disabled by default.
+    num_predict=4096,
 )
 
 HOURLY_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
