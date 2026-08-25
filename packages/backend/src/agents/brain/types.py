@@ -6,9 +6,7 @@ import numpy as np
 
 from agents.agent import AgentProfile
 from agents.memory.memory_object import MemoryObject
-from agents.reaction import DialogueArc, ReactionDecisionTrace
-
-from ..decision_diagnostics import ActionDiagnostics
+from agents.reaction import DialogueArc
 
 
 @dataclass(frozen=True)
@@ -61,7 +59,3 @@ class ActionLoopResult:
     """이번 턴이 현재 대화 세션을 마무리하는지 여부."""
     silent_reason: str = ""
     """발화하지 않았을 때 원인."""
-    reaction_trace: ReactionDecisionTrace | None = None
-    """LLM governance에서 생성한 reaction 추적 정보."""
-    diagnostics: ActionDiagnostics | None = None
-    """행동 판단 관측용 진단 정보."""

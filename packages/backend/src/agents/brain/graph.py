@@ -11,7 +11,6 @@ from agents.planning.models import DayPlanBroadStrokesRequest, DayPlanItem
 from agents.reaction import ReactionDecision, ReactionDecisionInput
 from llm.embedding_encoder import EmbeddingEncodingContext
 
-from ..decision_diagnostics import build_action_diagnostics
 from ..graph_support import (
     GRAPH_END,
     GRAPH_START,
@@ -146,7 +145,18 @@ class AgentBrainGraphRunner:
         self.planner: PlanningRunner | None = planner
         self.graph: AgentBrainGraphInvoker = self._build_graph()
 
-    def run(self, input: ActionLoopInput) -> ActionLoopResult:
+    def run(
+        self, input: ActionLoopInput
+    ) -> tuple[ActionLoopResult, ReactionDecision | None]:
+        """행동 루프를 실행한다.
+
+        반환값은 (도메인 결과, governance/diagnostics 원천 데이터) 튜플이다.
+        `ActionLoopResult`에는 런타임 행동에 필요한 최소 필드만 담기며,
+        raw_response/parse_error/thought 등 governance·관측 데이터는
+        별도 채널인 `ReactionDecision`(과 그 안의 trace)으로 전달한다.
+        호출자는 `llm.governance`와 `agents.decision_diagnostics`의 유틸을
+        사용해 필요할 때 governance trace/진단 정보를 조립해야 한다.
+        """
         final_state = self.graph.invoke(
             AgentBrainGraphState(
                 input=input,
@@ -157,7 +167,8 @@ class AgentBrainGraphRunner:
                 result=None,
             )
         )
-        return require_state_value(final_state["result"], key="result")
+        result = require_state_value(final_state["result"], key="result")
+        return result, final_state["reaction_decision"]
 
     def _build_graph(self) -> AgentBrainGraphInvoker:
         builder = STATE_GRAPH(AgentBrainGraphState)
@@ -391,12 +402,5 @@ class AgentBrainGraphRunner:
                 action_intent=action_intent,
                 end_dialogue=reaction_decision.end_dialogue,
                 silent_reason=silent_reason,
-                reaction_trace=reaction_decision.trace,
-                diagnostics=build_action_diagnostics(
-                    reaction_decision=reaction_decision,
-                    speak_decision=should_speak,
-                    action_intent=action_intent,
-                    silent_reason=silent_reason,
-                ),
             )
         }

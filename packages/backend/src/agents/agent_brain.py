@@ -2,6 +2,7 @@ import datetime
 
 from agents.agent import AgentIdentity, AgentProfile
 from agents.planning import Planner
+from agents.reaction import ReactionDecision
 from llm.llm_gateway import LlmGateway
 
 from .brain import ActionLoopInput, ActionLoopResult, AgentBrainGraphRunner
@@ -88,10 +89,15 @@ class AgentBrain:
             importance=memory.importance
         )
 
-    def action_loop(self, input: ActionLoopInput) -> ActionLoopResult:
+    def action_loop(
+        self, input: ActionLoopInput
+    ) -> tuple[ActionLoopResult, ReactionDecision | None]:
         # 1. 현재 상황을 인지한다. 인지할때 월드에서 현재 상황을 조회해서 주입한다.
         # 2. 인지된 정보들을 observation으로 메모리에 저장 (reflection 조건 충족 시 reflection도 함께 저장)
         # 3. 상황판단을 한다.
         # 4. 상황판단에 따라 반응을 결정한다.
         # 5. 반응에 때라 구체적인 행동 및 출력을 한다.
+        #
+        # 반환되는 두 번째 값(ReactionDecision)은 governance/diagnostics 원천
+        # 데이터다. Brain 결과 객체(ActionLoopResult)에는 병합하지 않는다.
         return self.brain_graph.run(input)

@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 from agents.brain import ActionLoopInput, ActionLoopResult
+from agents.decision_diagnostics import ActionDiagnostics, build_action_diagnostics
+from agents.reaction import ReactionDecision
 from agents.sim_agent import SimAgent
 from llm.governance import (
     apply_reply_policy,
@@ -101,7 +103,7 @@ class SimulationEngine:
         now = current_time + datetime.timedelta(
             seconds=self.config.turn_time_step_seconds
         )
-        action_result = self._run_action_loop(
+        action_result, reaction_decision = self._run_action_loop(
             turn=turn,
             now=now,
             speaker=speaker,
@@ -121,14 +123,16 @@ class SimulationEngine:
             fallback_on_empty_reply=self.config.fallback_on_empty_reply,
         )
 
+        reaction_trace = reaction_decision.trace if reaction_decision else None
         trace = merge_policy_trace(
-            trace=action_result.reaction_trace,
+            trace=reaction_trace,
             suppress_reason=policy_result.suppress_reason,
             fallback_reason=policy_result.fallback_reason,
         )
-        parse_failure = is_reaction_parse_failure(trace=action_result.reaction_trace)
+        parse_failure = is_reaction_parse_failure(trace=reaction_trace)
         observability = self._build_observability(
             action_result=action_result,
+            reaction_decision=reaction_decision,
             policy_suppress_reason=policy_result.suppress_reason,
             policy_fallback_reason=policy_result.fallback_reason,
             final_reply=policy_result.reply,
@@ -184,11 +188,14 @@ class SimulationEngine:
         self,
         *,
         action_result: ActionLoopResult,
+        reaction_decision: ReactionDecision | None,
         policy_suppress_reason: str,
         policy_fallback_reason: str,
         final_reply: str,
     ) -> SimulationStepObservability:
-        diagnostics = action_result.diagnostics
+        diagnostics = self._diagnostics_for(
+            action_result=action_result, reaction_decision=reaction_decision
+        )
         return SimulationStepObservability(
             thought=diagnostics.thought if diagnostics else "",
             model_thought=diagnostics.model_thought if diagnostics else "",
@@ -197,21 +204,37 @@ class SimulationEngine:
             action_summary=diagnostics.action_summary if diagnostics else "",
             decision_process=self._build_decision_process(
                 action_result=action_result,
+                diagnostics=diagnostics,
                 policy_suppress_reason=policy_suppress_reason,
                 policy_fallback_reason=policy_fallback_reason,
                 final_reply=final_reply,
             ),
         )
 
+    def _diagnostics_for(
+        self,
+        *,
+        action_result: ActionLoopResult,
+        reaction_decision: ReactionDecision | None,
+    ) -> ActionDiagnostics | None:
+        if reaction_decision is None:
+            return None
+        return build_action_diagnostics(
+            reaction_decision=reaction_decision,
+            speak_decision=action_result.speak_decision,
+            action_intent=action_result.action_intent,
+            silent_reason=action_result.silent_reason,
+        )
+
     def _build_decision_process(
         self,
         *,
         action_result: ActionLoopResult,
+        diagnostics: ActionDiagnostics | None,
         policy_suppress_reason: str,
         policy_fallback_reason: str,
         final_reply: str,
     ) -> dict[str, object]:
-        diagnostics = action_result.diagnostics
         base_process = dict(diagnostics.decision_process if diagnostics else {})
         base_process["policy"] = {
             "suppress_reason": policy_suppress_reason,
@@ -272,7 +295,7 @@ class SimulationEngine:
         speaker: SimAgent,
         speaking_partner: SimAgent,
         incoming_partner_utterance: str | None,
-    ) -> ActionLoopResult:
+    ) -> tuple[ActionLoopResult, ReactionDecision | None]:
         observed_events = build_turn_observed_events(
             language=self.config.language,
             speaker_name=speaker.name,

@@ -192,9 +192,10 @@ def test_brain_graph_skips_reflection_when_not_needed() -> None:
         observation_writer=_observation_writer(queued),
     )
 
-    result = graph.run(_input())
+    result, reaction_decision = graph.run(_input())
 
     assert result.silent_reason == "llm_declined_reaction"
+    assert reaction_decision is not None
     assert queued == []
     assert calls == [
         "encode_observation",
@@ -223,7 +224,7 @@ def test_brain_graph_runs_reflection_before_retrieval_when_needed() -> None:
         observation_writer=_ignore_observation,
     )
 
-    result = graph.run(_input())
+    result, _reaction_decision = graph.run(_input())
 
     assert isinstance(result, ActionLoopResult)
     assert calls == [

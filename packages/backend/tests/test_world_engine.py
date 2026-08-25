@@ -3,8 +3,7 @@ from dataclasses import dataclass
 from typing import Literal, cast
 
 from agents.brain import ActionLoopInput, ActionLoopResult
-from agents.decision_diagnostics import ActionDiagnostics
-from agents.reaction import ReactionDecisionTrace
+from agents.reaction import ReactionDecision, ReactionDecisionTrace
 from agents.sim_agent import SimAgent
 from world.engine import SimulationEngine, SimulationEngineConfig
 from world.session import WorldConversationSession
@@ -15,10 +14,13 @@ class DummyBrain:
     next_result: ActionLoopResult
     queued: list[str]
     last_input: ActionLoopInput | None = None
+    next_reaction_decision: ReactionDecision | None = None
 
-    def action_loop(self, input: ActionLoopInput) -> ActionLoopResult:
+    def action_loop(
+        self, input: ActionLoopInput
+    ) -> tuple[ActionLoopResult, ReactionDecision | None]:
         self.last_input = input
-        return self.next_result
+        return self.next_result, self.next_reaction_decision
 
     def queue_observation(
         self,
@@ -39,14 +41,12 @@ class DummyAgent:
     brain: DummyBrain
 
 
-def _diagnostics(*, thought: str = "") -> ActionDiagnostics:
-    return ActionDiagnostics(
-        thought=thought,
-        model_thought="",
-        self_critique="",
-        decision_reason="",
-        action_summary="react_to_partner",
-        decision_process={},
+def _reaction_decision(*, thought: str = "") -> ReactionDecision:
+    return ReactionDecision(
+        should_react=True,
+        reaction="",
+        reason=thought,
+        trace=ReactionDecisionTrace(raw_response="", parse_success=True),
     )
 
 
@@ -73,12 +73,8 @@ def test_step_commits_reply_and_broadcasts_to_partner() -> None:
                 current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
                 talk="안녕하세요",
                 utterance="안녕하세요",
-                diagnostics=_diagnostics(thought="반갑게 인사"),
-                reaction_trace=ReactionDecisionTrace(
-                    raw_response="",
-                    parse_success=True,
-                ),
             ),
+            next_reaction_decision=_reaction_decision(thought="반갑게 인사"),
             queued=[],
             last_input=None,
         ),
@@ -129,12 +125,8 @@ def test_step_suppresses_repeated_reply_when_policy_enabled() -> None:
                 talk="안녕하세요",
                 utterance="안녕하세요",
                 silent_reason="",
-                diagnostics=_diagnostics(),
-                reaction_trace=ReactionDecisionTrace(
-                    raw_response="",
-                    parse_success=True,
-                ),
             ),
+            next_reaction_decision=_reaction_decision(),
             queued=[],
             last_input=None,
         ),
@@ -183,12 +175,8 @@ def test_step_suppresses_meta_leak_reply() -> None:
                 talk="안녕하세요, Jiho. 커피는一如既往地生成回答：{",
                 utterance="안녕하세요, Jiho. 커피는一如既往地生成回答：{",
                 silent_reason="",
-                diagnostics=_diagnostics(),
-                reaction_trace=ReactionDecisionTrace(
-                    raw_response="",
-                    parse_success=True,
-                ),
             ),
+            next_reaction_decision=_reaction_decision(),
             queued=[],
             last_input=None,
         ),
@@ -233,12 +221,8 @@ def test_step_suppresses_english_only_reply_in_korean_runtime() -> None:
                 current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
                 talk="Hello, how are you today?",
                 utterance="Hello, how are you today?",
-                diagnostics=_diagnostics(),
-                reaction_trace=ReactionDecisionTrace(
-                    raw_response="",
-                    parse_success=True,
-                ),
             ),
+            next_reaction_decision=_reaction_decision(),
             queued=[],
             last_input=None,
         ),
@@ -283,12 +267,8 @@ def test_step_fallbacks_when_meta_leak_reply_and_fallback_enabled() -> None:
                 talk="안녕하세요, Jiho. 커피는一如既往地生成回答：{",
                 utterance="안녕하세요, Jiho. 커피는一如既往地生成回答：{",
                 silent_reason="",
-                diagnostics=_diagnostics(),
-                reaction_trace=ReactionDecisionTrace(
-                    raw_response="",
-                    parse_success=True,
-                ),
             ),
+            next_reaction_decision=_reaction_decision(),
             queued=[],
             last_input=None,
         ),
@@ -337,12 +317,8 @@ def test_step_finishes_session_when_action_marks_dialogue_end() -> None:
                 talk="그럼 난 이만 가볼게.",
                 utterance="그럼 난 이만 가볼게.",
                 end_dialogue=True,
-                diagnostics=_diagnostics(thought="마무리"),
-                reaction_trace=ReactionDecisionTrace(
-                    raw_response="",
-                    parse_success=True,
-                ),
             ),
+            next_reaction_decision=_reaction_decision(thought="마무리"),
             queued=[],
             last_input=None,
         ),
