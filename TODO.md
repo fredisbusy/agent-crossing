@@ -397,11 +397,40 @@ end-to-end 시나리오다.
     - [x] 저장된 대화의 참가자 쌍으로 복원 시 세션이 정확히 재구성된다
     - [x] 관련 단위 테스트(`test_world_session.py`, `test_world_runtime.py`,
           `test_session_persistence.py`, `test_world_map.py`)를 추가/갱신한다
-  - Note: 동시에 2건 이상의 대화가 각자 진행되는 진짜 다중 동시 대화는
-    이번 범위에서 의도적으로 제외했다(§5-A 정보 확산 실험에 필요해지면
-    별도로 다룬다). §5-A/§5-B의 실제 다중 tick 시뮬레이션 러너(seed 주입
-    → 진행 → 종료 시점 일괄 interview)는 이 리팩터가 전제 조건이지만
-    아직 별도로 배선되지 않았다.
+  - Note (2026-08-25 갱신): 동시에 2건 이상의 대화가 각자 진행되는 진짜
+    다중 동시 대화를 이어서 구현했다 —
+    - `world/engine.py::SimulationEngine`이 더 이상 `self.session`을
+      생성자에 고정으로 들고 있지 않는다. `step()`이 `session`을 인자로
+      받아, 엔진 인스턴스 하나를 여러 세션이 공유한다.
+    - `world/runtime.py::WorldRuntime`이 `self.session`(단일) 대신
+      `self.sessions: dict[pair_key, WorldConversationSession]`을 쓴다.
+      `_engaged_agent_ids()`가 이미 어떤 세션에 참여 중인 agent를
+      추적해, `_start_dialogue_for_real_encounter`가 그 agent를
+      제외하고 새 쌍을 찾는다(한 agent가 두 대화에 동시에 낄 수 없음).
+      `_cognitive_task`(단일) → `_cognitive_tasks`(dict)로 바뀌어
+      `_run_scheduler`가 매 tick 활성 세션마다 독립된
+      `_run_cognitive_turn(pair_key)` 태스크를 스레드로 띄우고
+      `asyncio.gather`로 모두 기다린다.
+    - `spatial.py::SpatialWorldRuntime.clear_cognitive_overlay(agent_id=)`
+      (전체 clear가 아닌 단일 agent clear)를 추가해, 한 쌍의 턴이
+      끝나며 오버레이를 지울 때 다른 쌍의 말풍선을 지우지 않게 했다.
+    - persistence: `RuntimeSaveState.conversation`(단수) →
+      `conversations: list[ConversationSave]`(복수)로 바꾸고
+      `SNAPSHOT_SCHEMA_VERSION`을 3으로 올렸다.
+    - `step()`(CLI/테스트용 단일 호출 드라이버)은 여러 세션 중 하나를
+      "primary session"으로만 진행한다(`_primary_session()`) — 진짜
+      동시성은 스케줄러 경로(`_run_scheduler`/`_run_cognitive_turn`)에서만
+      보장된다. `metrics()`/`state()`의 `history_size` 등도 동일하게
+      primary session 기준이다(여러 세션의 history를 섞으면 서로 무관한
+      대화 턴을 인접한 것처럼 비교하게 되어 의미가 없다).
+    - `test_world_runtime.py::test_concurrent_dialogue_sessions_run_in_parallel_without_interfering`가
+      두 쌍의 `_run_cognitive_turn`을 `asyncio.gather`로 동시에 돌려
+      실제로 겹쳐 실행되는지(`max_concurrent == 2`)와 한 쌍의 오버레이
+      처리가 다른 쌍을 건드리지 않는지를 검증한다.
+    - 여전히 의도적으로 하지 않은 것: Ollama 쪽 병렬 처리 설정
+      (`OLLAMA_NUM_PARALLEL`)은 손대지 않았다 — 코드 구조는 동시
+      대화를 지원하지만, 로컬 LLM 서버가 병렬 슬롯을 몇 개나 처리할
+      수 있는지는 별도로 튜닝해야 한다.
 
 ### 4-A. Backend 실시간 파이프라인
 

@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from settings import EMBEDDING_DIMENSION
 
-SNAPSHOT_SCHEMA_VERSION = 2
+SNAPSHOT_SCHEMA_VERSION = 3
 
 
 class PointSave(BaseModel):
@@ -111,7 +111,7 @@ class DashboardEventSave(BaseModel):
 
 
 class RuntimeSaveState(BaseModel):
-    schema_version: Literal[2] = SNAPSHOT_SCHEMA_VERSION
+    schema_version: Literal[3] = SNAPSHOT_SCHEMA_VERSION
     map_id: str
     current_time: datetime.datetime
     turn: int = Field(ge=0)
@@ -125,7 +125,8 @@ class RuntimeSaveState(BaseModel):
     # 쿨다운을 추적한다. 키는 `world.runtime._pair_key`와 동일한 형식
     # (두 agent_id를 정렬해 "|"로 이은 문자열).
     pair_cooldown_until: dict[str, datetime.datetime]
-    conversation: ConversationSave
+    # 동시에 여러 쌍이 대화 중일 수 있다(§3.4) — 활성 세션마다 하나씩.
+    conversations: list[ConversationSave]
     characters: list[CharacterSave]
     dashboard_events: list[DashboardEventSave]
 

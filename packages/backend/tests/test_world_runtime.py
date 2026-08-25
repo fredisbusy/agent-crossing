@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import threading
+import time
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import cast
@@ -16,7 +17,7 @@ from world.engine import (
     SimulationStepObservability,
     SimulationStepResult,
 )
-from world.runtime import WorldRuntime
+from world.runtime import WorldRuntime, _pair_key
 from world.session import WorldConversationSession
 from world.spatial import SpatialAgentSeed, SpatialWorldRuntime
 from world.world_map import load_world_map
@@ -52,11 +53,13 @@ class DummyEngine:
         current_time: datetime.datetime,
         speaker: SimAgent,
         speaking_partner: SimAgent,
+        session: object = None,
     ) -> SimulationStepResult:
         _ = turn
         _ = current_time
         _ = speaker
         _ = speaking_partner
+        _ = session
         return self.result
 
 
@@ -719,7 +722,7 @@ def test_tick_plan_disruption_dispatches_on_changed_observation() -> None:
     runtime = _encounter_test_runtime(
         plan_react_gate=gate, spatial_runtime=spatial_runtime
     )
-    runtime.session.finish_dialogue()
+    runtime.sessions.clear()
 
     runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
     assert runtime._plan_react_thread is not None
@@ -740,7 +743,7 @@ def test_tick_plan_disruption_stores_observation_before_judging() -> None:
     runtime = _encounter_test_runtime(
         plan_react_gate=gate, spatial_runtime=spatial_runtime
     )
-    runtime.session.finish_dialogue()
+    runtime.sessions.clear()
 
     stored: list[str] = []
     cast(
@@ -772,7 +775,7 @@ def test_tick_plan_disruption_dispatches_across_three_agents() -> None:
         spatial_runtime=spatial_runtime,
         agent_names=("Jiho", "Sujin", "Minji"),
     )
-    runtime.session.finish_dialogue()
+    runtime.sessions.clear()
 
     seen_observations: set[str] = set()
     for _ in range(6):
@@ -796,7 +799,7 @@ def test_tick_plan_disruption_skips_unchanged_observation() -> None:
     runtime = _encounter_test_runtime(
         plan_react_gate=gate, spatial_runtime=spatial_runtime
     )
-    runtime.session.finish_dialogue()
+    runtime.sessions.clear()
 
     # First tick catches up the initiator's perception of the partner; the
     # second catches up the partner's perception of the initiator (dispatch
@@ -831,7 +834,7 @@ def test_tick_plan_disruption_skipped_without_gate() -> None:
     runtime = _encounter_test_runtime(
         plan_react_gate=None, spatial_runtime=spatial_runtime
     )
-    runtime.session.finish_dialogue()
+    runtime.sessions.clear()
 
     runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
 
@@ -849,7 +852,7 @@ def test_tick_plan_disruption_skipped_during_active_dialogue() -> None:
     runtime = _encounter_test_runtime(
         plan_react_gate=gate, spatial_runtime=spatial_runtime
     )
-    assert runtime.session.is_active is True
+    assert runtime.sessions
 
     runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
 
@@ -889,12 +892,14 @@ def test_start_dialogue_picks_the_qualifying_pair_among_three_agents() -> None:
         spatial_runtime=spatial_runtime,
         agent_names=("Jiho", "Sujin", "Minji"),
     )
-    runtime.session.finish_dialogue()
+    runtime.sessions.clear()
 
     runtime._start_dialogue_for_real_encounter(runtime.current_time)
 
-    assert runtime.session.is_active is True
-    assert {agent.name for agent in runtime.session.agents} == {"Sujin", "Minji"}
+    assert len(runtime.sessions) == 1
+    opened_session = next(iter(runtime.sessions.values()))
+    assert opened_session.is_active is True
+    assert {agent.name for agent in opened_session.agents} == {"Sujin", "Minji"}
 
 
 def test_start_dialogue_respects_per_pair_cooldown_independently() -> None:
@@ -931,16 +936,17 @@ def test_start_dialogue_respects_per_pair_cooldown_independently() -> None:
         spatial_runtime=spatial_runtime,
         agent_names=("Jiho", "Sujin", "Minji", "Yuna"),
     )
-    runtime.session.finish_dialogue()
+    runtime.sessions.clear()
     jiho, sujin, minji, yuna = runtime.agents
-    from world.runtime import _pair_key
 
     runtime._pair_cooldown_until[_pair_key(jiho, sujin)] = runtime.current_time
 
     runtime._start_dialogue_for_real_encounter(runtime.current_time)
 
-    assert runtime.session.is_active is True
-    assert {agent.name for agent in runtime.session.agents} == {"Minji", "Yuna"}
+    assert len(runtime.sessions) == 1
+    opened_session = next(iter(runtime.sessions.values()))
+    assert opened_session.is_active is True
+    assert {agent.name for agent in opened_session.agents} == {"Minji", "Yuna"}
 
 
 def test_start_dialogue_does_nothing_while_another_dialogue_is_active() -> None:
@@ -964,28 +970,172 @@ def test_start_dialogue_does_nothing_while_another_dialogue_is_active() -> None:
         spatial_runtime=spatial_runtime,
         agent_names=("Jiho", "Sujin"),
     )
-    assert runtime.session.is_active is True
-    original_session = runtime.session
+    assert len(runtime.sessions) == 1
+    original_sessions = dict(runtime.sessions)
 
     runtime._start_dialogue_for_real_encounter(runtime.current_time)
 
-    assert runtime.session is original_session
+    assert runtime.sessions == original_sessions
+
+
+def test_start_dialogue_excludes_agent_already_engaged_in_another_pair() -> None:
+    """이미 대화 중인 agent는 다른 조건 충족 쌍에도 끼지 못한다(중복 참여 방지)."""
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(
+                agent_id="jiho",
+                current_action="arrived_at:카페",
+                tile_position=_tile(0, 0),
+                destination="카페",
+            ),
+            FakeAgentSnapshot(
+                agent_id="minji",
+                current_action="arrived_at:카페",
+                tile_position=_tile(0, 1),
+                destination="카페",
+            ),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        spatial_runtime=spatial_runtime,
+        agent_names=("Jiho", "Sujin", "Minji"),
+    )
+    # Jiho and Sujin are already mid-dialogue; the spatial snapshot only
+    # models Jiho and Minji as being physically close (Sujin isn't in it),
+    # so the only geometrically-qualifying pair is (Jiho, Minji) — but
+    # Jiho is engaged, so it must not start.
+    assert len(runtime.sessions) == 1
+    original_sessions = dict(runtime.sessions)
+
+    runtime._start_dialogue_for_real_encounter(runtime.current_time)
+
+    assert runtime.sessions == original_sessions
 
 
 def test_reopen_session_for_restore_rebuilds_session_for_saved_pair() -> None:
     """persistence: 저장된 참가자 쌍으로 세션을 재구성한다 (N-agent 확장)."""
     runtime = _encounter_test_runtime(agent_names=("Jiho", "Sujin", "Minji"))
-    runtime.session.finish_dialogue()
+    runtime.sessions.clear()
 
-    runtime._reopen_session_for_restore(("Sujin", "Minji"))
+    session = runtime._reopen_session_for_restore(("Sujin", "Minji"))
 
-    assert {agent.name for agent in runtime.session.agents} == {"Sujin", "Minji"}
-    assert runtime.engine.session is runtime.session
+    assert {agent.name for agent in session.agents} == {"Sujin", "Minji"}
+    assert runtime.sessions[_pair_key(*session.agents)] is session
 
 
 def test_reopen_session_for_restore_rejects_unknown_participant() -> None:
     runtime = _encounter_test_runtime(agent_names=("Jiho", "Sujin", "Minji"))
-    runtime.session.finish_dialogue()
+    runtime.sessions.clear()
 
     with pytest.raises(ValueError):
         runtime._reopen_session_for_restore(("Sujin", "Nobody"))
+
+
+class ConcurrencyTrackingEngine:
+    """Fake engine whose `step()` sleeps briefly and records how many calls
+    were in flight at once — proves two sessions' turns actually overlap in
+    time rather than being silently serialized despite running in separate
+    `asyncio.to_thread` workers."""
+
+    def __init__(self) -> None:
+        self.config: SimpleNamespace = SimpleNamespace(turn_time_step_seconds=300)
+        self._lock: threading.Lock = threading.Lock()
+        self.in_flight: int = 0
+        self.max_concurrent: int = 0
+
+    def step(
+        self,
+        *,
+        turn: int,
+        current_time: datetime.datetime,
+        speaker: SimAgent,
+        speaking_partner: SimAgent,
+        session: WorldConversationSession,
+    ) -> SimulationStepResult:
+        _ = turn, speaking_partner
+        with self._lock:
+            self.in_flight += 1
+            self.max_concurrent = max(self.max_concurrent, self.in_flight)
+        time.sleep(0.05)
+        with self._lock:
+            self.in_flight -= 1
+        session.finish_dialogue()
+        return SimulationStepResult(
+            now=current_time,
+            speaker_name=speaker.name,
+            trace={},
+            reply=f"{speaker.name} 응답",
+            silent_reason="",
+            parse_failure=False,
+            observability=SimulationStepObservability(
+                thought="",
+                model_thought="",
+                self_critique="",
+                decision_reason="",
+                action_summary="",
+                decision_process={},
+            ),
+        )
+
+
+class RecordingSpatialOverlayRuntime:
+    """Fake spatial runtime that only records overlay clear/set calls —
+    enough for `_run_cognitive_turn`, which never touches anything else on
+    `spatial_runtime` directly."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def clear_cognitive_overlay(self, *, agent_id: str) -> None:
+        self.calls.append(("clear", agent_id))
+
+    def clear_cognitive_overlays(self) -> None:
+        self.calls.append(("clear_all", ""))
+
+    def set_cognitive_overlay(
+        self, *, agent_id: str, kind: str, text: str
+    ) -> None:
+        _ = kind, text
+        self.calls.append(("set", agent_id))
+
+
+def test_concurrent_dialogue_sessions_run_in_parallel_without_interfering() -> None:
+    """N-agent 확장: 서로 다른 쌍의 대화가 실제로 동시에 진행된다.
+
+    §3.4에서 의도적으로 범위 밖으로 남겼던 "동시에 여러 쌍이 각자 대화"를
+    실제로 구현한 부분 — _run_cognitive_turn을 두 쌍에 대해 asyncio.gather로
+    동시에 돌려서 (a) 실제로 겹쳐 실행됐는지, (b) 한 쌍의 overlay 처리가
+    다른 쌍의 overlay를 지우지 않는지를 검증한다.
+    """
+    runtime = _encounter_test_runtime(agent_names=("Jiho", "Sujin", "Minji", "Yuna"))
+    runtime.sessions.clear()
+    jiho, sujin, minji, yuna = runtime.agents
+
+    engine = ConcurrencyTrackingEngine()
+    runtime.engine = cast(SimulationEngine, cast(object, engine))
+    overlay_runtime = RecordingSpatialOverlayRuntime()
+    runtime.spatial_runtime = cast(SpatialWorldRuntime, cast(object, overlay_runtime))
+
+    runtime._open_session_for_pair(jiho, sujin)
+    runtime._open_session_for_pair(minji, yuna)
+    assert len(runtime.sessions) == 2
+
+    async def _drive() -> None:
+        await asyncio.gather(
+            asyncio.to_thread(runtime._run_cognitive_turn, _pair_key(jiho, sujin)),
+            asyncio.to_thread(runtime._run_cognitive_turn, _pair_key(minji, yuna)),
+        )
+
+    asyncio.run(_drive())
+
+    assert engine.max_concurrent == 2
+    assert runtime.sessions == {}
+
+    cleared_agent_ids = {agent_id for kind, agent_id in overlay_runtime.calls if kind == "clear"}
+    assert cleared_agent_ids <= {
+        str(jiho.identity.id),
+        str(sujin.identity.id),
+        str(minji.identity.id),
+        str(yuna.identity.id),
+    }
+    assert ("clear_all", "") not in overlay_runtime.calls

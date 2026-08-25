@@ -102,8 +102,8 @@ def _run_simulation(
     _print_session_log_header(config=config)
 
     for turn in range(1, config.turns + 1):
-        speaker = runtime.session.agents[(turn - 1) % len(runtime.session.agents)]
         step_result = runtime.step()
+        speaker_name = step_result.speaker_name
         filtered_trace = _format_decision_trace_for_log(
             trace=step_result.trace,
             log_mode=config.log_mode,
@@ -113,48 +113,48 @@ def _run_simulation(
         _print_log_line(
             turn=turn,
             tag="CRITIQUE_OR_REASON",
-            speaker_name=speaker.name,
+            speaker_name=speaker_name,
             message=observability.thought,
         )
         if observability.model_thought:
             _print_log_line(
                 turn=turn,
                 tag="MODEL_THOUGHT",
-                speaker_name=speaker.name,
+                speaker_name=speaker_name,
                 message=observability.model_thought,
             )
         if observability.self_critique:
             _print_log_line(
                 turn=turn,
                 tag="SELF_CRITIQUE",
-                speaker_name=speaker.name,
+                speaker_name=speaker_name,
                 message=observability.self_critique,
             )
         _print_log_line(
             turn=turn,
             tag="ACTION",
-            speaker_name=speaker.name,
+            speaker_name=speaker_name,
             message=observability.action_summary,
         )
         _print_log_json_block(
             turn=turn,
             tag="PROCESS",
-            speaker_name=speaker.name,
+            speaker_name=speaker_name,
             payload=observability.decision_process,
         )
         _print_log_json_block(
             turn=turn,
             tag="DECISION_TRACE",
-            speaker_name=speaker.name,
+            speaker_name=speaker_name,
             payload=filtered_trace,
         )
 
         if not step_result.reply:
             silent_reason = step_result.silent_reason or "unknown"
-            print(f"[{turn:02d}] [SILENT] {speaker.name} reason={silent_reason}")
+            print(f"[{turn:02d}] [SILENT] {speaker_name} reason={silent_reason}")
             continue
 
-        print(f"{speaker.name}: {step_result.reply}")
+        print(f"{speaker_name}: {step_result.reply}")
 
     print("\nRecent memories")
     for agent in runtime.agents:

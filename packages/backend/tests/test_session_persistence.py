@@ -12,7 +12,6 @@ from db.models import (
 from db.session import SessionLocal
 from persistence.contracts import (
     CharacterSave,
-    ConversationSave,
     MemorySave,
     PointSave,
     RuntimeSaveState,
@@ -70,18 +69,7 @@ def _state(*, turn: int = 7) -> RuntimeSaveState:
         scheduler_was_running=True,
         planning_error=None,
         pair_cooldown_until={},
-        conversation=ConversationSave(
-            participant_agent_names=("박지호", "김수진"),
-            is_active=False,
-            turn_index=0,
-            dialogue_turn_window=None,
-            dialogue_target_turns=5,
-            dialogue_turns_taken=0,
-            dialogue_goal=None,
-            history=[],
-            dialogue_history_by_agent={"박지호": [], "김수진": []},
-            incoming_utterances_by_agent={"박지호": [], "김수진": []},
-        ),
+        conversations=[],
         characters=characters,
         dashboard_events=[],
     )

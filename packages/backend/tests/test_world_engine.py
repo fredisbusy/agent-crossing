@@ -95,13 +95,14 @@ def test_step_commits_reply_and_broadcasts_to_partner() -> None:
         agents=cast(list[SimAgent], [speaker, partner]),
         dialogue_turn_window=None,
     )
-    engine = SimulationEngine(session=session, config=_engine_config())
+    engine = SimulationEngine(config=_engine_config())
 
     result = engine.step(
         turn=1,
         current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
         speaker=cast(SimAgent, cast(object, speaker)),
         speaking_partner=cast(SimAgent, cast(object, partner)),
+        session=session,
     )
 
     assert result.reply == "안녕하세요"
@@ -149,7 +150,6 @@ def test_step_suppresses_repeated_reply_when_policy_enabled() -> None:
     )
     session.history.append(("Sujin", "안녕하세요"))
     engine = SimulationEngine(
-        session=session,
         config=_engine_config(suppress_repeated_replies=True),
     )
 
@@ -158,6 +158,7 @@ def test_step_suppresses_repeated_reply_when_policy_enabled() -> None:
         current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
         speaker=cast(SimAgent, cast(object, speaker)),
         speaking_partner=cast(SimAgent, cast(object, partner)),
+        session=session,
     )
 
     assert result.reply == ""
@@ -197,13 +198,14 @@ def test_step_suppresses_meta_leak_reply() -> None:
         agents=cast(list[SimAgent], [speaker, partner]),
         dialogue_turn_window=None,
     )
-    engine = SimulationEngine(session=session, config=_engine_config())
+    engine = SimulationEngine(config=_engine_config())
 
     result = engine.step(
         turn=1,
         current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
         speaker=cast(SimAgent, cast(object, speaker)),
         speaking_partner=cast(SimAgent, cast(object, partner)),
+        session=session,
     )
 
     assert result.reply == ""
@@ -243,13 +245,14 @@ def test_step_suppresses_english_only_reply_in_korean_runtime() -> None:
         agents=cast(list[SimAgent], [speaker, partner]),
         dialogue_turn_window=None,
     )
-    engine = SimulationEngine(session=session, config=_engine_config())
+    engine = SimulationEngine(config=_engine_config())
 
     result = engine.step(
         turn=1,
         current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
         speaker=cast(SimAgent, cast(object, speaker)),
         speaking_partner=cast(SimAgent, cast(object, partner)),
+        session=session,
     )
 
     assert result.reply == ""
@@ -290,7 +293,6 @@ def test_step_fallbacks_when_meta_leak_reply_and_fallback_enabled() -> None:
         dialogue_turn_window=None,
     )
     engine = SimulationEngine(
-        session=session,
         config=_engine_config(fallback_on_empty_reply=True),
     )
 
@@ -299,6 +301,7 @@ def test_step_fallbacks_when_meta_leak_reply_and_fallback_enabled() -> None:
         current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
         speaker=cast(SimAgent, cast(object, speaker)),
         speaking_partner=cast(SimAgent, cast(object, partner)),
+        session=session,
     )
 
     assert result.reply == "LLM 응답 오류"
@@ -339,13 +342,14 @@ def test_step_finishes_session_when_action_marks_dialogue_end() -> None:
         agents=cast(list[SimAgent], [speaker, partner]),
         dialogue_turn_window=None,
     )
-    engine = SimulationEngine(session=session, config=_engine_config())
+    engine = SimulationEngine(config=_engine_config())
 
     result = engine.step(
         turn=1,
         current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
         speaker=cast(SimAgent, cast(object, speaker)),
         speaking_partner=cast(SimAgent, cast(object, partner)),
+        session=session,
     )
 
     assert result.reply == "그럼 난 이만 가볼게."
@@ -359,6 +363,7 @@ def test_step_finishes_session_when_action_marks_dialogue_end() -> None:
         current_time=result.now,
         speaker=cast(SimAgent, cast(object, partner)),
         speaking_partner=cast(SimAgent, cast(object, speaker)),
+        session=session,
     )
 
     assert follow_up.reply == ""

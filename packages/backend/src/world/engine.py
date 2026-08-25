@@ -77,10 +77,8 @@ class SimulationEngine:
     def __init__(
         self,
         *,
-        session: WorldConversationSession,
         config: SimulationEngineConfig,
     ):
-        self.session: WorldConversationSession = session
         self.config: SimulationEngineConfig = config
 
     def step(
@@ -90,14 +88,22 @@ class SimulationEngine:
         current_time: datetime.datetime,
         speaker: SimAgent,
         speaking_partner: SimAgent,
+        session: WorldConversationSession,
     ) -> SimulationStepResult:
-        if not self.session.is_active:
+        """Run one dialogue turn for `session` (§3.4 pairwise sessions).
+
+        `session` is passed per call rather than held on `self` because
+        multiple independent dialogue sessions can be in flight at once
+        (`WorldRuntime.sessions`); this engine instance is shared across
+        all of them.
+        """
+        if not session.is_active:
             return self._build_inactive_step_result(
                 current_time=current_time,
                 speaker=speaker,
             )
 
-        incoming_partner_utterance = self.session.consume_incoming_partner_utterance(
+        incoming_partner_utterance = session.consume_incoming_partner_utterance(
             speaker=speaker
         )
         now = current_time + datetime.timedelta(
@@ -109,10 +115,11 @@ class SimulationEngine:
             speaker=speaker,
             speaking_partner=speaking_partner,
             incoming_partner_utterance=incoming_partner_utterance,
+            session=session,
         )
         raw_reply = (action_result.utterance or action_result.talk or "").strip()
         recent_replies = recent_replies_for_echo_check(
-            session_history=self.session.history,
+            session_history=session.history,
             window=self.config.repetition_window,
         )
         policy_result = apply_reply_policy(
@@ -150,7 +157,7 @@ class SimulationEngine:
             if not silent_reason:
                 silent_reason = "unknown"
             if action_result.end_dialogue:
-                self.session.finish_dialogue()
+                session.finish_dialogue()
             return SimulationStepResult(
                 now=now,
                 speaker_name=speaker.name,
@@ -161,19 +168,19 @@ class SimulationEngine:
                 observability=observability,
             )
 
-        self.session.commit_speaker_reply(
+        session.commit_speaker_reply(
             speaker=speaker,
             incoming_partner_utterance=incoming_partner_utterance,
             reply=policy_result.reply,
         )
-        self.session.broadcast_reply(
+        session.broadcast_reply(
             speaker=speaker,
             reply=policy_result.reply,
             now=now,
             language=self.config.language,
         )
         if action_result.end_dialogue:
-            self.session.finish_dialogue()
+            session.finish_dialogue()
         return SimulationStepResult(
             now=now,
             speaker_name=speaker.name,
@@ -295,6 +302,7 @@ class SimulationEngine:
         speaker: SimAgent,
         speaking_partner: SimAgent,
         incoming_partner_utterance: str | None,
+        session: WorldConversationSession,
     ) -> tuple[ActionLoopResult, ReactionDecision | None]:
         observed_events = build_turn_observed_events(
             language=self.config.language,
@@ -305,9 +313,9 @@ class SimulationEngine:
         return speaker.brain.action_loop(
             ActionLoopInput(
                 current_time=now,
-                dialogue_history=self.session.dialogue_context_for(speaker=speaker),
+                dialogue_history=session.dialogue_context_for(speaker=speaker),
                 profile=speaker.profile,
-                dialogue_arc=self.session.dialogue_arc_for(speaker=speaker),
+                dialogue_arc=session.dialogue_arc_for(speaker=speaker),
                 language=self.config.language,
                 world_context=build_turn_world_context(
                     speaker_name=speaker.name,

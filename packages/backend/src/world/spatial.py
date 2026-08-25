@@ -151,6 +151,18 @@ class SpatialWorldRuntime:
                 agent.cognitive_kind = None
                 agent.cognitive_text = ""
 
+    def clear_cognitive_overlay(self, *, agent_id: str) -> None:
+        """Clear a single agent's speech/thought bubble.
+
+        Used instead of `clear_cognitive_overlays()` when multiple dialogue
+        sessions may be running concurrently — a pair's turn finishing must
+        not blank out another pair's still-current bubble.
+        """
+        with self._lock:
+            agent = self._require_agent(agent_id)
+            agent.cognitive_kind = None
+            agent.cognitive_text = ""
+
     def set_cognitive_overlay(
         self,
         *,

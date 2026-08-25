@@ -125,7 +125,16 @@ class WorldRuntime:
             )
 
         self.agents: list[SimAgent] = agents
-        self.session: WorldConversationSession = session
+        # `_idle_session` exists purely so `step()` has a session object to
+        # hand `engine.step()` when no dialogue is active (see
+        # `_primary_session()`) — it's never itself entered into
+        # `self.sessions` unless the caller constructed it already active
+        # (e.g. tests seeding an in-progress dialogue), in which case it's
+        # also this runtime's first live session.
+        self._idle_session: WorldConversationSession = session
+        self.sessions: dict[str, WorldConversationSession] = {}
+        if session.is_active:
+            self.sessions[_pair_key(*session.agents)] = session
         self.engine: SimulationEngine = engine
         self.current_time: datetime.datetime = current_time
         self._dialogue_turn_window: int | None = dialogue_turn_window
@@ -139,7 +148,7 @@ class WorldRuntime:
         self._scheduler_task: asyncio.Task[None] | None = None
         self._scheduler_stop_requested: bool = False
         self._plan_refresh_task: asyncio.Task[None] | None = None
-        self._cognitive_task: asyncio.Task[None] | None = None
+        self._cognitive_tasks: dict[str, asyncio.Task[None]] = {}
         self.planning_coordinator: PlanningCoordinator | None = planning_coordinator
         self.spatial_runtime: SpatialWorldRuntime | None = spatial_runtime
         self.encounter_gate: EncounterGate | None = encounter_gate
@@ -167,22 +176,24 @@ class WorldRuntime:
                     if self.spatial_runtime is not None:
                         self.spatial_runtime.set_schedule(schedule)
             self._start_dialogue_for_real_encounter(planning_time)
-            dialogue_was_active = self.session.is_active
-            speaker = self.session.next_speaker()
-            speaking_partner = self._partner_of(speaker)
+            session, pair_key = self._primary_session()
+            dialogue_was_active = session.is_active
+            speaker = session.next_speaker()
+            speaking_partner = self._partner_of(speaker, session)
             try:
                 step_result = self.engine.step(
                     turn=self.turn,
                     current_time=self.current_time,
                     speaker=speaker,
                     speaking_partner=speaking_partner,
+                    session=session,
                 )
             except Exception as error:
                 logger.exception(
                     "Agent action loop failed; continuing the world clock",
                     extra={"agent_id": str(speaker.identity.id), "turn": self.turn},
                 )
-                self.session.finish_dialogue()
+                session.finish_dialogue()
                 step_result = build_failed_step_result(
                     current_time=self.current_time,
                     speaker_name=speaker.name,
@@ -204,10 +215,9 @@ class WorldRuntime:
                         kind="thought",
                         text=step_result.observability.thought,
                     )
-            if dialogue_was_active and not self.session.is_active:
-                self._pair_cooldown_until[_pair_key(*self.session.agents)] = (
-                    self.current_time
-                )
+            if pair_key is not None and dialogue_was_active and not session.is_active:
+                self._pair_cooldown_until[pair_key] = self.current_time
+                self.sessions.pop(pair_key, None)
             if self.spatial_runtime is not None:
                 self.spatial_runtime.update_world_state(
                     current_time=self.current_time,
@@ -269,29 +279,58 @@ class WorldRuntime:
                 )
         return decision
 
-    def _partner_of(self, speaker: SimAgent) -> SimAgent:
-        first, second = self.session.agents
+    def _partner_of(
+        self, speaker: SimAgent, session: WorldConversationSession
+    ) -> SimAgent:
+        first, second = session.agents
         return second if speaker is first else first
 
-    def _open_session_for_pair(self, agent_a: SimAgent, agent_b: SimAgent) -> None:
-        """Replace the (now-inactive) current session with a fresh one for
-        this specific pair. Only one dialogue is ever active at a time
-        (§3.4 design decision — matches the single local-LLM serialization
-        the rest of the tick loop already assumes), so the previous session
-        object is simply discarded rather than kept alongside this one.
+    def _primary_session(self) -> tuple[WorldConversationSession, str | None]:
+        """The session `step()`/`metrics()`/`state()` treat as *the* dialogue.
+
+        `step()` is a single-call, single-result driver (used by the CLI
+        harness and tests), so it can only ever advance one session per
+        call even when several are running concurrently. It picks
+        whichever active session was opened first; callers that need every
+        concurrent dialogue advanced should rely on the scheduler
+        (`_run_scheduler`/`_run_cognitive_turn`) instead, which does drive
+        all of `self.sessions` in parallel. Returns `(session, None)` with
+        `self._idle_session` when nothing is active — that placeholder is
+        intentionally never added to `self.sessions`.
+        """
+        if self.sessions:
+            pair_key, session = next(iter(self.sessions.items()))
+            return session, pair_key
+        return self._idle_session, None
+
+    def _engaged_agent_ids(self) -> set[str]:
+        return {
+            str(agent.identity.id)
+            for session in self.sessions.values()
+            for agent in session.agents
+        }
+
+    def _open_session_for_pair(
+        self, agent_a: SimAgent, agent_b: SimAgent
+    ) -> WorldConversationSession:
+        """Start a new session for this pair alongside any other sessions
+        already running (§3.4 pairwise model — multiple disjoint pairs may
+        converse at once; an agent already in `self.sessions` is never
+        offered a second pair, see `_engaged_agent_ids`).
         """
         session = WorldConversationSession(
             agents=[agent_a, agent_b],
             dialogue_turn_window=self._dialogue_turn_window,
             dialogue_target_turns=self._dialogue_target_turns,
         )
-        self.session = session
-        self.engine.session = session
+        self.sessions[_pair_key(agent_a, agent_b)] = session
+        return session
 
     def _reopen_session_for_restore(
         self, participant_agent_names: tuple[str, str]
-    ) -> None:
-        """Rebuild `self.session` for whichever pair a save snapshot names.
+    ) -> WorldConversationSession:
+        """Rebuild (and register in `self.sessions`) the session for
+        whichever pair a save snapshot names.
 
         Called after the per-agent identity fields are already restored
         (`agent.identity.name = saved.name`), so `participant_agent_names`
@@ -307,24 +346,31 @@ class WorldRuntime:
             raise ValueError(
                 "saved dialogue participants do not match current agent roster"
             ) from error
-        self._open_session_for_pair(agent_a, agent_b)
+        return self._open_session_for_pair(agent_a, agent_b)
 
     def _start_dialogue_for_real_encounter(self, now: datetime.datetime) -> None:
-        cognitive_turn_in_flight = (
-            self._cognitive_task is not None and not self._cognitive_task.done()
-        )
-        if (
-            self.session.is_active
-            or cognitive_turn_in_flight
-            or self.spatial_runtime is None
-        ):
+        """Open one new pairwise dialogue per call, if a qualifying and
+        not-yet-engaged pair is found (§3.4). Multiple sessions can be
+        active at once — an agent already in `self.sessions` is skipped so
+        it's never double-booked into a second concurrent dialogue — but
+        only one *new* session is opened per call, mirroring the
+        one-thing-per-tick pattern `_dispatch_tick_plan_disruption_check`
+        already uses to bound how much LLM-calling work a single tick does.
+        """
+        if self.spatial_runtime is None:
             return
 
+        engaged = self._engaged_agent_ids()
         snapshots = {
             snapshot.agent_id: snapshot
             for snapshot in self.spatial_runtime.snapshot().agents
         }
         for agent_a, agent_b in itertools.combinations(self.agents, 2):
+            if (
+                str(agent_a.identity.id) in engaged
+                or str(agent_b.identity.id) in engaged
+            ):
+                continue
             first = snapshots.get(str(agent_a.identity.id))
             second = snapshots.get(str(agent_b.identity.id))
             if first is None or second is None:
@@ -379,7 +425,7 @@ class WorldRuntime:
         if (
             self.plan_react_gate is None
             or self.spatial_runtime is None
-            or self.session.is_active
+            or self.sessions
         ):
             return
         if self._plan_react_thread is not None and self._plan_react_thread.is_alive():
@@ -504,10 +550,10 @@ class WorldRuntime:
 
     @property
     def cognitive_active(self) -> bool:
-        cognitive_turn_in_flight = (
-            self._cognitive_task is not None and not self._cognitive_task.done()
+        cognitive_turn_in_flight = any(
+            not task.done() for task in self._cognitive_tasks.values()
         )
-        return self.session.is_active or cognitive_turn_in_flight
+        return bool(self.sessions) or cognitive_turn_in_flight
 
     @property
     def effective_time_step_seconds(self) -> int:
@@ -530,12 +576,13 @@ class WorldRuntime:
             self._scheduler_stop_requested = True
             await task
         self._scheduler_task = None
-        cognitive_task = self._cognitive_task
-        if cognitive_task is not None and not cognitive_task.done():
-            await cognitive_task
-        if cognitive_task is not None and cognitive_task.done():
-            _ = cognitive_task.exception()
-        self._cognitive_task = None
+        cognitive_tasks = list(self._cognitive_tasks.values())
+        for cognitive_task in cognitive_tasks:
+            if not cognitive_task.done():
+                await cognitive_task
+            if cognitive_task.done():
+                _ = cognitive_task.exception()
+        self._cognitive_tasks = {}
         plan_task = self._plan_refresh_task
         if plan_task is not None and not plan_task.done():
             await plan_task
@@ -610,27 +657,35 @@ class WorldRuntime:
                 self._set_planning_error(error)
                 logger.exception("Authoritative plan transition failed")
                 return
-            if self.session.is_active and (
-                self._cognitive_task is None or self._cognitive_task.done()
-            ):
-                if self._cognitive_task is not None:
-                    _ = self._cognitive_task.exception()
-                self._cognitive_task = asyncio.create_task(
-                    asyncio.to_thread(self._run_cognitive_turn)
+            for pair_key, session in list(self.sessions.items()):
+                existing_task = self._cognitive_tasks.get(pair_key)
+                if not session.is_active:
+                    continue
+                if existing_task is not None and not existing_task.done():
+                    continue
+                if existing_task is not None:
+                    _ = existing_task.exception()
+                self._cognitive_tasks[pair_key] = asyncio.create_task(
+                    asyncio.to_thread(self._run_cognitive_turn, pair_key)
                 )
-            # §3.1.1 gate: the world clock only advances once the agents'
-            # in-flight actions for this tick have actually finished. Wait
-            # for both the dialogue-turn cognitive task and any background
+            # §3.1.1 gate: the world clock only advances once every pair's
+            # in-flight turn for this tick has actually finished (§3.4:
+            # several pairs may be conversing concurrently). Wait for both
+            # the dialogue-turn cognitive tasks and any background
             # plan-disruption check (which can mutate the plan via
             # `react_replan`) before letting the loop reach the next
             # `_advance_world_tick` call.
-            if self._cognitive_task is not None:
-                try:
-                    await self._cognitive_task
-                except Exception:
-                    logger.exception("Cognitive turn task failed")
-                finally:
-                    self._cognitive_task = None
+            in_flight_tasks = list(self._cognitive_tasks.values())
+            if in_flight_tasks:
+                results = await asyncio.gather(
+                    *in_flight_tasks, return_exceptions=True
+                )
+                for result in results:
+                    if isinstance(result, Exception):
+                        logger.exception(
+                            "Cognitive turn task failed", exc_info=result
+                        )
+                self._cognitive_tasks = {}
             plan_react_thread = self._plan_react_thread
             if plan_react_thread is not None:
                 await asyncio.to_thread(plan_react_thread.join)
@@ -723,13 +778,23 @@ class WorldRuntime:
                 for schedule in schedules:
                     self.spatial_runtime.set_schedule(schedule)
 
-    def _run_cognitive_turn(self) -> None:
-        """Run one dialogue turn independently from the authoritative world clock."""
-        if not self.session.is_active:
+    def _run_cognitive_turn(self, pair_key: str) -> None:
+        """Run one dialogue turn for `pair_key`'s session, independently
+        from the authoritative world clock. Several of these can run
+        concurrently in different worker threads (§3.4 — multiple pairs
+        conversing at once), one per active session; `self._step_lock`
+        below serializes their shared-state writes (spatial overlays,
+        counters, dashboard events). Each session object is only ever
+        touched by its own pair's turn (`_engaged_agent_ids` keeps an
+        agent out of more than one active session), so there's no race on
+        session-local state either.
+        """
+        session = self.sessions.get(pair_key)
+        if session is None or not session.is_active:
             return
-        dialogue_was_active = self.session.is_active
-        speaker = self.session.next_speaker()
-        speaking_partner = self._partner_of(speaker)
+        dialogue_was_active = session.is_active
+        speaker = session.next_speaker()
+        speaking_partner = self._partner_of(speaker, session)
         turn = self.turn
         cognitive_time = self.current_time
         try:
@@ -739,13 +804,14 @@ class WorldRuntime:
                 - datetime.timedelta(seconds=self.engine.config.turn_time_step_seconds),
                 speaker=speaker,
                 speaking_partner=speaking_partner,
+                session=session,
             )
         except Exception as error:
             logger.exception(
                 "Agent action loop failed; continuing the world clock",
                 extra={"agent_id": str(speaker.identity.id), "turn": turn},
             )
-            self.session.finish_dialogue()
+            session.finish_dialogue()
             step_result = build_failed_step_result(
                 current_time=cognitive_time,
                 speaker_name=speaker.name,
@@ -755,7 +821,9 @@ class WorldRuntime:
 
         with self._step_lock:
             if self.spatial_runtime is not None:
-                self.spatial_runtime.clear_cognitive_overlays()
+                self.spatial_runtime.clear_cognitive_overlay(
+                    agent_id=speaker.identity.id
+                )
                 if step_result.reply:
                     self.spatial_runtime.set_cognitive_overlay(
                         agent_id=speaker.identity.id,
@@ -768,10 +836,9 @@ class WorldRuntime:
                         kind="thought",
                         text=step_result.observability.thought,
                     )
-            if dialogue_was_active and not self.session.is_active:
-                self._pair_cooldown_until[_pair_key(*self.session.agents)] = (
-                    self.current_time
-                )
+            if dialogue_was_active and not session.is_active:
+                self._pair_cooldown_until[pair_key] = self.current_time
+                self.sessions.pop(pair_key, None)
             if step_result.parse_failure:
                 self.parse_failures += 1
             if not step_result.reply:
@@ -839,20 +906,28 @@ class WorldRuntime:
             )
 
     def metrics(self) -> ConversationMetrics:
+        """Repetition/topic-progress metrics for the primary session
+        (`_primary_session()`) — merging histories across concurrently
+        active sessions would compare unrelated dialogues' turns as if
+        they were adjacent, so with 2+ sessions active this reports only
+        one of them rather than a meaningless blend.
+        """
+        session, _ = self._primary_session()
         return build_conversation_metrics(
             turns=self.turn,
             parse_failures=self.parse_failures,
             silent_turns=self.silent_turns,
-            session_history=self.session.history,
+            session_history=session.history,
         )
 
     def state(self) -> WorldRuntimeState:
+        session, _ = self._primary_session()
         return WorldRuntimeState(
             turn=self.turn,
             current_time=self.current_time,
             parse_failures=self.parse_failures,
             silent_turns=self.silent_turns,
-            history_size=len(self.session.history),
+            history_size=len(session.history),
             scheduler_running=self.scheduler_running,
             tick_interval_seconds=self.tick_interval_seconds,
             cognitive_active=self.cognitive_active,
@@ -967,7 +1042,9 @@ class WorldRuntime:
                 scheduler_was_running=scheduler_was_running,
                 planning_error=self.planning_error,
                 pair_cooldown_until=dict(self._pair_cooldown_until),
-                conversation=self.session.export_state(),
+                conversations=[
+                    session.export_state() for session in self.sessions.values()
+                ],
                 characters=characters,
                 dashboard_events=dashboard_events,
             )
@@ -1049,8 +1126,19 @@ class WorldRuntime:
                         pass
                     else:
                         self.spatial_runtime.set_schedule(schedule)
-            self._reopen_session_for_restore(state.conversation.participant_agent_names)
-            self.session.restore_state(state.conversation)
+            self.sessions = {}
+            for conversation in state.conversations:
+                session = self._reopen_session_for_restore(
+                    conversation.participant_agent_names
+                )
+                session.restore_state(conversation)
+                if not session.is_active:
+                    # Defensive: exported snapshots only ever contain active
+                    # sessions (`export_save_state` reads `self.sessions`,
+                    # which only holds active ones), but keep the "only
+                    # active sessions live in `self.sessions`" invariant
+                    # even if a hand-edited/older snapshot violates it.
+                    self.sessions.pop(_pair_key(*session.agents), None)
             self.spatial_runtime.restore_state(
                 revision=state.revision,
                 current_time=state.current_time,
@@ -1111,7 +1199,6 @@ def build_world_runtime(
     )
     session.finish_dialogue()
     engine = SimulationEngine(
-        session=session,
         config=SimulationEngineConfig(
             language=config.language,
             turn_time_step_seconds=config.turn_time_step_seconds,
