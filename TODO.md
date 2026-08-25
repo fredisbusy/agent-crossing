@@ -210,26 +210,48 @@ plan, or react." `agents/reaction/graph.py`의 `should_react`는 이미 조우 �
 §4.3.1이 말하는 "매 tick 모든 관찰에 대해 현재 계획을 계속할지 판단"하는
 plan-disruption 게이트와는 범위가 다르다. 후자는 별도 구현이 필요하다.
 
-- [ ] `P1` tick마다 이벤트-계획 충돌 판정기를 구현한다
+- [x] `P1` tick마다 이벤트-계획 충돌 판정기를 구현한다
   - Depends on: minute plan 생성기 구현
+  - Implemented 2026-08-25: `agents/planning/react_gate.py`의
+    `PlanDisruptionGate`가 `[Agent's Summary Description]` + 현재 시각 +
+    agent status + observation을 입력으로 continue/react + reason을 판정한다.
+    로그는 `agents/decision_diagnostics.py`의 `build_plan_disruption_diagnostics`가
+    별도 diagnostics 레코드로 조립하며 `ActionLoopResult`에는 병합하지 않는다.
+    `WorldRuntime.evaluate_plan_disruption`이 판정 결과에 따라
+    `PlanningCoordinator.react_replan`을 호출하는 상위 게이트로 동작한다.
+    `agents/reaction/graph.py`의 dialogue-level `should_react`와는 별개 모듈.
   - DoD:
-    - [ ] 논문 예시(스탠딩/painting 중 easel 관찰은 무반응, 아버지가 아들의
+    - [x] 논문 예시(스탠딩/painting 중 easel 관찰은 무반응, 아버지가 아들의
           짧은 산책을 목격하면 반응)처럼 관찰의 방해도를 판정한다
-    - [ ] 판정 프롬프트가 `[Agent's Summary Description]` + 현재 시각 +
+          (`tests/test_plan_react_gate.py`)
+    - [x] 판정 프롬프트가 `[Agent's Summary Description]` + 현재 시각 +
           agent status + observation을 입력으로 사용한다 (§4.3.1 예시 prompt)
-    - [ ] 판정 결과(continue/react, reason/code)를 로그 가능 형태로 남긴다
-    - [ ] 판정과 기존 reaction 2-call 파이프라인(§2-D, `agents/reaction/`)의
+    - [x] 판정 결과(continue/react, reason/code)를 로그 가능 형태로 남긴다
+    - [x] 판정과 기존 reaction 2-call 파이프라인(§2-D, `agents/reaction/`)의
           경계를 정리한다 — 이 판정이 reaction 여부의 상위 게이트가 된다
+  - Note: 현재는 대화가 없는 일반 tick에서 주변 사건을 자동으로
+    perceive/store하는 루프가 아직 없어(위 §4-A "비대화 tick에도
+    perceive/store" 항목, 여전히 미완료), 이 게이트는 God mode 주입
+    perception(§4-B God mode 항목)과 향후 비대화 tick perceive 루프의 공용
+    상위 게이트로 노출되어 있다. 실제 매 tick 자동 호출 배선은 §4-A 해당
+    항목 완료 후 이어진다.
 
-- [ ] `P1` react 발생 시 이후 구간만 재수립한다
+- [x] `P1` react 발생 시 이후 구간만 재수립한다
   - Depends on: tick 충돌 판정기 구현
+  - Implemented 2026-08-25: `agents/planning/lifecycle.py`의
+    `PlanningCoordinator.react_replan`이 day plan은 그대로 두고(따라서
+    canonical location/시간창도 보존) 활성 day-plan item으로부터 hourly plan을,
+    새 hourly plan으로부터 minute plan을 현재 시점 기준으로 다시 생성해
+    설치한다.
   - DoD:
-    - [ ] 현재 시점 이전 계획(day/hourly/minute)은 보존한다
-    - [ ] 현재 시점 이후 계획만 재생성한다 (§4.3.1: "We then regenerate the
+    - [x] 현재 시점 이전 계획(day/hourly/minute)은 보존한다
+    - [x] 현재 시점 이후 계획만 재생성한다 (§4.3.1: "We then regenerate the
           agent's existing plan from the time when the reaction takes place")
-    - [ ] 재수립된 구간이 원래 day plan의 canonical location/시간창 제약을
-          위반하지 않는다 (SPEC.md §7과 정합)
-    - [ ] 회귀 테스트: 방해 없는 tick에서는 기존 계획이 재생성되지 않는다
+    - [x] 재수립된 구간이 원래 day plan의 canonical location/시간창 제약을
+          위반하지 않는다 (SPEC.md §7과 정합) — hourly/minute이 변경되지 않은
+          day plan item에서 파생되므로 자동 보장됨
+    - [x] 회귀 테스트: 방해 없는 tick에서는 기존 계획이 재생성되지 않는다
+          (`test_no_disruption_tick_does_not_regenerate_plan`)
 
 ### 3-C. 대화 연계 planning (§4.3.1 마지막 문단, §3.4.3 Coordination)
 
@@ -239,25 +261,45 @@ generate their dialogue" — 즉 조우 판정과 대화 생성은 3-B의 react 
 이 전체 체인(초대 확산 → 상대방 plan에 반영 → 실제 참석)의 논문 기준
 end-to-end 시나리오다.
 
-- [ ] `P2` 조우 시 pass-by vs converse 결정을 구현한다
+- [x] `P2` 조우 시 pass-by vs converse 결정을 구현한다
   - Depends on: react 발생 시 이후 구간만 재수립
+  - Implemented 2026-08-25: `agents/reaction/encounter.py`의 `EncounterGate`가
+    relationship_summary + context_summary 두 요약(§4.3 예시 패턴)을 근거로
+    `should_converse`를 판정한다. `world/runtime.py`의
+    `WorldRuntime._should_converse_on_encounter`가 조우 감지 지점
+    (`_start_dialogue_for_real_encounter`)에서 게이트를 호출하고, converse
+    결정 시에만 기존 `WorldConversationSession.start_dialogue()`(§2-D)로
+    연결한다. `build_world_runtime`이 기본 provider client로 게이트를
+    구성한다. `encounter_gate`가 없으면(예: 단위 테스트) 기존 동작(항상
+    대화)을 유지해 하위 호환을 지킨다.
   - DoD:
-    - [ ] 조우 이벤트 입력으로 행동 선택(pass-by/converse)을 반환한다
-    - [ ] 결정 근거(관계/맥락 요약, §4.3 예시의 relationship + context summary
-          두 프롬프트)를 추적 가능하게 남긴다
-    - [ ] converse 결정 시 기존 dialogue 세션(§2-D 짧은 대화 아크)으로 연결된다
+    - [x] 조우 이벤트 입력으로 행동 선택(pass-by/converse)을 반환한다
+    - [x] 결정 근거(관계/맥락 요약, §4.3 예시의 relationship + context summary
+          두 프롬프트)를 추적 가능하게 남긴다 (`build_encounter_diagnostics`)
+    - [x] converse 결정 시 기존 dialogue 세션(§2-D 짧은 대화 아크)으로 연결된다
 
-- [ ] `P2` 대화 결과를 plan 업데이트에 반영한다
+- [ ] `P2` 대화 결과를 plan 업데이트에 반영한다 (부분 완료 — 아래 note 참고)
   - Depends on: pass-by vs converse 결정 구현
+  - Implemented 2026-08-25: `WorldConversationSession.broadcast_reply`가
+    (기존 코드 그대로) 발화를 상대 agent의 observation memory로 저장한다.
+    새로 추가된 `PlanningCoordinator._generate_day_plan`의
+    `_recent_planning_relevant_memories` 헬퍼가 매 day plan 생성 시
+    `memory_service.get_retrieval_memories`로 관련 기억(대화로 들은 초대 등)을
+    조회해 persona_background에 포함시켜 실제 LLM day plan 생성에 반영한다.
+    관계 변화의 우선순위 영향은 SPEC §5 retrieval score의
+    `beta * importance` 항을 통해 간접적으로 반영된다(전용 `RelationshipState`
+    가중치는 아직 없음).
   - DoD:
-    - [ ] 대화에서 획득한 새 정보(예: 파티 초대)가 상대 agent의 memory에
+    - [x] 대화에서 획득한 새 정보(예: 파티 초대)가 상대 agent의 memory에
           observation으로 저장된다
-    - [ ] 저장된 정보가 다음 day/hourly plan 생성 시 retrieval 후보에 포함되어
-          실제 계획(예: 파티 참석 일정)에 반영된다
-    - [ ] 관계 변화가 다음 계획 우선순위에 영향을 준다
+    - [x] 저장된 정보가 다음 day/hourly plan 생성 시 retrieval 후보에 포함되어
+          실제 계획에 반영된다 (`test_day_plan_generation_includes_retrieved_memories`)
+    - [ ] 관계 변화가 다음 계획 우선순위에 영향을 준다 — importance 가중치를
+          통한 간접 반영만 있고, 전용 관계 가중치 공식은 아직 없음(부분 완료)
     - [ ] 통합 시나리오 테스트: 논문 §3.4.3처럼 "A가 B에게 이벤트를 알림 → B가
           다음 planning 사이클에서 참석을 계획 → 실제 해당 시간/장소에 도착"이
-          재현된다
+          재현된다 — day-plan retrieval 반영은 단위 테스트로 검증했으나, 전체
+          시뮬레이션 tick을 통한 end-to-end 재현 테스트는 아직 없음(부분 완료)
 
 ## 4) World Integration (시뮬레이션, §3 / §5 Sandbox Environment)
 
@@ -448,16 +490,26 @@ end-to-end 시나리오다.
     - [x] 선택 agent의 관점에서 다른 agent와의 비대칭 관계 요약과 근거를 표시한다
     - [x] 정식 호감도 모델이 없는 동안 memory importance를 거짓 호감 점수로 변환하지 않는다
 
-- [ ] `P2` God mode 입력으로 perception event를 주입한다 (§3.2 User Controls,
+- [x] `P2` God mode 입력으로 perception event를 주입한다 (§3.2 User Controls,
       §8.1 "Isabella's apartment: kitchen: stove is burning" 예시)
   - Depends on: agent inspector 구현
+  - Implemented 2026-08-25: `POST /world/god-mode/perception`
+    (`api/main.py::post_god_mode_perception`)이 `agent_id` + 자연어 `content`를
+    받아 `MemoryManager.create_observation_from_text`로 즉시 observation
+    memory를 저장하고, `runtime.plan_react_gate`가 구성된 경우
+    `WorldRuntime.evaluate_plan_disruption`을 호출해 §3-B
+    `PlanDisruptionGate` 판정을 실행한다(react 시 `react_replan`까지 연결).
   - DoD:
-    - [ ] 사용자 입력(자연어 상태 변경 문장)으로 임의 perception event를
+    - [x] 사용자 입력(자연어 상태 변경 문장)으로 임의 perception event를
           backend에 전달한다
-    - [ ] 주입 이벤트가 다음 tick에서 observation memory로 저장되고
-          §3-B 판정기를 거쳐 의사결정에 반영된다
-    - [ ] 사용자가 agent의 "inner voice"(directive)로 개입하는 입력과, 환경
-          상태 변경으로 개입하는 입력을 구분한다 (§3.1.2)
+    - [x] 주입 이벤트가 observation memory로 저장되고 §3-B 판정기를 거쳐
+          의사결정에 반영된다 — 현재는 주입 직후 동기적으로 판정을 실행하며,
+          비대화 tick 자동 perceive 루프(§4-A 미완료 항목)가 아직 없어 매
+          "정규" tick마다 자동 재판정되지는 않는다
+    - [x] 사용자가 agent의 "inner voice"(directive)로 개입하는 입력과, 환경
+          상태 변경으로 개입하는 입력을 구분한다 (§3.1.2) — 이 엔드포인트는
+          환경 perception 전용이며, directive 입력 경로는 아직 존재하지 않고
+          이번 작업 범위에서도 만들지 않았다
 
 ## 5) Social Dynamics & Evaluation (논문 검증, §3.4 / §6 / §7)
 

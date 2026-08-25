@@ -247,8 +247,14 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
 
 react 정책:
 
-- 매 tick마다 “현재 계획 유지 vs 반응” 판정
-- 반응 필요 시, 하루 전체를 재생성하지 않고 **현재 시점 이후 계획만** 재수립
+- 매 tick마다 “현재 계획 유지 vs 반응” 판정 (§4.3.1). `agents/planning/react_gate.py`의
+  `PlanDisruptionGate`가 `[Agent's Summary Description]` + 현재 시각 + agent status +
+  observation을 입력으로 continue/react와 근거를 반환한다. 이는 이미 진행 중인 대화를
+  이어갈지 판단하는 `agents/reaction/graph.py`의 dialogue-level `should_react`와는
+  범위가 다른 상위 게이트다.
+- 반응 필요 시, 하루 전체를 재생성하지 않고 **현재 시점 이후 계획만** 재수립한다.
+  `PlanningCoordinator.react_replan`이 day plan(과 canonical 위치/시간창)은 그대로
+  두고 hourly/minute plan만 현재 시점 기준으로 다시 생성한다.
 
 ---
 
@@ -297,6 +303,10 @@ react 정책:
 - `POST /world/path`: tile 좌표 입력을 받아 충돌을 우회하는 4방향 A\* 경로 반환
 - `GET /world/spatial/state`: 현재 공간 revision, 게임 시각, scheduler 상태, 좌표, 목적지, 활성 계층 계획과 하루 계획을 반환
 - `POST /world/spatial/step`: 결정론적 공간 tick을 한 번 진행
+- `POST /world/god-mode/perception`: 자연어 문장을 특정 agent의 observation memory로
+  주입한다(§3.2, §8.1). 환경 상태 변경 입력이며 "inner voice"/directive 입력(§3.1.2)과는
+  분리된 별도 경로다. `plan_react_gate`가 구성된 경우 주입 직후 §4.3.1 continue-vs-react
+  판정을 실행하고, react 판정 시 현재 시점 이후 계획만 재수립한다.
 - `WS /ws/world`: `session_id`를 포함한 최신 공간 snapshot을 약 650ms 간격으로 전달
 - 목적지가 막혔거나 도달 불가능하면 `reachable=false`, `path=[]`를 반환
 - `/ws/world` handler는 snapshot 송신과 client disconnect 수신을 동시에 감시한다.
@@ -323,9 +333,16 @@ react 정책:
 
 대화/정보 확산:
 
-- 조우 시 pass-by vs converse 결정
-- 대화 중 핵심 정보를 상대 메모리에 주입 가능
-- 정보 확산 측정 지표: seed fact 인지 agent 비율
+- 조우 시 pass-by vs converse 결정. `agents/reaction/encounter.py`의 `EncounterGate`가
+  관계 요약(relationship_summary) + 상황 요약(context_summary) 두 프롬프트 패턴(§4.3
+  예시)으로 판단하고 근거를 로그로 남긴다. converse 결정 시 기존 짧은 대화 아크
+  세션(§2-D)으로 연결한다. `encounter_gate`가 구성되지 않으면 기존 동작(항상 대화)을
+  유지한다.
+- 대화 중 핵심 정보를 상대 메모리에 주입 가능. `WorldConversationSession.broadcast_reply`가
+  발화를 상대 agent의 observation memory로 저장하며, day plan 생성이
+  `PlanningCoordinator._generate_day_plan`을 통해 최근 관련 기억을 retrieval 후보로
+  포함해 실제 계획에 반영한다(§3.4.3 coordination 패턴, 특정 시나리오에 하드코딩하지 않음).
+- 정보 확산 측정 지표: seed fact 인지 agent 비율 (미구현, §5-A)
 
 관계 형성 지표:
 
@@ -387,6 +404,11 @@ Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하�
 God mode 입력:
 
 - 자연어 이벤트 입력 -> perception event로 변환 -> 해당 agent loop에 주입
+- `POST /world/god-mode/perception`이 `agent_id` + `content`를 받아
+  `MemoryManager.create_observation_from_text`로 observation memory를 즉시 저장하고,
+  구성된 경우 §4.3.1 판정기(`PlanDisruptionGate`)를 실행해 react 여부를 결정한다.
+- 이 입력은 환경 상태 변경이며, 아직 구현되지 않은 "inner voice"/directive 입력(§3.1.2)과
+  별도 경로로 유지한다.
 
 한국어 출력 정책:
 
