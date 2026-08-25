@@ -1,4 +1,6 @@
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import cast
 import asyncio
@@ -61,7 +63,6 @@ from persistence.repository import (
     SessionSummary,
 )
 
-app = FastAPI(title="Agent Crossing API")
 logger = logging.getLogger(__name__)
 
 
@@ -79,11 +80,27 @@ def _runtime_config(*, persona_dir: Path, persona_names: list[str]) -> WorldRunt
     )
 
 
+async def _get_world_map() -> WorldMap:
+    """Return the cached world map, loading and caching it lazily if needed.
+
+    Under normal operation the `lifespan` startup hook populates
+    `app.state.world_map` once before any request is served. This fallback
+    only matters for callers that invoke handlers directly without going
+    through the app lifespan (e.g. unit tests).
+    """
+    world_map = getattr(app.state, "world_map", None)
+    if world_map is None:
+        world_map = await asyncio.to_thread(load_world_map)
+        app.state.world_map = world_map
+    return cast(WorldMap, world_map)
+
+
 def _build_runtime_bundle() -> tuple[WorldRuntime, SpatialWorldRuntime]:
     persona_names = cast(list[str], app.state.persona_names)
     persona_dir = cast(Path, app.state.persona_dir)
+    world_map = cast(WorldMap, app.state.world_map)
     spatial_runtime = SpatialWorldRuntime(
-        world_map=load_world_map(),
+        world_map=world_map,
         seeds=[
             SpatialAgentSeed(
                 agent_id=persona.agent.id,
@@ -100,8 +117,8 @@ def _build_runtime_bundle() -> tuple[WorldRuntime, SpatialWorldRuntime]:
     return runtime, spatial_runtime
 
 
-@app.on_event("startup")
 async def on_startup() -> None:
+    await _get_world_map()
     persona_dir = Path(__file__).resolve().parents[2] / "persona"
     app.state.persona_dir = persona_dir
     app.state.persona_loader = PersonaLoader(persona_dir)
@@ -155,7 +172,7 @@ async def on_startup() -> None:
         )
     if getattr(app.state, "spatial_runtime", None) is None:
         spatial_runtime = SpatialWorldRuntime(
-            world_map=load_world_map(),
+            world_map=cast(WorldMap, app.state.world_map),
             seeds=[
                 SpatialAgentSeed(
                     agent_id=persona.agent.id,
@@ -170,7 +187,6 @@ async def on_startup() -> None:
         await app.state.spatial_stream.start()
 
 
-@app.on_event("shutdown")
 async def on_shutdown() -> None:
     spatial_stream = cast(
         SpatialWorldStream | None,
@@ -205,6 +221,18 @@ async def on_shutdown() -> None:
         await runtime.stop_scheduler()
     elif spatial_stream is not None:
         await spatial_stream.stop()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    await on_startup()
+    try:
+        yield
+    finally:
+        await on_shutdown()
+
+
+app = FastAPI(title="Agent Crossing API", lifespan=lifespan)
 
 
 @app.get("/", response_model=StatusResponse)
@@ -392,7 +420,7 @@ async def post_session_load(session_id: uuid.UUID) -> SessionSummaryResponse:
 
 @app.get("/world/map", response_model=WorldMapResponse)
 async def get_world_map() -> WorldMapResponse:
-    world_map = load_world_map()
+    world_map = await _get_world_map()
     return _world_map_response(world_map)
 
 
@@ -777,7 +805,7 @@ async def _wait_for_websocket_disconnect(websocket: WebSocket) -> None:
 
 @app.post("/world/observe", response_model=WorldObservationResponse)
 async def post_world_observe(request: WorldObserveRequest) -> WorldObservationResponse:
-    world_map = load_world_map()
+    world_map = await _get_world_map()
     position = MapPoint(x=request.position.x, y=request.position.y)
     location = world_map.location_at(position)
     nearby = [
@@ -804,7 +832,7 @@ async def post_world_observe(request: WorldObserveRequest) -> WorldObservationRe
 
 @app.post("/world/path", response_model=WorldPathResponse)
 async def post_world_path(request: WorldPathRequest) -> WorldPathResponse:
-    world_map = load_world_map()
+    world_map = await _get_world_map()
     path = world_map.find_path(
         MapPoint(x=request.start.x, y=request.start.y),
         MapPoint(x=request.goal.x, y=request.goal.y),

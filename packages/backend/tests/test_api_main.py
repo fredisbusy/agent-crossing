@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from llm.governance import ConversationMetrics
 from world.engine import SimulationStepObservability, SimulationStepResult
 
+import api.main as api_main
 from api.main import (
     _require_runtime,
     app,
@@ -17,6 +18,11 @@ from api.main import (
     post_world_step,
     post_world_tick_start,
     post_world_tick_stop,
+)
+from api.schemas import (
+    WorldMapPointResponse,
+    WorldObserveRequest,
+    WorldPathRequest,
 )
 from world.spatial import SpatialAgentSeed, SpatialWorldRuntime
 from world.world_map import load_world_map
@@ -104,6 +110,42 @@ async def test_startup_keeps_spatial_world_active_when_cognitive_runtime_fails(
         assert app.state.cognitive_runtime_error == "database unavailable"
         assert app.state.spatial_runtime.snapshot().agents
         assert app.state.spatial_stream.running is True
+        assert app.state.world_map is not None
+    finally:
+        await on_shutdown()
+
+
+@pytest.mark.anyio
+async def test_startup_caches_world_map_and_handlers_reuse_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    load_calls = 0
+    real_load_world_map = api_main.load_world_map
+
+    def counting_load_world_map(*args: object, **kwargs: object) -> object:
+        nonlocal load_calls
+        load_calls += 1
+        return real_load_world_map(*args, **kwargs)
+
+    monkeypatch.setattr("api.main.load_world_map", counting_load_world_map)
+    app.state.world_map = None
+
+    await on_startup()
+    try:
+        assert load_calls == 1
+
+        await api_main.get_world_map()
+        await api_main.post_world_observe(
+            WorldObserveRequest(position=WorldMapPointResponse(x=640, y=464), radius=1)
+        )
+        await api_main.post_world_path(
+            WorldPathRequest(
+                start=WorldMapPointResponse(x=17, y=16),
+                goal=WorldMapPointResponse(x=15, y=12),
+            )
+        )
+
+        assert load_calls == 1
     finally:
         await on_shutdown()
 
