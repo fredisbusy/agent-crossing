@@ -3,6 +3,7 @@ import datetime
 import itertools
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
@@ -147,7 +148,7 @@ class WorldRuntime:
         self._step_lock: threading.Lock = threading.Lock()
         self._scheduler_task: asyncio.Task[None] | None = None
         self._scheduler_stop_requested: bool = False
-        self._plan_refresh_task: asyncio.Task[None] | None = None
+        self._plan_refresh_thread: threading.Thread | None = None
         self._cognitive_tasks: dict[str, asyncio.Task[None]] = {}
         self.planning_coordinator: PlanningCoordinator | None = planning_coordinator
         self.spatial_runtime: SpatialWorldRuntime | None = spatial_runtime
@@ -583,12 +584,10 @@ class WorldRuntime:
             if cognitive_task.done():
                 _ = cognitive_task.exception()
         self._cognitive_tasks = {}
-        plan_task = self._plan_refresh_task
-        if plan_task is not None and not plan_task.done():
-            await plan_task
-        if plan_task is not None and plan_task.done():
-            _ = plan_task.exception()
-        self._plan_refresh_task = None
+        plan_thread = self._plan_refresh_thread
+        if plan_thread is not None and plan_thread.is_alive():
+            await asyncio.to_thread(plan_thread.join)
+        self._plan_refresh_thread = None
         if self.spatial_runtime is not None:
             self.spatial_runtime.update_world_state(
                 current_time=self.current_time,
@@ -602,8 +601,8 @@ class WorldRuntime:
             return False
         task = self._scheduler_task
         self._scheduler_task = None
-        refresh_task = self._plan_refresh_task
-        self._plan_refresh_task = None
+        refresh_thread = self._plan_refresh_thread
+        self._plan_refresh_thread = None
         if task.done():
             return False
         task.cancel()
@@ -611,12 +610,11 @@ class WorldRuntime:
             await task
         except asyncio.CancelledError:
             pass
-        if refresh_task is not None and not refresh_task.done():
-            refresh_task.cancel()
-            try:
-                await refresh_task
-            except asyncio.CancelledError:
-                pass
+        if refresh_thread is not None and refresh_thread.is_alive():
+            # A background thread can't be forcibly cancelled like a task;
+            # it's a daemon thread already mid-flight on (at most) one more
+            # round of LLM calls, so just wait for it to finish naturally.
+            await asyncio.to_thread(refresh_thread.join)
         if self.spatial_runtime is not None:
             self.spatial_runtime.update_world_state(
                 current_time=self.current_time,
@@ -724,8 +722,10 @@ class WorldRuntime:
         sequential LLM calls per agent on a day/hour/minute boundary. Running that inline
         here would stall the tick loop (and dialogue) for as long as the local model takes
         to answer, so this only reads the already-valid plan synchronously (no LLM I/O) and
-        offloads regeneration to `_generate_plans_blocking` via `_plan_refresh_task`. Agents
-        whose plan is mid-regeneration simply keep their last known schedule for this tick.
+        offloads regeneration to `_generate_plans_blocking` via `_plan_refresh_thread`
+        (all agents needing regeneration run concurrently there, not one at a time).
+        Agents whose plan is mid-regeneration simply keep their last known schedule
+        for this tick.
         """
         assert self.planning_coordinator is not None
         schedules: list[AgentPlanSnapshot] = []
@@ -748,24 +748,46 @@ class WorldRuntime:
             self._ensure_plan_generation_task(planning_time)
 
     def _ensure_plan_generation_task(self, planning_time: datetime.datetime) -> None:
-        if self._plan_refresh_task is not None and not self._plan_refresh_task.done():
+        """Runs a background thread rather than `asyncio.create_task`:
+        this is called from `_advance_world_tick`, which itself executes
+        inside `asyncio.to_thread` (see the scheduler loop), so no event
+        loop is running here and `create_task` would raise `RuntimeError`
+        (same reasoning as `_dispatch_tick_plan_disruption_check`).
+        """
+        if (
+            self._plan_refresh_thread is not None
+            and self._plan_refresh_thread.is_alive()
+        ):
             return
-        self._plan_refresh_task = asyncio.create_task(
-            asyncio.to_thread(self._generate_plans_blocking, planning_time)
+        self._plan_refresh_thread = threading.Thread(
+            target=self._generate_plans_blocking,
+            args=(planning_time,),
+            daemon=True,
         )
+        self._plan_refresh_thread.start()
 
     def _generate_plans_blocking(self, planning_time: datetime.datetime) -> None:
-        """Runs off the tick loop's critical path; may issue several sequential LLM calls."""
+        """Runs off the tick loop's critical path. Regenerates every
+        agent's plan concurrently (each `ensure_current` call can issue
+        several sequential LLM calls) via a thread pool — this only helps
+        wall-clock time because `PlanningCoordinator` now locks per agent
+        rather than coordinator-wide, so different agents' LLM calls
+        actually overlap instead of queuing behind one shared lock.
+        """
         assert self.planning_coordinator is not None
+        planning_coordinator = self.planning_coordinator
         try:
-            schedules = [
-                self.planning_coordinator.ensure_current(
-                    agent=_as_life_agent(agent),
-                    now=planning_time,
-                    generate=True,
+            with ThreadPoolExecutor(max_workers=len(self.agents)) as executor:
+                schedules = list(
+                    executor.map(
+                        lambda agent: planning_coordinator.ensure_current(
+                            agent=_as_life_agent(agent),
+                            now=planning_time,
+                            generate=True,
+                        ),
+                        self.agents,
+                    )
                 )
-                for agent in self.agents
-            ]
         except Exception as error:
             with self._step_lock:
                 self._set_planning_error(error)
@@ -872,15 +894,17 @@ class WorldRuntime:
         if self.planning_coordinator is None:
             return
         planning_date = self.current_time
-        schedules = []
-        for agent in self.agents:
-            schedules.append(
-                await asyncio.to_thread(
-                    self.planning_coordinator.refresh_current,
+        planning_coordinator = self.planning_coordinator
+        schedules = await asyncio.gather(
+            *[
+                asyncio.to_thread(
+                    planning_coordinator.refresh_current,
                     agent=_as_life_agent(agent),
                     now=planning_date,
                 )
-            )
+                for agent in self.agents
+            ]
+        )
         self._set_planning_error(None)
         if self.spatial_runtime is not None:
             for schedule in schedules:

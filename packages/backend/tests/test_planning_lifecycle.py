@@ -1,4 +1,5 @@
 import datetime
+import threading
 from dataclasses import dataclass
 
 import pytest
@@ -437,3 +438,99 @@ def test_event_notification_via_conversation_flows_into_next_day_plan() -> None:
     ]
     assert invited_items, "생성된 day plan에 초대받은 시간/장소 항목이 포함돼야 한다"
     assert invited_items[0].start_time == datetime.datetime.combine(day, datetime.time(18))
+
+
+class BlockingPlanner:
+    """FakePlanner that blocks generate_day_plan on a barrier — used to prove
+    two agents' plan generation overlaps in time instead of queuing behind
+    a single coordinator-wide lock."""
+
+    def __init__(self, *, barrier: threading.Barrier) -> None:
+        self.barrier: threading.Barrier = barrier
+        self.day_calls: int = 0
+
+    def generate_day_plan(self, request):
+        self.day_calls += 1
+        # Every caller must reach this point before any of them proceeds —
+        # only possible if both agents' ensure_current calls are actually
+        # running concurrently, not serialized behind one shared lock.
+        self.barrier.wait(timeout=2)
+        date = request.today_date.date()
+        return [
+            DayPlanItem(
+                start_time=datetime.datetime.combine(date, datetime.time(6, 0)),
+                end_time=datetime.datetime.combine(date, datetime.time(6, 15)),
+                location="브라이어 코브 > 마을 광장",
+                action_content="하루를 보낸다.",
+            )
+        ]
+
+    def generate_hourly_plan(self, *, agent_name, current_time, day_plan_item):
+        _ = agent_name, current_time
+        return [
+            HourlyPlanItem(
+                start_time=day_plan_item.start_time,
+                end_time=day_plan_item.end_time,
+                location=day_plan_item.location,
+                action_content="현재 broad stroke를 수행한다.",
+            )
+        ]
+
+    def generate_minute_plan(self, *, agent_name, current_time, hourly_plan_item):
+        _ = agent_name, current_time
+        return [
+            MinutePlanItem(
+                start_time=hourly_plan_item.start_time,
+                end_time=hourly_plan_item.end_time,
+                location=hourly_plan_item.location,
+                action_content="일과를 계속한다.",
+            )
+        ]
+
+
+def test_ensure_current_runs_different_agents_concurrently() -> None:
+    """N-agent 확장: PlanningCoordinator가 coordinator-wide 락 대신 agent별
+    락을 쓰므로, 서로 다른 agent의 plan 생성(LLM 호출 포함)이 겹쳐 실행될
+    수 있다 — 한쪽이 끝날 때까지 다른 쪽이 큐에서 기다리지 않는다."""
+    barrier = threading.Barrier(2)
+    planner_a = BlockingPlanner(barrier=barrier)
+    planner_b = BlockingPlanner(barrier=barrier)
+    agent_a = FakeAgent(
+        identity=AgentIdentity(id="jiho", name="Jiho Park", age=29, traits=["차분함"]),
+        profile=AgentProfile(
+            fixed=FixedPersona(identity_stable_set=[]),
+            extended=ExtendedPersona(lifestyle_and_routine=[], current_plan_context=[]),
+        ),
+        brain=FakeBrain(planner=planner_a),
+    )
+    agent_b = FakeAgent(
+        identity=AgentIdentity(id="sujin", name="Sujin Lee", age=27, traits=["활발함"]),
+        profile=AgentProfile(
+            fixed=FixedPersona(identity_stable_set=[]),
+            extended=ExtendedPersona(lifestyle_and_routine=[], current_plan_context=[]),
+        ),
+        brain=FakeBrain(planner=planner_b),
+    )
+    coordinator = PlanningCoordinator()
+    now = datetime.datetime(2026, 8, 24, 6, 5)
+
+    results: dict[str, object] = {}
+    errors: list[BaseException] = []
+
+    def run(agent: FakeAgent, key: str) -> None:
+        try:
+            results[key] = coordinator.ensure_current(agent=agent, now=now)
+        except BaseException as error:  # noqa: BLE001
+            errors.append(error)
+
+    thread_a = threading.Thread(target=run, args=(agent_a, "a"))
+    thread_b = threading.Thread(target=run, args=(agent_b, "b"))
+    thread_a.start()
+    thread_b.start()
+    thread_a.join(timeout=3)
+    thread_b.join(timeout=3)
+
+    assert not errors, errors
+    assert not thread_a.is_alive() and not thread_b.is_alive()
+    assert results["a"].active_day.action_content == "하루를 보낸다."
+    assert results["b"].active_day.action_content == "하루를 보낸다."

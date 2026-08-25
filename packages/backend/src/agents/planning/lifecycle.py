@@ -113,6 +113,22 @@ class PlanningCoordinator:
     def __init__(self) -> None:
         self._states: dict[str, _AgentPlanState] = {}
         self._lock: threading.RLock = threading.RLock()
+        self._agent_locks: dict[str, threading.RLock] = {}
+
+    def _agent_lock(self, agent_id: str) -> threading.RLock:
+        """Per-agent lock so different agents' plan generation (each of
+        which can issue several sequential LLM calls) runs concurrently,
+        while operations for the *same* agent still serialize against each
+        other (e.g. a scheduled refresh racing a tick-triggered react
+        replan). `self._lock` itself only guards this dict's bookkeeping,
+        never an LLM call.
+        """
+        with self._lock:
+            lock = self._agent_locks.get(agent_id)
+            if lock is None:
+                lock = threading.RLock()
+                self._agent_locks[agent_id] = lock
+            return lock
 
     def export_state(self, *, agent_id: str) -> PlanningStateSave | None:
         with self._lock:
@@ -181,7 +197,7 @@ class PlanningCoordinator:
         reason: str,
     ) -> AgentPlanSnapshot:
         """Install generated broad strokes against the current world time."""
-        with self._lock:
+        with self._agent_lock(str(agent.identity.id)):
             planner = agent.brain.planner
             if planner is None:
                 raise PlanningGenerationError(
@@ -264,8 +280,8 @@ class PlanningCoordinator:
         therefore its canonical location/time-window constraints, SPEC.md
         §7) and everything before `now` untouched.
         """
-        with self._lock:
-            agent_id = str(agent.identity.id)
+        agent_id = str(agent.identity.id)
+        with self._agent_lock(agent_id):
             state = self._states.get(agent_id)
             if state is None or not state.day_items:
                 # No live plan to react against yet; fall back to a normal
@@ -332,7 +348,7 @@ class PlanningCoordinator:
         now: datetime.datetime,
         generate: bool = True,
     ) -> AgentPlanSnapshot:
-        with self._lock:
+        with self._agent_lock(str(agent.identity.id)):
             return self._ensure_current(agent=agent, now=now, generate=generate)
 
     def _ensure_current(
@@ -343,7 +359,8 @@ class PlanningCoordinator:
         generate: bool,
     ) -> AgentPlanSnapshot:
         agent_id = str(agent.identity.id)
-        state = self._states.setdefault(agent_id, _AgentPlanState())
+        with self._lock:
+            state = self._states.setdefault(agent_id, _AgentPlanState())
         planner = agent.brain.planner
         if planner is None:
             raise RuntimeError(f"agent {agent_id} does not have a planner")

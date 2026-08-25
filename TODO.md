@@ -754,10 +754,33 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
   일반화했더니 재시도 없이 ~1초로 줄었다(`drop_params=True`가 이미
   있어 thinking 미지원 모델에는 안전한 no-op). `tests/test_litellm_client.py`에
   회귀 테스트 추가.
-- 남은 것: `world/runtime.py::_generate_plans_blocking`의 에이전트별
-  순차 planning 루프는 아직 병렬화하지 않았다 — `OLLAMA_NUM_PARALLEL`
-  설정과 GGUF 모델 전환이 전제 조건이었고 이제 갖춰졌으니, 이어서
-  다룰 만하다.
+- **`_generate_plans_blocking` 병렬화 완료 (2026-08-25)**:
+  - `agents/planning/lifecycle.py::PlanningCoordinator`가 coordinator
+    전체를 덮는 단일 `RLock` 대신 **agent별 `RLock`**(`_agent_lock`)을
+    쓰도록 바꿨다 — `install_day_plan`/`react_replan`/`ensure_current`가
+    LLM 호출을 포함한 본문 전체를 이 lock으로 감싼다. `_states` dict
+    구조 자체를 건드리는 지점(`setdefault`)만 여전히 coordinator-wide
+    `self._lock`으로 짧게 보호한다. 이 변경 전에는 클라이언트 쪽
+    루프를 아무리 병렬화해도 이 단일 lock 때문에 사실상 전부
+    직렬화됐을 것이다(중요한 선행 발견).
+  - `world/runtime.py::_generate_plans_blocking`이 `ThreadPoolExecutor`로
+    모든 agent의 `ensure_current(generate=True)`를 동시에 돌린다.
+    `_refresh_plans`(스케줄러 시작 시 1회성 경로)도 `asyncio.gather`로
+    동일하게 병렬화했다.
+  - **부수적으로 발견 및 수정한 버그**: `_ensure_plan_generation_task`가
+    `asyncio.create_task(...)`를 호출했는데, 이 메서드는
+    `_advance_world_tick`(자체가 `asyncio.to_thread` 안에서 실행되는
+    워커 스레드)에서 호출된다 — 즉 이 스레드엔 실행 중인 이벤트 루프가
+    없어 `PlanningGenerationError`가 실제로 발생하는 경로를 타면
+    `RuntimeError: no running event loop`로 죽었을 잠재 버그다(§3-B
+    tick 관찰 배선 때 고친 것과 동일 패턴). `asyncio.Task` 기반
+    `_plan_refresh_task`를 `threading.Thread` 기반 `_plan_refresh_thread`로
+    바꿔 해결 — `pause_scheduler`/`stop_scheduler`도 `.cancel()` 대신
+    `join()`으로 맞춰 갱신했다.
+  - 신규 테스트: `tests/test_planning_lifecycle.py::test_ensure_current_runs_different_agents_concurrently`가
+    `threading.Barrier(2)`로 두 agent의 `ensure_current` 호출이 실제로
+    겹쳐 실행되는지 직접 증명한다(한쪽이 barrier에서 기다리는 동안
+    다른 쪽도 반드시 도달해야 진행되므로, 직렬이면 타임아웃으로 실패).
 
 ## Milestones
 
