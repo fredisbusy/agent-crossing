@@ -316,6 +316,13 @@ saves" 커밋과 일치. 처음부터 전체 스키마를 만드는 마이그레
 
 ### 4.5 Backend↔DB 브릿지 — 구조적 drift 위험
 
+> **Resolved 2026-08-25**: Prisma를 완전히 제거하고 SQLAlchemy + Alembic로
+> 스키마/마이그레이션을 일원화했다. `packages/database`(Prisma) 패키지 삭제,
+> `packages/backend/alembic/`이 단일 마이그레이션 소스. CHECK 제약조건은
+> `db/models.py`의 `__table_args__`에 명시적으로 선언되고, 임베딩 차원은
+> `Vector(EMBEDDING_DIMENSION)`으로 통일해 하드코딩을 제거했다. 아래 원문은
+> 문제 진단 당시 스냅샷으로 남겨둔다.
+
 **Python 백엔드는 Prisma 클라이언트를 쓰지 않는다.** `packages/backend/src/db/
 models.py`가 `schema.prisma`를 필드 단위로 손으로 미러링한 SQLAlchemy ORM
 모델이다. 코드 생성이나 introspection으로 두 정의를 묶어주는 장치가 전혀 없다:

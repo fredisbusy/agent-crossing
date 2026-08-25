@@ -9,9 +9,9 @@
     "sync": "uv sync --project packages/backend",
     "build": "pnpm -r build",
     "test": "pnpm test:backend && pnpm --filter @agent-crossing/frontend test",
-    "db:validate": "pnpm --filter @agent-crossing/database build",
-    "db:migrate": "pnpm --filter @agent-crossing/database migrate:deploy",
-    "db:status": "pnpm --filter @agent-crossing/database migrate:status"
+    "db:migrate": "uv run --project packages/backend alembic -c packages/backend/alembic.ini upgrade head",
+    "db:revision": "uv run --project packages/backend alembic -c packages/backend/alembic.ini revision --autogenerate -m",
+    "db:status": "uv run --project packages/backend alembic -c packages/backend/alembic.ini current"
   },
   "devDependencies": {
     "prettier": "^3.0.0"

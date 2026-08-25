@@ -16,7 +16,10 @@ def init_db() -> None:
     with engine.begin() as connection:
         table_name = connection.scalar(text("SELECT to_regclass('public.game_sessions')"))
         if table_name is None:
-            raise RuntimeError("database migrations are not applied; run pnpm db:migrate")
+            raise RuntimeError(
+                "database migrations are not applied; run pnpm db:migrate"
+                " (uv run alembic upgrade head)"
+            )
 
 
 def get_db() -> Generator[Session, None, None]:

@@ -7,9 +7,11 @@ from settings import EMBEDDING_DIMENSION
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -67,6 +69,27 @@ class MemoryNodeType(str, enum.Enum):
 
 class GameSessionRecord(Base):
     __tablename__ = "game_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "char_length(btrim(name)) BETWEEN 1 AND 80",
+            name="game_sessions_name_check",
+        ),
+        CheckConstraint(
+            "schema_version > 0 AND save_version > 0",
+            name="game_sessions_version_check",
+        ),
+        Index(
+            "game_sessions_status_saved_at_idx",
+            "status",
+            text("saved_at DESC"),
+        ),
+        Index(
+            "game_sessions_single_active_idx",
+            "status",
+            unique=True,
+            postgresql_where=text("status = 'ACTIVE'"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -98,7 +121,13 @@ class GameSessionRecord(Base):
 
 class SessionCharacterRecord(Base):
     __tablename__ = "session_characters"
-    __table_args__ = (UniqueConstraint("session_id", "agent_id"),)
+    __table_args__ = (
+        UniqueConstraint("session_id", "agent_id"),
+        CheckConstraint(
+            "reflection_accumulated_importance >= 0",
+            name="session_characters_reflection_check",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     session_id: Mapped[uuid.UUID] = mapped_column(
@@ -124,7 +153,22 @@ class SessionCharacterRecord(Base):
 
 class SessionMemoryRecord(Base):
     __tablename__ = "session_memories"
-    __table_args__ = (UniqueConstraint("character_id", "runtime_local_id"),)
+    __table_args__ = (
+        UniqueConstraint("character_id", "runtime_local_id"),
+        CheckConstraint(
+            "importance BETWEEN 1 AND 10", name="session_memories_importance_check"
+        ),
+        Index(
+            "session_memories_character_created_idx",
+            "character_id",
+            text("game_created_at DESC"),
+        ),
+        Index(
+            "session_memories_character_accessed_idx",
+            "character_id",
+            "last_accessed_at",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     character_id: Mapped[uuid.UUID] = mapped_column(
@@ -138,7 +182,9 @@ class SessionMemoryRecord(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     importance: Mapped[int] = mapped_column(Integer, nullable=False)
-    embedding: Mapped[list[float]] = mapped_column(Vector(1024), nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(
+        Vector(EMBEDDING_DIMENSION), nullable=False
+    )
     game_created_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     last_accessed_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     inserted_at: Mapped[datetime.datetime] = mapped_column(
@@ -148,6 +194,15 @@ class SessionMemoryRecord(Base):
 
 class SessionMemoryCitationRecord(Base):
     __tablename__ = "session_memory_citations"
+    __table_args__ = (
+        CheckConstraint(
+            "memory_id <> cited_memory_id",
+            name="session_memory_citations_no_self_check",
+        ),
+        CheckConstraint(
+            "position >= 0", name="session_memory_citations_position_check"
+        ),
+    )
 
     memory_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -164,7 +219,18 @@ class SessionMemoryCitationRecord(Base):
 
 class SessionPlanItemRecord(Base):
     __tablename__ = "session_plan_items"
-    __table_args__ = (UniqueConstraint("character_id", "level", "ordinal"),)
+    __table_args__ = (
+        UniqueConstraint("character_id", "level", "ordinal"),
+        CheckConstraint("end_time > start_time", name="session_plan_items_time_check"),
+        CheckConstraint("ordinal >= 0", name="session_plan_items_ordinal_check"),
+        Index(
+            "session_plan_items_active_idx",
+            "character_id",
+            "level",
+            "start_time",
+            "end_time",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     character_id: Mapped[uuid.UUID] = mapped_column(
@@ -188,6 +254,13 @@ class SessionPlanItemRecord(Base):
 
 class SessionDialogueStateRecord(Base):
     __tablename__ = "session_dialogue_states"
+    __table_args__ = (
+        CheckConstraint(
+            "turn_index >= 0 AND dialogue_target_turns >= 2"
+            " AND dialogue_turns_taken >= 0",
+            name="session_dialogue_state_counts_check",
+        ),
+    )
 
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -211,7 +284,19 @@ class SessionDialogueStateRecord(Base):
 
 class SessionCognitiveLogRecord(Base):
     __tablename__ = "session_cognitive_logs"
-    __table_args__ = (UniqueConstraint("session_id", "sequence"),)
+    __table_args__ = (
+        UniqueConstraint("session_id", "sequence"),
+        Index(
+            "session_cognitive_logs_session_sequence_idx",
+            "session_id",
+            text("sequence DESC"),
+        ),
+        Index(
+            "session_cognitive_logs_character_sequence_idx",
+            "character_id",
+            text("sequence DESC"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     session_id: Mapped[uuid.UUID] = mapped_column(
