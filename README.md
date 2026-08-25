@@ -28,6 +28,7 @@ Built with **React 19 + Phaser 3** (frontend) and **FastAPI** (backend).
 
 ```text
 packages/
+  database/    # Prisma schema and PostgreSQL migrations
   shared/      # shared types/constants
   frontend/    # React + Phaser client
   backend/     # FastAPI + agent brain
@@ -76,6 +77,7 @@ export GOOGLE_AI_STUDIO_API_KEY=your_api_key
 
 ```bash
 docker compose up -d
+pnpm db:migrate
 ```
 
 Quick check:
@@ -85,6 +87,26 @@ docker compose exec postgres psql -U agent -d agent_crossing -c "SELECT extname 
 ```
 
 If the result includes `vector`, pgvector is enabled.
+
+Prisma owns the PostgreSQL schema and migrations; the FastAPI runtime consumes
+that schema through its typed SQLAlchemy repository. Useful commands:
+
+```bash
+pnpm db:validate
+pnpm db:status
+```
+
+### Game save slots
+
+The HUD provides RPG-style **새 게임**, **지금 저장**, and **불러오기** controls.
+A save includes the world clock, positions and routes, persona state, memories,
+planning caches, conversation state, encounter cooldown, and public cognitive
+logs. The same operations are available through:
+
+- `GET /sessions`
+- `POST /sessions`
+- `POST /sessions/current/save`
+- `POST /sessions/{session_id}/load`
 
 ### Tests
 

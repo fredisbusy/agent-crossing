@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import cast
 import asyncio
+import uuid
 
 from agents.persona_loader import PersonaLoader
 from agents.planning.lifecycle import PlanItemSnapshot
@@ -15,6 +16,10 @@ from api.schemas import (
     DashboardRelationshipResponse,
     DashboardStateResponse,
     DashboardWorldResponse,
+    SessionCreateRequest,
+    SessionListResponse,
+    SessionSaveRequest,
+    SessionSummaryResponse,
     SpatialAgentResponse,
     PlanItemResponse,
     SpatialWorldResponse,
@@ -50,17 +55,34 @@ from world.observability import DashboardEvent
 from world.spatial import SpatialAgentSeed, SpatialWorldRuntime, SpatialWorldSnapshot
 from world.stream import SpatialWorldStream
 from world.world_map import MapBounds, MapPoint, WorldMap, load_world_map
+from persistence.repository import (
+    GameSessionRepository,
+    SaveVersionConflictError,
+    SessionSummary,
+)
 
 app = FastAPI(title="Agent Crossing API")
 logger = logging.getLogger(__name__)
 
 
-@app.on_event("startup")
-async def on_startup() -> None:
-    persona_dir = Path(__file__).resolve().parents[2] / "persona"
-    app.state.persona_loader = PersonaLoader(persona_dir)
-    app.state.agent_personas = app.state.persona_loader.load_all()
-    app.state.spatial_runtime = SpatialWorldRuntime(
+def _runtime_config(*, persona_dir: Path, persona_names: list[str]) -> WorldRuntimeConfig:
+    return WorldRuntimeConfig(
+        agent_persona_names=persona_names[:2],
+        base_url=LLM_BASE_URL,
+        api_key=LLM_API_KEY or GOOGLE_AI_STUDIO_API_KEY,
+        llm_model=LLM_MODEL,
+        embedding_model=EMBEDDING_MODEL,
+        timeout_seconds=LLM_TIMEOUT_SECONDS,
+        persona_dir=str(persona_dir),
+        tick_interval_seconds=WORLD_TICK_INTERVAL_SECONDS,
+        cognitive_time_step_seconds=WORLD_COGNITIVE_TIME_STEP_SECONDS,
+    )
+
+
+def _build_runtime_bundle() -> tuple[WorldRuntime, SpatialWorldRuntime]:
+    persona_names = cast(list[str], app.state.persona_names)
+    persona_dir = cast(Path, app.state.persona_dir)
+    spatial_runtime = SpatialWorldRuntime(
         world_map=load_world_map(),
         seeds=[
             SpatialAgentSeed(
@@ -71,34 +93,78 @@ async def on_startup() -> None:
             for persona in app.state.agent_personas
         ],
     )
-    app.state.spatial_stream = SpatialWorldStream(runtime=app.state.spatial_runtime)
-    await app.state.spatial_stream.start()
+    runtime = build_world_runtime(
+        config=_runtime_config(persona_dir=persona_dir, persona_names=persona_names),
+        spatial_runtime=spatial_runtime,
+    )
+    return runtime, spatial_runtime
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+    persona_dir = Path(__file__).resolve().parents[2] / "persona"
+    app.state.persona_dir = persona_dir
+    app.state.persona_loader = PersonaLoader(persona_dir)
+    app.state.agent_personas = app.state.persona_loader.load_all()
     persona_names = [persona.agent.id for persona in app.state.agent_personas]
+    app.state.persona_names = persona_names
+    app.state.session_lock = asyncio.Lock()
+    app.state.session_repository = None
+    app.state.current_session_id = None
     app.state.world_runtime = None
     app.state.cognitive_runtime_error = None
     try:
         init_db()
         if len(persona_names) >= 2:
-            app.state.world_runtime = build_world_runtime(
-                config=WorldRuntimeConfig(
-                    agent_persona_names=persona_names[:2],
-                    base_url=LLM_BASE_URL,
-                    api_key=LLM_API_KEY or GOOGLE_AI_STUDIO_API_KEY,
-                    llm_model=LLM_MODEL,
-                    embedding_model=EMBEDDING_MODEL,
-                    timeout_seconds=LLM_TIMEOUT_SECONDS,
-                    persona_dir=str(persona_dir),
-                    tick_interval_seconds=WORLD_TICK_INTERVAL_SECONDS,
-                    cognitive_time_step_seconds=WORLD_COGNITIVE_TIME_STEP_SECONDS,
-                ),
-                spatial_runtime=app.state.spatial_runtime,
-            )
-            await app.state.world_runtime.start_scheduler()
+            repository = GameSessionRepository()
+            app.state.session_repository = repository
+            runtime, spatial_runtime = await asyncio.to_thread(_build_runtime_bundle)
+            latest = await asyncio.to_thread(repository.latest_session)
+            should_start_scheduler = True
+            if latest is not None:
+                summary, saved_state = latest
+                runtime.restore_save_state(saved_state)
+                activated = await asyncio.to_thread(
+                    repository.activate, session_id=summary.id
+                )
+                if activated is None:
+                    raise RuntimeError("saved session disappeared during startup")
+                app.state.current_session_id = summary.id
+                should_start_scheduler = saved_state.scheduler_was_running
+            else:
+                initial_state = runtime.export_save_state(scheduler_was_running=True)
+                summary = await asyncio.to_thread(
+                    repository.create,
+                    name="브라이어 코브 1",
+                    state=initial_state,
+                )
+                app.state.current_session_id = summary.id
+            app.state.world_runtime = runtime
+            app.state.spatial_runtime = spatial_runtime
+            app.state.spatial_stream = SpatialWorldStream(runtime=spatial_runtime)
+            await app.state.spatial_stream.start()
+            if should_start_scheduler:
+                await runtime.start_scheduler()
     except Exception as error:
         app.state.cognitive_runtime_error = str(error)
         logger.exception(
             "Cognitive runtime is unavailable; spatial world remains active"
         )
+    if getattr(app.state, "spatial_runtime", None) is None:
+        spatial_runtime = SpatialWorldRuntime(
+            world_map=load_world_map(),
+            seeds=[
+                SpatialAgentSeed(
+                    agent_id=persona.agent.id,
+                    name=persona.agent.name,
+                    plan_context=(),
+                )
+                for persona in app.state.agent_personas
+            ],
+        )
+        app.state.spatial_runtime = spatial_runtime
+        app.state.spatial_stream = SpatialWorldStream(runtime=spatial_runtime)
+        await app.state.spatial_stream.start()
 
 
 @app.on_event("shutdown")
@@ -107,16 +173,218 @@ async def on_shutdown() -> None:
         SpatialWorldStream | None,
         getattr(app.state, "spatial_stream", None),
     )
-    if spatial_stream is not None:
-        await spatial_stream.stop()
     runtime = cast(WorldRuntime | None, getattr(app.state, "world_runtime", None))
     if runtime is not None:
+        repository = cast(
+            GameSessionRepository | None,
+            getattr(app.state, "session_repository", None),
+        )
+        current_session_id = cast(
+            uuid.UUID | None, getattr(app.state, "current_session_id", None)
+        )
+        was_running = runtime.scheduler_running
+        if spatial_stream is not None:
+            await spatial_stream.stop()
+        try:
+            await runtime.pause_scheduler()
+            if repository is not None and current_session_id is not None:
+                state = runtime.export_save_state(
+                    scheduler_was_running=was_running
+                )
+                await asyncio.to_thread(
+                    repository.save,
+                    session_id=current_session_id,
+                    state=state,
+                    expected_save_version=None,
+                )
+        except Exception:
+            logger.exception("Failed to save the active session during shutdown")
         await runtime.stop_scheduler()
+    elif spatial_stream is not None:
+        await spatial_stream.stop()
 
 
 @app.get("/", response_model=StatusResponse)
 async def get_status():
     return {"status": "online", "version": "0.1.0"}
+
+
+def _require_session_repository() -> GameSessionRepository:
+    repository = cast(
+        GameSessionRepository | None,
+        getattr(app.state, "session_repository", None),
+    )
+    if repository is None:
+        raise HTTPException(status_code=503, detail="session database is unavailable")
+    return repository
+
+
+def _session_summary_response(summary: SessionSummary) -> SessionSummaryResponse:
+    return SessionSummaryResponse(
+        id=str(summary.id),
+        name=summary.name,
+        status=summary.status.value,
+        map_id=summary.map_id,
+        world_time=summary.world_time.isoformat(),
+        turn=summary.turn,
+        revision=summary.revision,
+        save_version=summary.save_version,
+        created_at=summary.created_at.isoformat(),
+        saved_at=summary.saved_at.isoformat(),
+    )
+
+
+async def _resume_runtime(
+    *, runtime: WorldRuntime, stream: SpatialWorldStream, should_run: bool
+) -> None:
+    if not stream.running:
+        await stream.start()
+    if should_run and not runtime.scheduler_running:
+        await runtime.start_scheduler()
+
+
+@app.get("/sessions", response_model=SessionListResponse)
+async def get_sessions() -> SessionListResponse:
+    repository = _require_session_repository()
+    summaries = await asyncio.to_thread(repository.list_sessions, limit=50)
+    current_session_id = cast(
+        uuid.UUID | None, getattr(app.state, "current_session_id", None)
+    )
+    return SessionListResponse(
+        current_session_id=(str(current_session_id) if current_session_id else None),
+        sessions=[_session_summary_response(summary) for summary in summaries],
+    )
+
+
+@app.post("/sessions", response_model=SessionSummaryResponse, status_code=201)
+async def post_session(request: SessionCreateRequest) -> SessionSummaryResponse:
+    repository = _require_session_repository()
+    lock = cast(asyncio.Lock, app.state.session_lock)
+    async with lock:
+        new_runtime, new_spatial = await asyncio.to_thread(_build_runtime_bundle)
+        new_state = new_runtime.export_save_state(scheduler_was_running=True)
+        old_runtime = cast(WorldRuntime, _require_runtime())
+        old_spatial = cast(SpatialWorldRuntime, app.state.spatial_runtime)
+        old_session_id = cast(
+            uuid.UUID | None, getattr(app.state, "current_session_id", None)
+        )
+        stream = cast(SpatialWorldStream, app.state.spatial_stream)
+        old_was_running = old_runtime.scheduler_running
+        await stream.stop()
+        await old_runtime.pause_scheduler()
+        try:
+            await stream.replace_runtime(new_spatial)
+            app.state.world_runtime = new_runtime
+            app.state.spatial_runtime = new_spatial
+            await stream.start()
+            await new_runtime.start_scheduler()
+            summary = await asyncio.to_thread(
+                repository.create,
+                name=request.name,
+                state=new_state,
+            )
+            app.state.current_session_id = summary.id
+        except Exception:
+            await stream.stop()
+            await new_runtime.pause_scheduler()
+            await stream.replace_runtime(old_spatial)
+            app.state.world_runtime = old_runtime
+            app.state.spatial_runtime = old_spatial
+            app.state.current_session_id = old_session_id
+            await _resume_runtime(
+                runtime=old_runtime,
+                stream=stream,
+                should_run=old_was_running,
+            )
+            raise
+        return _session_summary_response(summary)
+
+
+@app.post("/sessions/current/save", response_model=SessionSummaryResponse)
+async def post_current_session_save(
+    request: SessionSaveRequest,
+) -> SessionSummaryResponse:
+    repository = _require_session_repository()
+    session_id = cast(
+        uuid.UUID | None, getattr(app.state, "current_session_id", None)
+    )
+    if session_id is None:
+        raise HTTPException(status_code=409, detail="there is no active session")
+    lock = cast(asyncio.Lock, app.state.session_lock)
+    async with lock:
+        runtime = _require_runtime()
+        stream = cast(SpatialWorldStream, app.state.spatial_stream)
+        was_running = runtime.scheduler_running
+        await stream.stop()
+        await runtime.pause_scheduler()
+        try:
+            state = runtime.export_save_state(scheduler_was_running=was_running)
+            summary = await asyncio.to_thread(
+                repository.save,
+                session_id=session_id,
+                state=state,
+                expected_save_version=request.expected_save_version,
+            )
+            if summary is None:
+                raise HTTPException(status_code=404, detail="session not found")
+        except SaveVersionConflictError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        finally:
+            await _resume_runtime(
+                runtime=runtime,
+                stream=stream,
+                should_run=was_running,
+            )
+        return _session_summary_response(summary)
+
+
+@app.post("/sessions/{session_id}/load", response_model=SessionSummaryResponse)
+async def post_session_load(session_id: uuid.UUID) -> SessionSummaryResponse:
+    repository = _require_session_repository()
+    saved = await asyncio.to_thread(repository.get, session_id)
+    if saved is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    _, saved_state = saved
+    new_runtime, new_spatial = await asyncio.to_thread(_build_runtime_bundle)
+    new_runtime.restore_save_state(saved_state)
+    lock = cast(asyncio.Lock, app.state.session_lock)
+    async with lock:
+        old_runtime = _require_runtime()
+        old_spatial = cast(SpatialWorldRuntime, app.state.spatial_runtime)
+        old_session_id = cast(
+            uuid.UUID | None, getattr(app.state, "current_session_id", None)
+        )
+        stream = cast(SpatialWorldStream, app.state.spatial_stream)
+        old_was_running = old_runtime.scheduler_running
+        await stream.stop()
+        await old_runtime.pause_scheduler()
+        try:
+            await stream.replace_runtime(new_spatial)
+            app.state.world_runtime = new_runtime
+            app.state.spatial_runtime = new_spatial
+            await stream.start()
+            if saved_state.scheduler_was_running:
+                await new_runtime.start_scheduler()
+            summary = await asyncio.to_thread(
+                repository.activate, session_id=session_id
+            )
+            if summary is None:
+                raise HTTPException(status_code=404, detail="session not found")
+            app.state.current_session_id = session_id
+        except Exception:
+            await stream.stop()
+            await new_runtime.pause_scheduler()
+            await stream.replace_runtime(old_spatial)
+            app.state.world_runtime = old_runtime
+            app.state.spatial_runtime = old_spatial
+            app.state.current_session_id = old_session_id
+            await _resume_runtime(
+                runtime=old_runtime,
+                stream=stream,
+                should_run=old_was_running,
+            )
+            raise
+        return _session_summary_response(summary)
 
 
 @app.get("/world/map", response_model=WorldMapResponse)
@@ -221,6 +489,15 @@ def _spatial_response(snapshot: SpatialWorldSnapshot) -> SpatialWorldResponse:
         return result
 
     return SpatialWorldResponse(
+        session_id=(
+            str(current_session_id)
+            if (
+                current_session_id := getattr(
+                    app.state, "current_session_id", None
+                )
+            )
+            else None
+        ),
         revision=snapshot.revision,
         map_id=snapshot.map_id,
         agents=[

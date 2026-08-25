@@ -1,0 +1,15 @@
+{
+  "name": "@agent-crossing/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "prisma validate --config prisma.config.ts",
+    "migrate:deploy": "prisma migrate deploy --config prisma.config.ts",
+    "migrate:status": "prisma migrate status --config prisma.config.ts",
+    "studio": "prisma studio --config prisma.config.ts"
+  },
+  "devDependencies": {
+    "prisma": "^7.0.0"
+  }
+}

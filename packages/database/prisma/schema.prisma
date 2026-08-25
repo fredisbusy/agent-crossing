@@ -1,0 +1,180 @@
+datasource db {
+  provider = "postgresql"
+}
+
+enum GameSessionStatus {
+  ACTIVE
+  SAVED
+  ERROR
+}
+
+enum PlanLevel {
+  DAY
+  HOURLY
+  MINUTE
+}
+
+enum MemoryNodeType {
+  OBSERVATION
+  REFLECTION
+  PLAN
+}
+
+model GameSession {
+  id                    String                   @id @db.Uuid
+  name                  String                   @db.VarChar(80)
+  status                GameSessionStatus        @default(SAVED)
+  mapId                 String                   @map("map_id") @db.VarChar(80)
+  worldTime             DateTime                 @map("world_time") @db.Timestamp(6)
+  turn                  BigInt
+  revision              BigInt
+  parseFailures         Int                      @map("parse_failures") @default(0)
+  silentTurns           Int                      @map("silent_turns") @default(0)
+  lastDialogueEndAt     DateTime?                @map("last_dialogue_end_at") @db.Timestamp(6)
+  schedulerWasRunning   Boolean                  @map("scheduler_was_running") @default(true)
+  planningError         String?                  @map("planning_error")
+  schemaVersion         Int                      @map("schema_version") @default(1)
+  saveVersion           Int                      @map("save_version") @default(1)
+  snapshot              Json                     @db.JsonB
+  createdAt             DateTime                 @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                 @map("updated_at") @updatedAt @db.Timestamptz(6)
+  savedAt               DateTime                 @map("saved_at") @default(now()) @db.Timestamptz(6)
+  characters            SessionCharacter[]
+  dialogueState         SessionDialogueState?
+  cognitiveLogs         SessionCognitiveLog[]
+
+  @@index([status, savedAt(sort: Desc)])
+  @@map("game_sessions")
+}
+
+model SessionCharacter {
+  id                              String                @id @db.Uuid
+  sessionId                       String                @map("session_id") @db.Uuid
+  agentId                         String                @map("agent_id") @db.VarChar(80)
+  name                            String                @db.VarChar(120)
+  personaSnapshot                 Json                  @map("persona_snapshot") @db.JsonB
+  tileX                           Int                   @map("tile_x")
+  tileY                           Int                   @map("tile_y")
+  goalX                           Int?                  @map("goal_x")
+  goalY                           Int?                  @map("goal_y")
+  destinationPath                 String?               @map("destination_path")
+  route                           Json                  @db.JsonB
+  currentAction                   String                @map("current_action")
+  plan                            String
+  currentPlanContext              Json                  @map("current_plan_context") @db.JsonB
+  reflectionAccumulatedImportance Int                   @map("reflection_accumulated_importance") @default(0)
+  lastReplanReason                String?               @map("last_replan_reason")
+  session                         GameSession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  memories                        SessionMemory[]
+  plans                           SessionPlanItem[]
+  cognitiveLogs                   SessionCognitiveLog[]
+
+  @@unique([sessionId, agentId])
+  @@map("session_characters")
+}
+
+model SessionMemory {
+  id              String                 @id @db.Uuid
+  characterId     String                 @map("character_id") @db.Uuid
+  runtimeLocalId  Int                    @map("runtime_local_id")
+  nodeType        MemoryNodeType         @map("node_type")
+  content         String
+  importance      Int
+  embedding       Unsupported("vector(1024)")
+  gameCreatedAt   DateTime               @map("game_created_at") @db.Timestamp(6)
+  lastAccessedAt  DateTime               @map("last_accessed_at") @db.Timestamp(6)
+  insertedAt      DateTime               @map("inserted_at") @default(now()) @db.Timestamptz(6)
+  character       SessionCharacter       @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  citations       SessionMemoryCitation[] @relation("memory_citations")
+  citedBy         SessionMemoryCitation[] @relation("cited_memories")
+
+  @@unique([characterId, runtimeLocalId])
+  @@index([characterId, gameCreatedAt(sort: Desc)])
+  @@index([characterId, lastAccessedAt])
+  @@map("session_memories")
+}
+
+model SessionMemoryCitation {
+  memoryId      String        @map("memory_id") @db.Uuid
+  citedMemoryId String        @map("cited_memory_id") @db.Uuid
+  position      Int
+  memory        SessionMemory @relation("memory_citations", fields: [memoryId], references: [id], onDelete: Cascade)
+  citedMemory   SessionMemory @relation("cited_memories", fields: [citedMemoryId], references: [id], onDelete: Cascade)
+
+  @@id([memoryId, citedMemoryId])
+  @@map("session_memory_citations")
+}
+
+model SessionPlanItem {
+  id            String             @id @db.Uuid
+  characterId   String             @map("character_id") @db.Uuid
+  parentId      String?            @map("parent_id") @db.Uuid
+  level         PlanLevel
+  ordinal       Int
+  startTime     DateTime           @map("start_time") @db.Timestamp(6)
+  endTime       DateTime           @map("end_time") @db.Timestamp(6)
+  location      String
+  actionContent String             @map("action_content")
+  isActive      Boolean            @map("is_active") @default(false)
+  character     SessionCharacter   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  parent        SessionPlanItem?   @relation("plan_hierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children      SessionPlanItem[]  @relation("plan_hierarchy")
+
+  @@unique([characterId, level, ordinal])
+  @@index([characterId, level, startTime, endTime])
+  @@map("session_plan_items")
+}
+
+model SessionDialogueState {
+  sessionId               String      @id @map("session_id") @db.Uuid
+  isActive                Boolean     @map("is_active")
+  turnIndex               Int         @map("turn_index")
+  dialogueTurnWindow      Int?        @map("dialogue_turn_window")
+  dialogueTargetTurns     Int         @map("dialogue_target_turns")
+  dialogueTurnsTaken      Int         @map("dialogue_turns_taken")
+  dialogueGoal            String?     @map("dialogue_goal")
+  history                 Json        @db.JsonB
+  historyByAgent          Json        @map("history_by_agent") @db.JsonB
+  incomingQueuesByAgent   Json        @map("incoming_queues_by_agent") @db.JsonB
+  session                 GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_dialogue_states")
+}
+
+model SessionCognitiveLog {
+  id              BigInt            @id @default(autoincrement())
+  sessionId       String            @map("session_id") @db.Uuid
+  characterId     String?           @map("character_id") @db.Uuid
+  sequence        BigInt
+  turn            BigInt
+  occurredAt      DateTime          @map("occurred_at") @db.Timestamp(6)
+  agentId         String            @map("agent_id") @db.VarChar(80)
+  agentName       String            @map("agent_name") @db.VarChar(120)
+  reply           String
+  silentReason    String            @map("silent_reason")
+  parseFailure    Boolean           @map("parse_failure")
+  thought         String
+  modelThought    String            @map("model_thought")
+  selfCritique    String            @map("self_critique")
+  decisionReason  String            @map("decision_reason")
+  actionSummary   String            @map("action_summary")
+  decisionProcess Json              @map("decision_process") @db.JsonB
+  governanceTrace Json              @map("governance_trace") @db.JsonB
+  session         GameSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  character       SessionCharacter? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, sequence])
+  @@index([sessionId, sequence(sort: Desc)])
+  @@index([characterId, sequence(sort: Desc)])
+  @@map("session_cognitive_logs")
+}
+
+model VectorMemory {
+  id          Int                         @id @default(autoincrement())
+  description String
+  importance  Int
+  embedding   Unsupported("vector(1024)")
+  createdAt   DateTime                    @map("created_at") @default(now()) @db.Timestamp(6)
+
+  @@map("vector_memories")
+}

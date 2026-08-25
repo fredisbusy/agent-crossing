@@ -21,5 +21,10 @@ class Reflection:
     def clear_importance(self) -> None:
         self._accumulated_importance = 0
 
+    def restore_importance(self, importance: int) -> None:
+        if importance < 0:
+            raise ValueError("accumulated importance must not be negative")
+        self._accumulated_importance = importance
+
     def should_reflect(self) -> bool:
         return self._accumulated_importance >= self.config.threshold

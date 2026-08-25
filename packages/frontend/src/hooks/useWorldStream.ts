@@ -108,6 +108,7 @@ function parseAgent(value: unknown): SpatialAgentState | null {
 function parseSnapshot(value: unknown): SpatialWorldSnapshot | null {
   if (
     !isRecord(value) ||
+    (value.session_id !== null && typeof value.session_id !== "string") ||
     typeof value.revision !== "number" ||
     typeof value.map_id !== "string" ||
     !Array.isArray(value.agents) ||
@@ -123,6 +124,7 @@ function parseSnapshot(value: unknown): SpatialWorldSnapshot | null {
     return null;
   }
   return {
+    session_id: value.session_id,
     revision: value.revision,
     map_id: value.map_id,
     agents: agents.filter(

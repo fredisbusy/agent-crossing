@@ -1,0 +1,346 @@
+from __future__ import annotations
+
+import datetime
+import uuid
+from dataclasses import dataclass
+
+from db.models import (
+    GameSessionRecord,
+    GameSessionStatus,
+    MemoryNodeType,
+    PlanLevel,
+    SessionCharacterRecord,
+    SessionCognitiveLogRecord,
+    SessionDialogueStateRecord,
+    SessionMemoryCitationRecord,
+    SessionMemoryRecord,
+    SessionPlanItemRecord,
+)
+from db.session import SessionLocal
+from persistence.contracts import RuntimeSaveState
+from sqlalchemy import delete, select, update
+from sqlalchemy.orm import Session
+
+
+class SaveVersionConflictError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class SessionSummary:
+    id: uuid.UUID
+    name: str
+    status: GameSessionStatus
+    map_id: str
+    world_time: datetime.datetime
+    turn: int
+    revision: int
+    save_version: int
+    created_at: datetime.datetime
+    saved_at: datetime.datetime
+
+
+class GameSessionRepository:
+    def list_sessions(self, *, limit: int = 50) -> list[SessionSummary]:
+        bounded_limit = max(1, min(limit, 100))
+        with SessionLocal() as db:
+            records = db.scalars(
+                select(GameSessionRecord)
+                .order_by(GameSessionRecord.saved_at.desc())
+                .limit(bounded_limit)
+            ).all()
+            return [_summary(record) for record in records]
+
+    def latest_session(self) -> tuple[SessionSummary, RuntimeSaveState] | None:
+        with SessionLocal() as db:
+            record = db.scalar(
+                select(GameSessionRecord)
+                .order_by(
+                    (GameSessionRecord.status == GameSessionStatus.ACTIVE).desc(),
+                    GameSessionRecord.saved_at.desc(),
+                )
+                .limit(1)
+            )
+            if record is None:
+                return None
+            return _summary(record), RuntimeSaveState.model_validate(record.snapshot)
+
+    def get(self, session_id: uuid.UUID) -> tuple[SessionSummary, RuntimeSaveState] | None:
+        with SessionLocal() as db:
+            record = db.get(GameSessionRecord, session_id)
+            if record is None:
+                return None
+            return _summary(record), RuntimeSaveState.model_validate(record.snapshot)
+
+    def create(self, *, name: str, state: RuntimeSaveState) -> SessionSummary:
+        session_id = uuid.uuid4()
+        now = datetime.datetime.now(datetime.UTC)
+        with SessionLocal.begin() as db:
+            _mark_all_saved(db)
+            record = GameSessionRecord(
+                id=session_id,
+                name=name,
+                status=GameSessionStatus.ACTIVE,
+                map_id=state.map_id,
+                world_time=state.current_time,
+                turn=state.turn,
+                revision=state.revision,
+                parse_failures=state.parse_failures,
+                silent_turns=state.silent_turns,
+                last_dialogue_end_at=state.last_dialogue_end_time,
+                scheduler_was_running=state.scheduler_was_running,
+                planning_error=state.planning_error,
+                schema_version=state.schema_version,
+                save_version=1,
+                snapshot=state.model_dump(mode="json"),
+                created_at=now,
+                updated_at=now,
+                saved_at=now,
+            )
+            db.add(record)
+            _write_projection(db, session_id=session_id, state=state)
+            db.flush()
+            summary = _summary(record)
+        return summary
+
+    def save(
+        self,
+        *,
+        session_id: uuid.UUID,
+        state: RuntimeSaveState,
+        expected_save_version: int | None,
+    ) -> SessionSummary | None:
+        now = datetime.datetime.now(datetime.UTC)
+        with SessionLocal.begin() as db:
+            record = db.scalar(
+                select(GameSessionRecord)
+                .where(GameSessionRecord.id == session_id)
+                .with_for_update()
+            )
+            if record is None:
+                return None
+            if (
+                expected_save_version is not None
+                and record.save_version != expected_save_version
+            ):
+                raise SaveVersionConflictError(
+                    f"expected save version {expected_save_version}, got {record.save_version}"
+                )
+            record.map_id = state.map_id
+            record.world_time = state.current_time
+            record.turn = state.turn
+            record.revision = state.revision
+            record.parse_failures = state.parse_failures
+            record.silent_turns = state.silent_turns
+            record.last_dialogue_end_at = state.last_dialogue_end_time
+            record.scheduler_was_running = state.scheduler_was_running
+            record.planning_error = state.planning_error
+            record.schema_version = state.schema_version
+            record.save_version += 1
+            record.snapshot = state.model_dump(mode="json")
+            record.updated_at = now
+            record.saved_at = now
+            _delete_projection(db, session_id=session_id)
+            _write_projection(db, session_id=session_id, state=state)
+            db.flush()
+            summary = _summary(record)
+        return summary
+
+    def activate(self, *, session_id: uuid.UUID) -> SessionSummary | None:
+        now = datetime.datetime.now(datetime.UTC)
+        with SessionLocal.begin() as db:
+            record = db.scalar(
+                select(GameSessionRecord)
+                .where(GameSessionRecord.id == session_id)
+                .with_for_update()
+            )
+            if record is None:
+                return None
+            _mark_all_saved(db)
+            record.status = GameSessionStatus.ACTIVE
+            record.updated_at = now
+            db.flush()
+            summary = _summary(record)
+        return summary
+
+
+def _mark_all_saved(db: Session) -> None:
+    db.execute(
+        update(GameSessionRecord)
+        .where(GameSessionRecord.status == GameSessionStatus.ACTIVE)
+        .values(status=GameSessionStatus.SAVED)
+    )
+
+
+def _delete_projection(db: Session, *, session_id: uuid.UUID) -> None:
+    db.execute(
+        delete(SessionCognitiveLogRecord).where(
+            SessionCognitiveLogRecord.session_id == session_id
+        )
+    )
+    db.execute(
+        delete(SessionDialogueStateRecord).where(
+            SessionDialogueStateRecord.session_id == session_id
+        )
+    )
+    db.execute(
+        delete(SessionCharacterRecord).where(
+            SessionCharacterRecord.session_id == session_id
+        )
+    )
+
+
+def _write_projection(
+    db: Session, *, session_id: uuid.UUID, state: RuntimeSaveState
+) -> None:
+    character_ids: dict[str, uuid.UUID] = {}
+    memory_ids: dict[tuple[str, int], uuid.UUID] = {}
+    for character in state.characters:
+        character_id = uuid.uuid4()
+        character_ids[character.agent_id] = character_id
+        planning_reason = (
+            character.planning.last_replan_reason
+            if character.planning is not None
+            else None
+        )
+        db.add(
+            SessionCharacterRecord(
+                id=character_id,
+                session_id=session_id,
+                agent_id=character.agent_id,
+                name=character.name,
+                persona_snapshot={
+                    "age": character.age,
+                    "traits": character.traits,
+                    "identity_stable_set": character.identity_stable_set,
+                    "lifestyle_and_routine": character.lifestyle_and_routine,
+                },
+                tile_x=character.tile_position.x,
+                tile_y=character.tile_position.y,
+                goal_x=character.goal.x if character.goal is not None else None,
+                goal_y=character.goal.y if character.goal is not None else None,
+                destination_path=character.destination_path,
+                route=[point.model_dump() for point in character.route],
+                current_action=character.current_action,
+                plan=character.plan,
+                current_plan_context=list(character.current_plan_context),
+                reflection_accumulated_importance=(
+                    character.reflection_accumulated_importance
+                ),
+                last_replan_reason=planning_reason,
+            )
+        )
+        if character.planning is not None:
+            plan_groups = (
+                (PlanLevel.DAY, character.planning.day_items),
+                (PlanLevel.HOURLY, character.planning.hourly_items),
+                (PlanLevel.MINUTE, character.planning.minute_items),
+            )
+            for level, items in plan_groups:
+                for ordinal, item in enumerate(items):
+                    db.add(
+                        SessionPlanItemRecord(
+                            id=uuid.uuid4(),
+                            character_id=character_id,
+                            parent_id=None,
+                            level=level,
+                            ordinal=ordinal,
+                            start_time=item.start_time,
+                            end_time=item.end_time,
+                            location=item.location,
+                            action_content=item.action_content,
+                            is_active=(
+                                item.start_time <= state.current_time < item.end_time
+                            ),
+                        )
+                    )
+        for memory in character.memories:
+            memory_id = uuid.uuid4()
+            memory_ids[(character.agent_id, memory.id)] = memory_id
+            db.add(
+                SessionMemoryRecord(
+                    id=memory_id,
+                    character_id=character_id,
+                    runtime_local_id=memory.id,
+                    node_type=MemoryNodeType(memory.node_type),
+                    content=memory.content,
+                    importance=memory.importance,
+                    embedding=memory.embedding,
+                    game_created_at=memory.created_at,
+                    last_accessed_at=memory.last_accessed_at,
+                )
+            )
+    db.flush()
+    for character in state.characters:
+        for memory in character.memories:
+            for position, cited_local_id in enumerate(memory.citations or []):
+                cited_id = memory_ids.get((character.agent_id, cited_local_id))
+                if cited_id is None:
+                    raise ValueError(
+                        f"memory {memory.id} cites unknown memory {cited_local_id}"
+                    )
+                db.add(
+                    SessionMemoryCitationRecord(
+                        memory_id=memory_ids[(character.agent_id, memory.id)],
+                        cited_memory_id=cited_id,
+                        position=position,
+                    )
+                )
+    conversation = state.conversation
+    db.add(
+        SessionDialogueStateRecord(
+            session_id=session_id,
+            is_active=conversation.is_active,
+            turn_index=conversation.turn_index,
+            dialogue_turn_window=conversation.dialogue_turn_window,
+            dialogue_target_turns=conversation.dialogue_target_turns,
+            dialogue_turns_taken=conversation.dialogue_turns_taken,
+            dialogue_goal=conversation.dialogue_goal,
+            history=[list(item) for item in conversation.history],
+            history_by_agent={
+                agent: [list(item) for item in history]
+                for agent, history in conversation.dialogue_history_by_agent.items()
+            },
+            incoming_queues_by_agent={
+                agent: list(queue)
+                for agent, queue in conversation.incoming_utterances_by_agent.items()
+            },
+        )
+    )
+    for event in state.dashboard_events:
+        db.add(
+            SessionCognitiveLogRecord(
+                session_id=session_id,
+                character_id=character_ids.get(event.agent_id),
+                sequence=event.sequence,
+                turn=event.turn,
+                occurred_at=event.occurred_at,
+                agent_id=event.agent_id,
+                agent_name=event.agent_name,
+                reply=event.reply,
+                silent_reason=event.silent_reason,
+                parse_failure=event.parse_failure,
+                thought=event.thought,
+                model_thought=event.model_thought,
+                self_critique=event.self_critique,
+                decision_reason=event.decision_reason,
+                action_summary=event.action_summary,
+                decision_process=event.decision_process,
+                governance_trace=event.governance_trace,
+            )
+        )
+
+
+def _summary(record: GameSessionRecord) -> SessionSummary:
+    return SessionSummary(
+        id=record.id,
+        name=record.name,
+        status=record.status,
+        map_id=record.map_id,
+        world_time=record.world_time,
+        turn=record.turn,
+        revision=record.revision,
+        save_version=record.save_version,
+        created_at=record.created_at,
+        saved_at=record.saved_at,
+    )

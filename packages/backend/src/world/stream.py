@@ -56,6 +56,16 @@ class SpatialWorldStream:
     def unsubscribe(self, queue: asyncio.Queue[SpatialWorldSnapshot]) -> None:
         self._subscribers.discard(queue)
 
+    async def replace_runtime(self, runtime: SpatialWorldRuntime) -> None:
+        """Swap worlds while retaining existing WebSocket subscribers."""
+        was_running = self.running
+        if was_running:
+            await self.stop()
+        self.runtime = runtime
+        self._publish(runtime.snapshot())
+        if was_running:
+            await self.start()
+
     async def _run(self) -> None:
         while True:
             snapshot = self.runtime.tick()

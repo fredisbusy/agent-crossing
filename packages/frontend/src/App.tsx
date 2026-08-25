@@ -22,6 +22,7 @@ import {
   residentPlanLabel,
   residentStatusLabel,
 } from "./ui/observer";
+import { SessionMenu } from "./components/SessionMenu";
 
 const mapSpawns = getLayer("spawns");
 
@@ -189,6 +190,7 @@ function App() {
         <a className="dashboard-link" href="/dashboard">
           <BrainCircuit size={13} /> DASHBOARD
         </a>
+        <SessionMenu />
       </header>
 
       <button

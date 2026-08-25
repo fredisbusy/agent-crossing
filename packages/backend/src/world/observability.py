@@ -81,3 +81,13 @@ class DashboardEventBuffer:
     def latest_sequence(self) -> int:
         with self._lock:
             return self._next_sequence - 1
+
+    def restore(self, events: list[DashboardEvent]) -> None:
+        """Restore a bounded, monotonically sequenced diagnostic tail."""
+        ordered = sorted(events, key=lambda event: event.sequence)
+        if len({event.sequence for event in ordered}) != len(ordered):
+            raise ValueError("dashboard event sequences must be unique")
+        with self._lock:
+            capacity = self._events.maxlen or 500
+            self._events = deque(ordered[-capacity:], maxlen=capacity)
+            self._next_sequence = (ordered[-1].sequence + 1) if ordered else 1

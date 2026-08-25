@@ -33,6 +33,8 @@ Backend (FastAPI)
   - AgentBrain (tick loop)
   - Memory (PostgreSQL + pgvector)
   - World clock/scheduler
+Database package (Prisma)
+  - schema and PostgreSQL migrations
 ```
 
 Backend 레이어 책임:
@@ -91,7 +93,21 @@ Backend 레이어 책임:
 ### 4.2 Storage
 
 - 영속 저장소: PostgreSQL + pgvector
+- DB 스키마와 migration의 단일 기준은 `packages/database/prisma`이다.
+- Python runtime은 Prisma가 생성한 구조를 SQLAlchemy repository로 읽고 쓴다.
 - 메모리 조회 기본 정렬: score 내림차순, 동점 시 최신 생성 우선
+
+### 4.3 게임 세션 저장 계약
+
+- 한 시점에 `ACTIVE` 세션은 하나이며 나머지 저장 슬롯은 `SAVED` 상태다.
+- 저장 snapshot은 schema version과 낙관적 `save_version`을 포함한다.
+- 세션은 world clock, turn/revision, scheduler 상태, planning error, 조우 cooldown,
+  대화 큐/history, 공개 가능한 diagnostics를 저장한다.
+- 캐릭터는 persona/profile, tile/goal/route/destination, 현재 행동, memory/citation,
+  reflection 누적값과 day/hourly/minute planning cache를 저장한다.
+- provider 원문 응답, prompt, API key는 cognitive log에 저장하지 않는다.
+- 로드 전에 map/agent roster, embedding 차원, walkable 좌표와 연속 route를 검증한다.
+- 저장 또는 로드 중 실패하면 기존 runtime, spatial stream, 활성 세션을 함께 유지한다.
 
 ---
 
@@ -266,12 +282,16 @@ react 정책:
 
 월드 API:
 
+- `GET /sessions`: 현재 슬롯과 저장된 세션 목록 반환
+- `POST /sessions`: 06:00 초기 상태의 새 세션 생성 및 활성화
+- `POST /sessions/current/save`: 현재 runtime을 저장하며 선택적으로 save version 충돌 검사
+- `POST /sessions/{session_id}/load`: 저장 snapshot 검증 후 해당 세션 활성화
 - `GET /world/map`: 장소, 충돌, 상호작용 물체, 스폰의 canonical snapshot
 - `POST /world/observe`: 좌표와 반경을 입력받아 현재 위치와 주변 affordance 반환
 - `POST /world/path`: tile 좌표 입력을 받아 충돌을 우회하는 4방향 A\* 경로 반환
 - `GET /world/spatial/state`: 현재 공간 revision, 게임 시각, scheduler 상태, 좌표, 목적지, 활성 계층 계획과 하루 계획을 반환
 - `POST /world/spatial/step`: 결정론적 공간 tick을 한 번 진행
-- `WS /ws/world`: 최신 공간 snapshot을 약 650ms 간격으로 전달
+- `WS /ws/world`: `session_id`를 포함한 최신 공간 snapshot을 약 650ms 간격으로 전달
 - 목적지가 막혔거나 도달 불가능하면 `reachable=false`, `path=[]`를 반환
 - `/ws/world` handler는 snapshot 송신과 client disconnect 수신을 동시에 감시한다.
   한쪽이 종료되면 반대 task와 stream 구독을 즉시 취소해 reload/shutdown이 열린

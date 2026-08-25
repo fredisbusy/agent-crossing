@@ -21,6 +21,7 @@ interface GameTextOverlayState {
 }
 
 interface GameState {
+  sessionId: string | null;
   revision: number;
   mapId: string | null;
   agents: Record<string, SpatialAgentState>;
@@ -48,6 +49,7 @@ interface GameState {
 }
 
 export const useGameStore = create<GameState>((set) => ({
+  sessionId: null,
   revision: 0,
   mapId: null,
   agents: {},
@@ -63,6 +65,7 @@ export const useGameStore = create<GameState>((set) => ({
   gameTextOverlay: { owner: null, labels: [] },
   setSnapshot: (snapshot) =>
     set({
+      sessionId: snapshot.session_id,
       revision: snapshot.revision,
       mapId: snapshot.map_id,
       currentTime: snapshot.current_time,

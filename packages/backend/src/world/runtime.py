@@ -6,14 +6,28 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
+import numpy as np
+
 from agents.sim_agent import SimAgent
-from agents.planning.lifecycle import LifeAgent, PlanningCoordinator
+from agents.memory.memory_object import MemoryObject, NodeType
+from agents.planning.lifecycle import (
+    LifeAgent,
+    PlanningCoordinator,
+    PlanningGenerationError,
+)
 from llm.governance import (
     ConversationMetrics,
     build_conversation_metrics,
 )
 from llm.clients.provider_factory import build_provider_client
 from agents.world_factory import init_agents
+from persistence.contracts import (
+    CharacterSave,
+    DashboardEventSave,
+    MemorySave,
+    RuntimeSaveState,
+    sanitized_diagnostics,
+)
 
 from .engine import (
     SimulationEngine,
@@ -102,6 +116,7 @@ class WorldRuntime:
         self._partner: SimAgent = agents[1]
         self._step_lock: threading.Lock = threading.Lock()
         self._scheduler_task: asyncio.Task[None] | None = None
+        self._scheduler_stop_requested: bool = False
         self._plan_refresh_task: asyncio.Task[None] | None = None
         self._cognitive_task: asyncio.Task[None] | None = None
         self.planning_coordinator: PlanningCoordinator | None = planning_coordinator
@@ -238,8 +253,31 @@ class WorldRuntime:
     async def start_scheduler(self) -> bool:
         if self.scheduler_running:
             return False
+        self._scheduler_stop_requested = False
         self._scheduler_task = asyncio.create_task(self._run_scheduler())
         return True
+
+    async def pause_scheduler(self) -> bool:
+        """Stop at a safe boundary and wait for in-flight cognition to finish."""
+        was_running = self.scheduler_running
+        task = self._scheduler_task
+        if task is not None and not task.done():
+            self._scheduler_stop_requested = True
+            await task
+        self._scheduler_task = None
+        cognitive_task = self._cognitive_task
+        if cognitive_task is not None and not cognitive_task.done():
+            await cognitive_task
+        if cognitive_task is not None and cognitive_task.done():
+            _ = cognitive_task.exception()
+        self._cognitive_task = None
+        if self.spatial_runtime is not None:
+            self.spatial_runtime.update_world_state(
+                current_time=self.current_time,
+                turn=self.turn,
+                scheduler_running=False,
+            )
+        return was_running
 
     async def stop_scheduler(self) -> bool:
         if self._scheduler_task is None:
@@ -272,12 +310,29 @@ class WorldRuntime:
     async def _run_scheduler(self) -> None:
         if self.planning_coordinator is not None:
             try:
-                await self._refresh_plans()
+                schedules = [
+                    self.planning_coordinator.ensure_current(
+                        agent=_as_life_agent(agent),
+                        now=self.current_time,
+                        generate=False,
+                    )
+                    for agent in self.agents
+                ]
+                if self.spatial_runtime is not None:
+                    for schedule in schedules:
+                        self.spatial_runtime.set_schedule(schedule)
+            except PlanningGenerationError:
+                try:
+                    await self._refresh_plans()
+                except Exception as error:
+                    self._set_planning_error(error)
+                    logger.exception("Authoritative plan generation failed")
+                    return
             except Exception as error:
                 self._set_planning_error(error)
-                logger.exception("Authoritative plan generation failed")
+                logger.exception("Authoritative restored plan validation failed")
                 return
-        while True:
+        while not self._scheduler_stop_requested:
             try:
                 await asyncio.to_thread(self._advance_world_tick)
             except Exception as error:
@@ -463,6 +518,220 @@ class WorldRuntime:
             cognitive_active=self.cognitive_active,
             effective_time_step_seconds=self.effective_time_step_seconds,
         )
+
+    def export_save_state(self, *, scheduler_was_running: bool) -> RuntimeSaveState:
+        if self.spatial_runtime is None:
+            raise RuntimeError("spatial runtime is required for session persistence")
+        if self.scheduler_running or self.cognitive_active:
+            raise RuntimeError("runtime must be quiescent before it can be saved")
+        with self._step_lock:
+            spatial_snapshot = self.spatial_runtime.snapshot()
+            characters: list[CharacterSave] = []
+            for agent in self.agents:
+                movement = self.spatial_runtime.export_character_state(
+                    agent_id=str(agent.identity.id)
+                )
+                memories = [
+                    MemorySave(
+                        id=memory.id,
+                        node_type=memory.node_type.value,
+                        citations=(
+                            list(memory.citations)
+                            if memory.citations is not None
+                            else None
+                        ),
+                        content=memory.content,
+                        created_at=memory.created_at,
+                        last_accessed_at=memory.last_accessed_at,
+                        importance=memory.importance,
+                        embedding=[float(value) for value in memory.embedding.tolist()],
+                    )
+                    for memory in agent.memory_service.memory_stream.snapshot()
+                ]
+                planning = (
+                    self.planning_coordinator.export_state(
+                        agent_id=str(agent.identity.id)
+                    )
+                    if self.planning_coordinator is not None
+                    else None
+                )
+                characters.append(
+                    CharacterSave(
+                        tile_position=movement.tile_position,
+                        goal=movement.goal,
+                        route=movement.route,
+                        destination_path=movement.destination_path,
+                        explicit_location=movement.explicit_location,
+                        current_action=movement.current_action,
+                        plan=movement.plan,
+                        cognitive_kind=movement.cognitive_kind,
+                        cognitive_text=movement.cognitive_text,
+                        agent_id=str(agent.identity.id),
+                        name=agent.name,
+                        age=agent.identity.age,
+                        traits=list(agent.identity.traits),
+                        identity_stable_set=list(
+                            agent.profile.fixed.identity_stable_set
+                        ),
+                        lifestyle_and_routine=list(
+                            agent.profile.extended.lifestyle_and_routine
+                        ),
+                        current_plan_context=list(
+                            agent.profile.extended.current_plan_context
+                        ),
+                        reflection_accumulated_importance=(
+                            agent.brain.reflection_graph.reflection.accumulated_importance
+                        ),
+                        memories=memories,
+                        planning=planning,
+                    )
+                )
+            dashboard_events: list[DashboardEventSave] = []
+            for event in self.dashboard_events(limit=500):
+                decision_process = sanitized_diagnostics(event.decision_process)
+                governance_trace = sanitized_diagnostics(event.governance_trace)
+                dashboard_events.append(
+                    DashboardEventSave(
+                        sequence=event.sequence,
+                        turn=event.turn,
+                        occurred_at=event.occurred_at,
+                        agent_id=event.agent_id,
+                        agent_name=event.agent_name,
+                        reply=event.reply[:8192],
+                        silent_reason=event.silent_reason[:8192],
+                        parse_failure=event.parse_failure,
+                        thought=event.thought[:8192],
+                        model_thought=event.model_thought[:8192],
+                        self_critique=event.self_critique[:8192],
+                        decision_reason=event.decision_reason[:8192],
+                        action_summary=event.action_summary[:8192],
+                        decision_process=(
+                            decision_process
+                            if isinstance(decision_process, dict)
+                            else {}
+                        ),
+                        governance_trace=(
+                            governance_trace
+                            if isinstance(governance_trace, dict)
+                            else {}
+                        ),
+                    )
+                )
+            return RuntimeSaveState(
+                map_id=spatial_snapshot.map_id,
+                current_time=self.current_time,
+                turn=self.turn,
+                revision=spatial_snapshot.revision,
+                parse_failures=self.parse_failures,
+                silent_turns=self.silent_turns,
+                scheduler_was_running=scheduler_was_running,
+                planning_error=self.planning_error,
+                last_dialogue_end_time=self._last_dialogue_end_time,
+                conversation=self.session.export_state(),
+                characters=characters,
+                dashboard_events=dashboard_events,
+            )
+
+    def restore_save_state(self, state: RuntimeSaveState) -> None:
+        if self.scheduler_running or self.cognitive_active:
+            raise RuntimeError("runtime must be quiescent before restore")
+        if self.spatial_runtime is None:
+            raise RuntimeError("spatial runtime is required for session restore")
+        if state.map_id != self.spatial_runtime.world_map.id:
+            raise ValueError(f"saved map is not supported: {state.map_id}")
+        saved_by_id = {character.agent_id: character for character in state.characters}
+        runtime_ids = {str(agent.identity.id) for agent in self.agents}
+        if (
+            len(state.characters) != len(saved_by_id)
+            or len(saved_by_id) != len(runtime_ids)
+            or set(saved_by_id) != runtime_ids
+        ):
+            raise ValueError("saved character roster does not match runtime")
+
+        with self._step_lock:
+            self.current_time = state.current_time
+            self.turn = state.turn
+            self.parse_failures = state.parse_failures
+            self.silent_turns = state.silent_turns
+            self.planning_error = state.planning_error
+            self._last_dialogue_end_time = state.last_dialogue_end_time
+            for agent in self.agents:
+                saved = saved_by_id[str(agent.identity.id)]
+                agent.identity.name = saved.name
+                agent.identity.age = saved.age
+                agent.identity.traits = list(saved.traits)
+                agent.profile.fixed.identity_stable_set = list(
+                    saved.identity_stable_set
+                )
+                agent.profile.extended.lifestyle_and_routine = list(
+                    saved.lifestyle_and_routine
+                )
+                agent.profile.extended.current_plan_context = list(
+                    saved.current_plan_context
+                )
+                agent.memory_service.memory_stream.restore(
+                    [
+                        MemoryObject(
+                            id=memory.id,
+                            node_type=NodeType(memory.node_type),
+                            citations=(
+                                list(memory.citations)
+                                if memory.citations is not None
+                                else None
+                            ),
+                            content=memory.content,
+                            created_at=memory.created_at,
+                            last_accessed_at=memory.last_accessed_at,
+                            importance=memory.importance,
+                            embedding=np.asarray(memory.embedding, dtype=np.float32),
+                        )
+                        for memory in saved.memories
+                    ]
+                )
+                agent.brain.reflection_graph.reflection.restore_importance(
+                    saved.reflection_accumulated_importance
+                )
+                if self.planning_coordinator is not None and saved.planning is not None:
+                    self.planning_coordinator.restore_state(
+                        agent_id=saved.agent_id,
+                        state=saved.planning,
+                    )
+                    schedule = self.planning_coordinator.ensure_current(
+                        agent=_as_life_agent(agent),
+                        now=self.current_time,
+                        generate=False,
+                    )
+                    self.spatial_runtime.set_schedule(schedule)
+            self.session.restore_state(state.conversation)
+            self.spatial_runtime.restore_state(
+                revision=state.revision,
+                current_time=state.current_time,
+                turn=state.turn,
+                planning_error=state.planning_error,
+                characters=state.characters,
+            )
+            self._dashboard_events.restore(
+                [
+                    DashboardEvent(
+                        sequence=event.sequence,
+                        turn=event.turn,
+                        occurred_at=event.occurred_at,
+                        agent_id=event.agent_id,
+                        agent_name=event.agent_name,
+                        reply=event.reply,
+                        silent_reason=event.silent_reason,
+                        parse_failure=event.parse_failure,
+                        thought=event.thought,
+                        model_thought=event.model_thought,
+                        self_critique=event.self_critique,
+                        decision_reason=event.decision_reason,
+                        action_summary=event.action_summary,
+                        decision_process=dict(event.decision_process),
+                        governance_trace=dict(event.governance_trace),
+                    )
+                    for event in state.dashboard_events
+                ]
+            )
 
 
 def build_world_runtime(

@@ -84,6 +84,7 @@ export interface PlanItemState {
 }
 
 export interface SpatialWorldSnapshot {
+  session_id: string | null;
   revision: number;
   map_id: string;
   agents: SpatialAgentState[];
@@ -91,6 +92,24 @@ export interface SpatialWorldSnapshot {
   turn: number;
   scheduler_running: boolean;
   planning_error: string | null;
+}
+
+export interface GameSessionSummary {
+  id: string;
+  name: string;
+  status: "ACTIVE" | "SAVED" | "ERROR";
+  map_id: string;
+  world_time: string;
+  turn: number;
+  revision: number;
+  save_version: number;
+  created_at: string;
+  saved_at: string;
+}
+
+export interface GameSessionList {
+  current_session_id: string | null;
+  sessions: GameSessionSummary[];
 }
 
 export interface DashboardMemory {

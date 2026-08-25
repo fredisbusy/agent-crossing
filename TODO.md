@@ -261,8 +261,18 @@
     - [x] planning fallback을 제거하고 생성·검증 실패를 UI와 dashboard에 명시적으로 노출한다
     - [x] 로컬 planner의 생성 timeout을 제거하고 structured JSON 요청에서 Qwen thinking을 끈다
     - [x] 현재 시각을 덮지 않는 미래 계획을 active로 선택하지 않고 planning error로 중단한다
-    - [ ] 재시작 후에도 게임 시각, 위치, 계획 cache와 조우 cooldown을 복원한다
+    - [x] 재시작 후에도 게임 시각, 위치, 계획 cache와 조우 cooldown을 복원한다
     - [ ] 비대화 tick에도 주변 사건을 perceive/store하고 필요할 때 retrieve/reflect/react한다
+
+- [x] `P1` Prisma 기반 RPG 세션 저장/불러오기를 구현한다
+  - Depends on: world clock + tick scheduler 연동
+  - DoD:
+    - [x] Prisma schema와 migration을 세션 DB 구조의 단일 기준으로 사용한다
+    - [x] 세션, 캐릭터, 기억/citation, 계층 계획, 대화 상태, 인지 로그를 PostgreSQL에 저장한다
+    - [x] 새 세션, 현재 세션 저장, 저장된 세션 목록/불러오기 API를 제공한다
+    - [x] HUD에서 현재 슬롯, 새 게임, 저장, 불러오기를 조작할 수 있다
+    - [x] 낙관적 save version 충돌과 잘못된 snapshot 복원을 거부한다
+    - [x] OrbStack PostgreSQL에서 저장 후 backend 재시작과 세션 복원을 검증한다
 
 - [x] `P1` spatial WebSocket snapshot broadcast를 구현한다
   - Depends on: world clock + tick scheduler 연동

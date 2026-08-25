@@ -13,6 +13,7 @@ from .models import (
     HourlyPlanItem,
     MinutePlanItem,
 )
+from persistence.contracts import PlanItemSave, PlanningStateSave
 
 CANONICAL_LOCATIONS: tuple[str, ...] = (
     "브라이어 코브 > 지호의 집",
@@ -108,6 +109,37 @@ class PlanningCoordinator:
     def __init__(self) -> None:
         self._states: dict[str, _AgentPlanState] = {}
         self._lock: threading.RLock = threading.RLock()
+
+    def export_state(self, *, agent_id: str) -> PlanningStateSave | None:
+        with self._lock:
+            state = self._states.get(agent_id)
+            if state is None:
+                return None
+            return PlanningStateSave(
+                plan_date=state.plan_date,
+                day_items=[_save_item(item) for item in state.day_items],
+                hourly_items=[_save_item(item) for item in state.hourly_items],
+                minute_items=[_save_item(item) for item in state.minute_items],
+                hourly_parent_key=state.hourly_parent_key,
+                minute_parent_key=state.minute_parent_key,
+                last_replan_reason=state.last_replan_reason,
+            )
+
+    def restore_state(self, *, agent_id: str, state: PlanningStateSave) -> None:
+        with self._lock:
+            self._states[agent_id] = _AgentPlanState(
+                plan_date=state.plan_date,
+                day_items=[_restore_day_item(item) for item in state.day_items],
+                hourly_items=[
+                    _restore_hourly_item(item) for item in state.hourly_items
+                ],
+                minute_items=[
+                    _restore_minute_item(item) for item in state.minute_items
+                ],
+                hourly_parent_key=state.hourly_parent_key,
+                minute_parent_key=state.minute_parent_key,
+                last_replan_reason=state.last_replan_reason,
+            )
 
     def bootstrap(
         self, *, agent: LifeAgent, now: datetime.datetime
@@ -358,6 +390,44 @@ def _snapshot(
     item: DayPlanItem | HourlyPlanItem | MinutePlanItem,
 ) -> PlanItemSnapshot:
     return PlanItemSnapshot(
+        start_time=item.start_time,
+        end_time=item.end_time,
+        location=item.location,
+        action_content=item.action_content,
+    )
+
+
+def _save_item(
+    item: DayPlanItem | HourlyPlanItem | MinutePlanItem,
+) -> PlanItemSave:
+    return PlanItemSave(
+        start_time=item.start_time,
+        end_time=item.end_time,
+        location=item.location,
+        action_content=item.action_content,
+    )
+
+
+def _restore_day_item(item: PlanItemSave) -> DayPlanItem:
+    return DayPlanItem(
+        start_time=item.start_time,
+        end_time=item.end_time,
+        location=item.location,
+        action_content=item.action_content,
+    )
+
+
+def _restore_hourly_item(item: PlanItemSave) -> HourlyPlanItem:
+    return HourlyPlanItem(
+        start_time=item.start_time,
+        end_time=item.end_time,
+        location=item.location,
+        action_content=item.action_content,
+    )
+
+
+def _restore_minute_item(item: PlanItemSave) -> MinutePlanItem:
+    return MinutePlanItem(
         start_time=item.start_time,
         end_time=item.end_time,
         location=item.location,

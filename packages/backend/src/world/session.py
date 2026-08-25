@@ -4,6 +4,7 @@ from typing import Literal
 from agents.reaction import DialogueArc
 from agents.sim_agent import SimAgent
 from world.observation_builder import format_other_said, format_self_said
+from persistence.contracts import ConversationSave
 
 DEFAULT_DIALOGUE_TARGET_TURNS = 5
 
@@ -216,3 +217,44 @@ class WorldConversationSession:
                 profile=observer.profile,
             )
             self.incoming_utterances_by_agent[observer.name].append(reply)
+
+    def export_state(self) -> ConversationSave:
+        return ConversationSave(
+            is_active=self.is_active,
+            turn_index=self.turn_index,
+            dialogue_turn_window=self.dialogue_turn_window,
+            dialogue_target_turns=self.dialogue_target_turns,
+            dialogue_turns_taken=self.dialogue_turns_taken,
+            dialogue_goal=self.dialogue_goal,
+            history=list(self.history),
+            dialogue_history_by_agent={
+                name: list(history)
+                for name, history in self.dialogue_history_by_agent.items()
+            },
+            incoming_utterances_by_agent={
+                name: list(queue)
+                for name, queue in self.incoming_utterances_by_agent.items()
+            },
+        )
+
+    def restore_state(self, state: ConversationSave) -> None:
+        known_agents = {agent.name for agent in self.agents}
+        if set(state.dialogue_history_by_agent) != known_agents:
+            raise ValueError("dialogue history agent roster does not match runtime")
+        if set(state.incoming_utterances_by_agent) != known_agents:
+            raise ValueError("incoming dialogue queue roster does not match runtime")
+        self.is_active = state.is_active
+        self.turn_index = state.turn_index
+        self.dialogue_turn_window = state.dialogue_turn_window
+        self.dialogue_target_turns = state.dialogue_target_turns
+        self.dialogue_turns_taken = state.dialogue_turns_taken
+        self.dialogue_goal = state.dialogue_goal
+        self.history = list(state.history)
+        self.dialogue_history_by_agent = {
+            name: list(history)
+            for name, history in state.dialogue_history_by_agent.items()
+        }
+        self.incoming_utterances_by_agent = {
+            name: list(queue)
+            for name, queue in state.incoming_utterances_by_agent.items()
+        }

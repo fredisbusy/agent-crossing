@@ -1,5 +1,13 @@
 from .base import Base
-from .models import VectorMemory
+from .models import GameSessionRecord, VectorMemory
 from .session import SessionLocal, engine, get_db, init_db
 
-__all__ = ["Base", "VectorMemory", "SessionLocal", "engine", "get_db", "init_db"]
+__all__ = [
+    "Base",
+    "GameSessionRecord",
+    "VectorMemory",
+    "SessionLocal",
+    "engine",
+    "get_db",
+    "init_db",
+]

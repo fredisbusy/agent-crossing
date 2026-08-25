@@ -1,11 +1,45 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class StatusResponse(BaseModel):
     status: str
     version: str
+
+
+class SessionCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("session name must not be blank")
+        return normalized
+
+
+class SessionSaveRequest(BaseModel):
+    expected_save_version: int | None = Field(default=None, gt=0)
+
+
+class SessionSummaryResponse(BaseModel):
+    id: str
+    name: str
+    status: Literal["ACTIVE", "SAVED", "ERROR"]
+    map_id: str
+    world_time: str
+    turn: int
+    revision: int
+    save_version: int
+    created_at: str
+    saved_at: str
+
+
+class SessionListResponse(BaseModel):
+    current_session_id: str | None
+    sessions: list[SessionSummaryResponse]
 
 
 class WorldStateResponse(BaseModel):
@@ -134,6 +168,7 @@ class PlanItemResponse(BaseModel):
 
 
 class SpatialWorldResponse(BaseModel):
+    session_id: str | None
     revision: int
     map_id: str
     agents: list[SpatialAgentResponse]

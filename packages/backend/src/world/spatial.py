@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from agents.planning.lifecycle import AgentPlanSnapshot, PlanItemSnapshot
+from persistence.contracts import CharacterMovementSave, CharacterSave, PointSave
 
 from .world_map import MapLocation, MapPoint, MapSpawn, WorldMap
 
@@ -181,6 +182,113 @@ class SpatialWorldRuntime:
     def snapshot(self) -> SpatialWorldSnapshot:
         with self._lock:
             return self._snapshot_unlocked()
+
+    def export_character_state(self, *, agent_id: str) -> CharacterMovementSave:
+        """Return movement fields used by the versioned session snapshot."""
+        with self._lock:
+            agent = self._require_agent(agent_id)
+            return CharacterMovementSave(
+                tile_position=PointSave(
+                    x=agent.tile_position.x, y=agent.tile_position.y
+                ),
+                goal=(
+                    PointSave(x=agent.goal.x, y=agent.goal.y)
+                    if agent.goal is not None
+                    else None
+                ),
+                route=[PointSave(x=point.x, y=point.y) for point in agent.route or []],
+                destination_path=(
+                    agent.destination.location_path
+                    if agent.destination is not None
+                    else None
+                ),
+                explicit_location=agent.explicit_location,
+                current_action=agent.current_action,
+                plan=agent.plan,
+                cognitive_kind=agent.cognitive_kind,
+                cognitive_text=agent.cognitive_text,
+            )
+
+    def restore_state(
+        self,
+        *,
+        revision: int,
+        current_time: datetime.datetime,
+        turn: int,
+        planning_error: str | None,
+        characters: list[CharacterSave],
+    ) -> None:
+        if revision < 0 or turn < 0:
+            raise ValueError("world revision and turn must not be negative")
+        with self._lock:
+            saved_ids = {character.agent_id for character in characters}
+            if len(characters) != len(saved_ids) or saved_ids != set(self._agents):
+                raise ValueError("saved spatial agent roster does not match runtime")
+            occupied_tiles: set[MapPoint] = set()
+            for character in characters:
+                tile = MapPoint(
+                    x=character.tile_position.x,
+                    y=character.tile_position.y,
+                )
+                if not self.world_map.is_walkable_tile(tile):
+                    raise ValueError(
+                        f"saved tile is not walkable for {character.agent_id}: {tile}"
+                    )
+                if tile in occupied_tiles:
+                    raise ValueError("saved characters cannot occupy the same tile")
+                occupied_tiles.add(tile)
+                points = [
+                    *(
+                        [MapPoint(x=character.goal.x, y=character.goal.y)]
+                        if character.goal is not None
+                        else []
+                    ),
+                    *[MapPoint(x=point.x, y=point.y) for point in character.route],
+                ]
+                if any(not self.world_map.is_walkable_tile(point) for point in points):
+                    raise ValueError(
+                        f"saved route contains an invalid tile for {character.agent_id}"
+                    )
+                previous = tile
+                for point in character.route:
+                    current = MapPoint(x=point.x, y=point.y)
+                    if abs(previous.x - current.x) + abs(previous.y - current.y) != 1:
+                        raise ValueError(
+                            f"saved route is not contiguous for {character.agent_id}"
+                        )
+                    previous = current
+            for character in characters:
+                agent = self._require_agent(character.agent_id)
+                destination = (
+                    self.world_map.resolve_location(character.destination_path)
+                    if character.destination_path is not None
+                    else None
+                )
+                if character.destination_path is not None and destination is None:
+                    raise ValueError(
+                        f"unknown saved destination: {character.destination_path}"
+                    )
+                agent.tile_position = MapPoint(
+                    x=character.tile_position.x,
+                    y=character.tile_position.y,
+                )
+                agent.goal = (
+                    MapPoint(x=character.goal.x, y=character.goal.y)
+                    if character.goal is not None
+                    else None
+                )
+                agent.route = [MapPoint(x=point.x, y=point.y) for point in character.route]
+                agent.destination = destination
+                agent.explicit_location = character.explicit_location
+                agent.current_action = character.current_action
+                agent.plan = character.plan
+                agent.cognitive_kind = character.cognitive_kind
+                agent.cognitive_text = character.cognitive_text
+            self.revision = revision
+            self._current_time = current_time
+            self._turn = turn
+            self._scheduler_running = False
+            self._planning_error = planning_error
 
     def _advance(
         self,

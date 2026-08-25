@@ -23,6 +23,15 @@ class MemoryStream:
         with self._lock:
             return tuple(self.memories)
 
+    def restore(self, memories: list[MemoryObject]) -> None:
+        """Replace the stream from a validated session snapshot."""
+        with self._lock:
+            expected_ids = list(range(len(memories)))
+            actual_ids = [memory.id for memory in memories]
+            if actual_ids != expected_ids:
+                raise ValueError("memory ids must be contiguous and zero-based")
+            self.memories = list(memories)
+
     def add_memory(
         self,
         node_type: NodeType,
