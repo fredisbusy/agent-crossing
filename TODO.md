@@ -361,6 +361,48 @@ end-to-end 시나리오다.
     - [x] persona 성격/습관/현재 계획/seed memory를 한국어로 제공한다
     - [x] 프런트엔드 계획 fallback과 주민 상태를 한국어로 표시한다
 
+- [x] `P1` WorldRuntime을 정확히 2명 고정에서 N-agent + pairwise 대화로 확장한다
+      (§3.4 조우 모델 — "마을 전체가 한 방에서 듣는" 공용 채팅방이 아니라
+      가까이 있는 두 명끼리만 사적으로 대화)
+  - Depends on: 짧은 대화 아크를 session/reaction 경계에 도입
+  - Implemented 2026-08-25:
+    - `agents/persona_loader.py::PersonaLoader.list_names()`로 persona
+      디렉토리의 파일 개수만큼 로스터를 자동 구성한다
+      (`run_agent_loop_simulation.py`의 `DEFAULT_CONFIG` 기본값).
+      `api/main.py`의 `persona_names[:2]` 잘림도 제거했다. 검증용 3번째
+      페르소나(Minji)와 `briar-cove.tmj` spawn 포인트를 추가했다.
+    - `world/session.py::WorldConversationSession`이 항상 정확히 2명(한
+      쌍)만 받도록 강화됐다 — "마을 전체 로스터가 도는 공용 채팅방" 모델
+      대신 세션은 매번 특정 쌍 전용으로 새로 만들어진다.
+    - `world/runtime.py`: `_start_dialogue_for_real_encounter`가
+      `itertools.combinations`로 모든 쌍을 스캔해 조건을 만족하는 첫 쌍만
+      대화를 시작한다(`_open_session_for_pair`). 동시 활성 대화는 설계상
+      최대 1건(로컬 LLM 직렬 처리 제약과 일치). 조우 쿨다운을 전역
+      타임스탬프에서 쌍별(`_pair_cooldown_until`, `frozenset` 키)로
+      바꿔 한 쌍의 쿨다운이 다른 쌍을 막지 않는다.
+      `_dispatch_tick_plan_disruption_check`(§3-B)도 고정 2-agent 쌍
+      대신 `itertools.permutations`로 전체 agent 쌍을 본다.
+    - `persistence/contracts.py`: `SNAPSHOT_SCHEMA_VERSION`을 2로 올리고
+      `ConversationSave.participant_agent_names`(세션이 매번 다른 쌍으로
+      재생성되므로 참가자를 명시적으로 저장)와
+      `RuntimeSaveState.pair_cooldown_until`(dict, 쌍별 쿨다운)을
+      추가했다. 이전 스키마 저장분은 호환되지 않는다(breaking change).
+  - DoD:
+    - [x] 에이전트 수가 persona 정의 개수를 따른다
+    - [x] 조우 시 조건을 만족하는 쌍만 대화를 시작하고 나머지 agent는
+          영향받지 않는다
+    - [x] 쌍별 조우 쿨다운이 서로 독립적이다
+    - [x] 이미 대화 중이면 다른 쌍이 조건을 만족해도 새 대화가 시작되지
+          않는다
+    - [x] 저장된 대화의 참가자 쌍으로 복원 시 세션이 정확히 재구성된다
+    - [x] 관련 단위 테스트(`test_world_session.py`, `test_world_runtime.py`,
+          `test_session_persistence.py`, `test_world_map.py`)를 추가/갱신한다
+  - Note: 동시에 2건 이상의 대화가 각자 진행되는 진짜 다중 동시 대화는
+    이번 범위에서 의도적으로 제외했다(§5-A 정보 확산 실험에 필요해지면
+    별도로 다룬다). §5-A/§5-B의 실제 다중 tick 시뮬레이션 러너(seed 주입
+    → 진행 → 종료 시점 일괄 interview)는 이 리팩터가 전제 조건이지만
+    아직 별도로 배선되지 않았다.
+
 ### 4-A. Backend 실시간 파이프라인
 
 - [x] `P1` API runtime에서 world engine step 경로를 재사용한다

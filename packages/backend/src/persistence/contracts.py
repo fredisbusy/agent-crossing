@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from settings import EMBEDDING_DIMENSION
 
-SNAPSHOT_SCHEMA_VERSION = 1
+SNAPSHOT_SCHEMA_VERSION = 2
 
 
 class PointSave(BaseModel):
@@ -111,7 +111,7 @@ class DashboardEventSave(BaseModel):
 
 
 class RuntimeSaveState(BaseModel):
-    schema_version: Literal[1] = SNAPSHOT_SCHEMA_VERSION
+    schema_version: Literal[2] = SNAPSHOT_SCHEMA_VERSION
     map_id: str
     current_time: datetime.datetime
     turn: int = Field(ge=0)
@@ -120,7 +120,11 @@ class RuntimeSaveState(BaseModel):
     silent_turns: int = Field(ge=0)
     scheduler_was_running: bool
     planning_error: str | None
-    last_dialogue_end_time: datetime.datetime | None
+    # 조우 쌍(pair)별 마지막 대화 종료/패스바이 시각. N-agent 확장 이전에는
+    # 마을 전체가 하나의 전역 쿨다운을 공유했지만, 이제 쌍마다 독립적으로
+    # 쿨다운을 추적한다. 키는 `world.runtime._pair_key`와 동일한 형식
+    # (두 agent_id를 정렬해 "|"로 이은 문자열).
+    pair_cooldown_until: dict[str, datetime.datetime]
     conversation: ConversationSave
     characters: list[CharacterSave]
     dashboard_events: list[DashboardEventSave]

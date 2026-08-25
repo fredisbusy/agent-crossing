@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
+
 from agents.sim_agent import SimAgent
 from agents.planning.lifecycle import PlanningCoordinator
 from agents.reaction.encounter import EncounterDecision, EncounterGate
@@ -565,9 +567,18 @@ class StubPlanReactGate:
 
 
 class FakeAgentSnapshot:
-    def __init__(self, *, agent_id: str, current_action: str) -> None:
+    def __init__(
+        self,
+        *,
+        agent_id: str,
+        current_action: str,
+        tile_position: object = None,
+        destination: object = None,
+    ) -> None:
         self.agent_id: str = agent_id
         self.current_action: str = current_action
+        self.tile_position: object = tile_position
+        self.destination: object = destination
 
 
 class FakeSpatialSnapshot:
@@ -586,38 +597,36 @@ class FakeSpatialRuntime:
         _ = kwargs
 
 
+def _dummy_full_agent(name: str, *, agent_id: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        name=name,
+        identity=DummyIdentity(id=agent_id),
+        profile=SimpleNamespace(
+            fixed=SimpleNamespace(identity_stable_set=[]),
+            extended=SimpleNamespace(current_plan_context=[]),
+        ),
+        memory_service=SimpleNamespace(
+            get_retrieval_memories=lambda *args, **kwargs: [],
+            create_observation_from_text=lambda *args, **kwargs: None,
+        ),
+    )
+
+
 def _encounter_test_runtime(
     *,
     encounter_gate: object | None = None,
     plan_react_gate: object | None = None,
     spatial_runtime: object | None = None,
+    agent_names: tuple[str, ...] = ("Jiho", "Sujin"),
 ) -> WorldRuntime:
-    agent1 = SimpleNamespace(
-        name="Jiho",
-        identity=DummyIdentity(id="jiho"),
-        profile=SimpleNamespace(
-            fixed=SimpleNamespace(identity_stable_set=[]),
-            extended=SimpleNamespace(current_plan_context=[]),
-        ),
-        memory_service=SimpleNamespace(
-            get_retrieval_memories=lambda *args, **kwargs: [],
-            create_observation_from_text=lambda *args, **kwargs: None,
-        ),
+    agents = cast(
+        list[SimAgent],
+        [
+            _dummy_full_agent(name, agent_id=name.lower())
+            for name in agent_names
+        ],
     )
-    agent2 = SimpleNamespace(
-        name="Sujin",
-        identity=DummyIdentity(id="sujin"),
-        profile=SimpleNamespace(
-            fixed=SimpleNamespace(identity_stable_set=[]),
-            extended=SimpleNamespace(current_plan_context=[]),
-        ),
-        memory_service=SimpleNamespace(
-            get_retrieval_memories=lambda *args, **kwargs: [],
-            create_observation_from_text=lambda *args, **kwargs: None,
-        ),
-    )
-    agents = cast(list[SimAgent], [agent1, agent2])
-    session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+    session = WorldConversationSession(agents=agents[:2], dialogue_turn_window=None)
     return WorldRuntime(
         agents=agents,
         session=session,
@@ -659,24 +668,42 @@ def _encounter_test_runtime(
 def test_should_converse_on_encounter_defaults_true_without_gate() -> None:
     """TODO.md §3-C: encounter_gate가 구성되지 않으면 기존 동작(항상 대화)을 유지한다."""
     runtime = _encounter_test_runtime(encounter_gate=None)
+    speaker, other = runtime.agents
 
-    assert runtime._should_converse_on_encounter(runtime.current_time) is True
+    assert (
+        runtime._should_converse_on_encounter(
+            runtime.current_time, speaker=speaker, other=other
+        )
+        is True
+    )
 
 
 def test_should_converse_on_encounter_uses_configured_gate_for_pass_by() -> None:
     """TODO.md §3-C: 조우 시 pass-by vs converse 결정이 게이트 판정을 따른다."""
     gate = StubEncounterGate(should_converse=False)
     runtime = _encounter_test_runtime(encounter_gate=gate)
+    speaker, other = runtime.agents
 
-    assert runtime._should_converse_on_encounter(runtime.current_time) is False
+    assert (
+        runtime._should_converse_on_encounter(
+            runtime.current_time, speaker=speaker, other=other
+        )
+        is False
+    )
     assert gate.calls == 1
 
 
 def test_should_converse_on_encounter_uses_configured_gate_for_converse() -> None:
     gate = StubEncounterGate(should_converse=True)
     runtime = _encounter_test_runtime(encounter_gate=gate)
+    speaker, other = runtime.agents
 
-    assert runtime._should_converse_on_encounter(runtime.current_time) is True
+    assert (
+        runtime._should_converse_on_encounter(
+            runtime.current_time, speaker=speaker, other=other
+        )
+        is True
+    )
     assert gate.calls == 1
 
 
@@ -717,7 +744,7 @@ def test_tick_plan_disruption_stores_observation_before_judging() -> None:
 
     stored: list[str] = []
     cast(
-        SimpleNamespace, runtime._initiator
+        SimpleNamespace, runtime.agents[0]
     ).memory_service.create_observation_from_text = lambda *, content, **kwargs: (
         stored.append(content)
     )
@@ -728,6 +755,33 @@ def test_tick_plan_disruption_stores_observation_before_judging() -> None:
 
     assert stored == ["Sujin가 moving_to:cafe 상태이다."]
     assert len(gate.calls) == 1
+
+
+def test_tick_plan_disruption_dispatches_across_three_agents() -> None:
+    """N-agent 확장: 2명 고정 쌍이 아니라 모든 agent 쌍의 관찰 변화를 본다."""
+    gate = StubPlanReactGate()
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(agent_id="jiho", current_action="idle"),
+            FakeAgentSnapshot(agent_id="sujin", current_action="idle"),
+            FakeAgentSnapshot(agent_id="minji", current_action="moving_to:도서관"),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        plan_react_gate=gate,
+        spatial_runtime=spatial_runtime,
+        agent_names=("Jiho", "Sujin", "Minji"),
+    )
+    runtime.session.finish_dialogue()
+
+    seen_observations: set[str] = set()
+    for _ in range(6):
+        runtime._dispatch_tick_plan_disruption_check(runtime.current_time)
+        if runtime._plan_react_thread is not None:
+            runtime._plan_react_thread.join(timeout=1)
+        seen_observations.update(call.observation_content for call in gate.calls)
+
+    assert any("Minji가 moving_to:도서관" in obs for obs in seen_observations)
 
 
 def test_tick_plan_disruption_skips_unchanged_observation() -> None:
@@ -801,3 +855,137 @@ def test_tick_plan_disruption_skipped_during_active_dialogue() -> None:
 
     assert runtime._plan_react_thread is None
     assert len(gate.calls) == 0
+
+
+def _tile(x: int, y: int) -> SimpleNamespace:
+    return SimpleNamespace(x=x, y=y)
+
+
+def test_start_dialogue_picks_the_qualifying_pair_among_three_agents() -> None:
+    """N-agent 확장: 조건을 만족하는 쌍만 대화를 시작하고 나머지는 그대로다."""
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(
+                agent_id="jiho",
+                current_action="at:카페",
+                tile_position=_tile(0, 0),
+                destination="다른 곳",
+            ),
+            FakeAgentSnapshot(
+                agent_id="sujin",
+                current_action="arrived_at:카페",
+                tile_position=_tile(10, 10),
+                destination="카페",
+            ),
+            FakeAgentSnapshot(
+                agent_id="minji",
+                current_action="arrived_at:카페",
+                tile_position=_tile(10, 11),
+                destination="카페",
+            ),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        spatial_runtime=spatial_runtime,
+        agent_names=("Jiho", "Sujin", "Minji"),
+    )
+    runtime.session.finish_dialogue()
+
+    runtime._start_dialogue_for_real_encounter(runtime.current_time)
+
+    assert runtime.session.is_active is True
+    assert {agent.name for agent in runtime.session.agents} == {"Sujin", "Minji"}
+
+
+def test_start_dialogue_respects_per_pair_cooldown_independently() -> None:
+    """A-B 쌍의 쿨다운이 C-D 쌍의 조우를 막지 않는다."""
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(
+                agent_id="jiho",
+                current_action="arrived_at:카페",
+                tile_position=_tile(0, 0),
+                destination="카페",
+            ),
+            FakeAgentSnapshot(
+                agent_id="sujin",
+                current_action="arrived_at:카페",
+                tile_position=_tile(0, 1),
+                destination="카페",
+            ),
+            FakeAgentSnapshot(
+                agent_id="minji",
+                current_action="arrived_at:도서관",
+                tile_position=_tile(20, 20),
+                destination="도서관",
+            ),
+            FakeAgentSnapshot(
+                agent_id="yuna",
+                current_action="arrived_at:도서관",
+                tile_position=_tile(20, 21),
+                destination="도서관",
+            ),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        spatial_runtime=spatial_runtime,
+        agent_names=("Jiho", "Sujin", "Minji", "Yuna"),
+    )
+    runtime.session.finish_dialogue()
+    jiho, sujin, minji, yuna = runtime.agents
+    from world.runtime import _pair_key
+
+    runtime._pair_cooldown_until[_pair_key(jiho, sujin)] = runtime.current_time
+
+    runtime._start_dialogue_for_real_encounter(runtime.current_time)
+
+    assert runtime.session.is_active is True
+    assert {agent.name for agent in runtime.session.agents} == {"Minji", "Yuna"}
+
+
+def test_start_dialogue_does_nothing_while_another_dialogue_is_active() -> None:
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(
+                agent_id="jiho",
+                current_action="arrived_at:카페",
+                tile_position=_tile(0, 0),
+                destination="카페",
+            ),
+            FakeAgentSnapshot(
+                agent_id="sujin",
+                current_action="arrived_at:카페",
+                tile_position=_tile(0, 1),
+                destination="카페",
+            ),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        spatial_runtime=spatial_runtime,
+        agent_names=("Jiho", "Sujin"),
+    )
+    assert runtime.session.is_active is True
+    original_session = runtime.session
+
+    runtime._start_dialogue_for_real_encounter(runtime.current_time)
+
+    assert runtime.session is original_session
+
+
+def test_reopen_session_for_restore_rebuilds_session_for_saved_pair() -> None:
+    """persistence: 저장된 참가자 쌍으로 세션을 재구성한다 (N-agent 확장)."""
+    runtime = _encounter_test_runtime(agent_names=("Jiho", "Sujin", "Minji"))
+    runtime.session.finish_dialogue()
+
+    runtime._reopen_session_for_restore(("Sujin", "Minji"))
+
+    assert {agent.name for agent in runtime.session.agents} == {"Sujin", "Minji"}
+    assert runtime.engine.session is runtime.session
+
+
+def test_reopen_session_for_restore_rejects_unknown_participant() -> None:
+    runtime = _encounter_test_runtime(agent_names=("Jiho", "Sujin", "Minji"))
+    runtime.session.finish_dialogue()
+
+    with pytest.raises(ValueError):
+        runtime._reopen_session_for_restore(("Sujin", "Nobody"))
