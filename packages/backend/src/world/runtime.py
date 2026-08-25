@@ -80,7 +80,7 @@ class WorldRuntimeConfig:
     suppress_repeated_replies: bool = True
     repetition_window: int = 4
     turn_time_step_seconds: int = 300
-    cognitive_time_step_seconds: int = 30
+    cognitive_time_step_seconds: int = 60
     tick_interval_seconds: float = 1.0
 
 
@@ -108,7 +108,7 @@ class WorldRuntime:
         dialogue_turn_window: int | None = None,
         dialogue_target_turns: int = 5,
         tick_interval_seconds: float = 1.0,
-        cognitive_time_step_seconds: int = 30,
+        cognitive_time_step_seconds: int = 60,
         planning_coordinator: PlanningCoordinator | None = None,
         spatial_runtime: SpatialWorldRuntime | None = None,
         encounter_gate: EncounterGate | None = None,

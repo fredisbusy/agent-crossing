@@ -7,6 +7,7 @@ from agents.planning.graph import PlanningGraphRunner
 from agents.planning.models import (
     DayPlanBroadStrokesRequest,
     DayPlanItem,
+    HourlyPlanItem,
 )
 from agents.planning.planner import Planner
 from llm.clients.types import LlmGenerateOptions
@@ -147,6 +148,47 @@ def test_planning_graph_runner_parses_day_hour_and_minute_plans() -> None:
     assert client.call_labels == ["day", "hour", "minute"]
     assert client.options[0].num_predict == 4096
     assert client.options[0].reasoning_effort is None
+
+
+def test_minute_plan_fits_a_non_five_minute_remaining_window() -> None:
+    client = StubPlanningClient()
+    graph = PlanningGraphRunner(planning_client=client)
+    hourly_item = HourlyPlanItem(
+        start_time=datetime.datetime(2026, 2, 13, 8),
+        end_time=datetime.datetime(2026, 2, 13, 9),
+        location="Town > Home > Desk",
+        action_content="Draft composition motifs.",
+    )
+
+    items = graph.generate_minute_plan(
+        agent_name="Eddy Lin",
+        current_time=datetime.datetime(2026, 2, 13, 8, 1),
+        hourly_plan_item=hourly_item,
+    )
+
+    assert [item.duration_minutes for item in items] == [10, 10, 10, 10, 19]
+    assert items[0].start_time == datetime.datetime(2026, 2, 13, 8, 1)
+    assert items[-1].end_time == hourly_item.end_time
+
+
+def test_minute_plan_allows_a_short_tail_at_the_parent_boundary() -> None:
+    client = StubPlanningClient()
+    graph = PlanningGraphRunner(planning_client=client)
+    hourly_item = HourlyPlanItem(
+        start_time=datetime.datetime(2026, 2, 13, 8),
+        end_time=datetime.datetime(2026, 2, 13, 9),
+        location="Town > Home > Desk",
+        action_content="Draft composition motifs.",
+    )
+
+    items = graph.generate_minute_plan(
+        agent_name="Eddy Lin",
+        current_time=datetime.datetime(2026, 2, 13, 8, 57),
+        hourly_plan_item=hourly_item,
+    )
+
+    assert [item.duration_minutes for item in items] == [3]
+    assert items[-1].end_time == hourly_item.end_time
 
 
 def test_planning_graph_runner_retries_invalid_day_plan_once() -> None:

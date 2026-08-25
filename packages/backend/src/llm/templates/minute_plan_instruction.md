@@ -24,7 +24,7 @@ Decompose the active hourly task into concrete subtasks with durations.
 - Return the result in `items`.
 - Each item must contain only `duration_minutes` and `action_content`.
 - `duration_minutes` must be exactly `5`, `10`, or `15`.
-- Aim for a total of exactly `$total_duration_minutes`; the simulation will fit only the final boundary if the arithmetic differs.
+- Aim for a total of exactly `$total_duration_minutes`; the simulation owns the final boundary and may extend or trim only the final action to cover a non-5-minute remainder. If the window is shorter than 5 minutes, return one 5-minute draft action for that boundary.
 - Do not output `start_time`, `end_time`, or `location`; the simulation owns those authoritative fields.
 - Keep items ordered from earlier to later time.
 - Keep the sequence chronological and cover the requested activity with concrete steps.

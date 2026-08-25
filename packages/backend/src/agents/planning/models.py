@@ -113,10 +113,8 @@ class MinutePlanItem:
             end_time=self.end_time,
             label="minute plan",
         )
-        if duration_minutes < 5 or duration_minutes % 5 != 0:
-            raise ValueError(
-                "minute plan duration_minutes must be a positive multiple of 5"
-            )
+        if duration_minutes < 1:
+            raise ValueError("minute plan duration_minutes must be positive")
         if not self.location.strip():
             raise ValueError("location must not be blank")
         if not self.action_content.strip():

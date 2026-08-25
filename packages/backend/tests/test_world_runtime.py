@@ -358,8 +358,8 @@ def test_cognitive_tick_slows_clock_and_holds_current_plan() -> None:
 
     runtime._advance_world_tick()
 
-    assert runtime.current_time == initial_time + datetime.timedelta(seconds=30)
-    assert runtime.effective_time_step_seconds == 30
+    assert runtime.current_time == initial_time + datetime.timedelta(seconds=60)
+    assert runtime.effective_time_step_seconds == 60
     assert coordinator.ensure_calls == 0
 
 

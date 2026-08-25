@@ -50,6 +50,18 @@ MINUTE_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
 )
 
 
+def _truncate_to_minute(moment: datetime.datetime) -> datetime.datetime:
+    """Drop sub-minute precision so window prompts and validation always agree.
+
+    Prompts render planning-window timestamps with minute precision, so any
+    sub-minute component on the simulation clock would make the LLM's
+    exact-boundary output un-matchable against the validator's full-precision
+    comparison. Truncating here keeps both sides on the same footing regardless
+    of the world runtime's tick size.
+    """
+    return moment.replace(second=0, microsecond=0)
+
+
 def _day_plan_item_bounds(
     request: DayPlanBroadStrokesRequest,
 ) -> tuple[int, int]:
@@ -183,7 +195,7 @@ class PlanningGraphRunner:
             self.hourly_plan_graph.invoke(
                 HourlyPlanningGraphState(
                     agent_name=agent_name,
-                    current_time=current_time,
+                    current_time=_truncate_to_minute(current_time),
                     day_plan_item=day_plan_item,
                     base_prompt="",
                     current_prompt="",
@@ -207,13 +219,14 @@ class PlanningGraphRunner:
         current_time: datetime.datetime,
         hourly_plan_item: HourlyPlanItem,
     ) -> list[MinutePlanItem]:
+        current_time = _truncate_to_minute(current_time)
         window_start = max(current_time, hourly_plan_item.start_time)
         window_duration_minutes = int(
             (hourly_plan_item.end_time - window_start).total_seconds() // 60
         )
-        if window_duration_minutes < 5 or window_duration_minutes % 5 != 0:
+        if window_duration_minutes < 1:
             raise PlanningGraphError(
-                "minute planning window must contain a positive multiple of 5 minutes"
+                "minute planning window must contain at least one minute"
             )
         final_state = cast(
             MinutePlanningGraphState,

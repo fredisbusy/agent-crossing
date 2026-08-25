@@ -315,8 +315,8 @@ def try_parse_minute_task_decomposition(
             if remaining <= 0:
                 break
             fitted_duration = min(item.duration_minutes, remaining)
-            if fitted_duration < 5 or fitted_duration % 5 != 0:
-                raise MinutePlanParseError("fixed_window_is_not_a_5_minute_multiple")
+            if fitted_duration < 1:
+                raise MinutePlanParseError("fixed_window_is_not_positive")
             fitted.append(
                 MinuteTaskDecompositionItem(
                     action_content=item.action_content,
