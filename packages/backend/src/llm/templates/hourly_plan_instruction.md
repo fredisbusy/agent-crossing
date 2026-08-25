@@ -33,6 +33,7 @@ Decompose the active day-plan block into a chronological hourly plan for the nea
 - Every following item must start exactly when the previous item ends; gaps and overlaps are invalid.
 - The final item must end exactly at the fixed planning-window end.
 - Keep each item aligned with the given active day-plan context.
+- Keep each `action_content` to one concise sentence of at most $action_max_chars characters.
 - Do not output `location`; the simulation inherits the authoritative location from the active day-plan item.
 - Do not add numbering, bullets, markdown, explanatory text, or additional keys.
 

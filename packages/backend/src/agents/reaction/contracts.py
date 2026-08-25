@@ -8,6 +8,8 @@ from agents.agent import AgentIdentity, AgentProfile
 from agents.memory.memory_object import MemoryObject
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
+
     from llm.clients.types import LlmGenerateOptions
 
 
@@ -100,4 +102,5 @@ class GenerateClient(Protocol):
         system: str | None = None,
         options: LlmGenerateOptions | None = None,
         format_json: bool = False,
+        response_model: type[BaseModel] | None = None,
     ) -> str: ...

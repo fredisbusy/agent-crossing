@@ -1,6 +1,8 @@
 import datetime
 import json
 
+from pydantic import BaseModel
+
 from agents.planning.graph import PlanningGraphRunner
 from agents.planning.models import (
     DayPlanBroadStrokesRequest,
@@ -89,7 +91,9 @@ class StubPlanningClient:
         *,
         prompt: str,
         options: LlmGenerateOptions,
+        response_model: type[BaseModel],
     ) -> str:
+        assert issubclass(response_model, BaseModel)
         normalized_prompt = prompt.lower()
         if options.num_predict == 3072:
             label = "minute"
@@ -258,6 +262,55 @@ def test_hourly_plan_retries_when_it_misses_the_current_world_time() -> None:
 
     assert client.call_labels == ["hour", "hour"]
     assert items[0].start_time <= datetime.datetime(2026, 2, 13, 8, 45)
+    assert items[-1].end_time == parent.end_time
+
+
+def test_hourly_plan_retries_when_one_item_exceeds_three_hours() -> None:
+    client = StubPlanningClient()
+    client.responses_by_label["hour"] = [
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "start_time": "2026-02-13T08:00:00",
+                        "end_time": "2026-02-13T12:00:00",
+                        "action_content": "오전 작업 전체를 한 번에 수행한다.",
+                    }
+                ]
+            }
+        ),
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "start_time": "2026-02-13T08:00:00",
+                        "end_time": "2026-02-13T10:00:00",
+                        "action_content": "오전 전반 작업을 수행한다.",
+                    },
+                    {
+                        "start_time": "2026-02-13T10:00:00",
+                        "end_time": "2026-02-13T12:00:00",
+                        "action_content": "오전 후반 작업을 수행한다.",
+                    },
+                ]
+            }
+        ),
+    ]
+    parent = DayPlanItem(
+        start_time=datetime.datetime(2026, 2, 13, 8),
+        end_time=datetime.datetime(2026, 2, 13, 12),
+        location="Town > Home > Desk",
+        action_content="오전 작업",
+    )
+
+    items = PlanningGraphRunner(planning_client=client).generate_hourly_plan(
+        agent_name="Eddy Lin",
+        current_time=datetime.datetime(2026, 2, 13, 8),
+        day_plan_item=parent,
+    )
+
+    assert [item.duration_minutes for item in items] == [120, 120]
+    assert client.call_labels == ["hour", "hour"]
     assert items[-1].end_time == parent.end_time
 
 

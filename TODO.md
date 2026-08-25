@@ -20,6 +20,12 @@
 - [x] Backend 런타임 부팅 (FastAPI + uv)
 - [x] LLM provider 클라이언트 경로를 정리하고 호환 import를 유지한다 (`packages/backend/src/llm/clients`)
 - [x] Qwen 생성 호출의 추론 강도를 `low`로 고정한다
+- [x] `P0` 모든 LLM JSON 출력을 schema-constrained generation으로 안정화한다
+  - DoD:
+    - [x] Pydantic 응답 모델에서 JSON Schema를 생성해 provider 호출과 사후 검증에 재사용한다
+    - [x] 계획/반성/중요도/반응 JSON에 필수 필드, 추가 필드 금지, 배열 개수, 텍스트 길이 제한을 적용한다
+    - [x] token-limit 종료를 parse failure와 구분하고 출력 예산을 한 번 증액해 재시도한다
+    - [x] 출력 토큰 상한 대신 prompt/schema 필드 제한으로 응답 길이를 제어한다
 - [x] 로컬 LLM + 벡터 DB PoC 통과 (MLX/Vector DB)
 - [x] `P0` 메모리 영속 스토어 전환 확정 (PostgreSQL + pgvector)
 

@@ -186,6 +186,7 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
 - `duration_minutes`는 저장 필드가 아니라 `end_time - start_time`으로부터 계산되는 파생값으로 취급
 - day/hourly/minute plan 모두 초 단위 없이 minute precision 사용
 - day/hourly plan은 exact-hour 정렬을 강제하지 않으며 `5:30 pm` 같은 자연스러운 broad-strokes 시간을 허용
+- hourly plan의 개별 항목은 최대 180분으로 제한해 minute decomposition이 과도하게 길어지지 않게 함
 - LLM이 생성하는 minute duration은 5~15분이며 5분 단위여야 함
 - 고정 시간창보다 총합이 짧을 때는 논문 구현처럼 마지막 항목을 종료 시각까지 늘릴 수 있어 최종 canonical 항목은 15분을 초과할 수 있음
 - minute decomposition의 duration 합계는 현재 시각부터 active hourly 종료까지의 남은 시간과 정확히 같아야 함
@@ -193,6 +194,9 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
 - hourly location은 active day-plan의 canonical location을 runtime이 상속함
 - duration 합계가 고정 시간창보다 길면 끝부분을 잘라내고, 짧으면 마지막 항목을 늘려 authoritative 종료 시각에 맞춤
 - JSON/schema/필수 행동/duration 단위 자체가 잘못된 경우에는 보정하지 않고 semantic parse error로 재시도함
+- 계획 JSON은 Pydantic 모델에서 생성한 JSON Schema를 provider의 constrained decoding에 전달하고 동일 모델로 응답을 재검증함
+- day/hourly/minute `action_content`는 각각 최대 50/50/30자로 제한하고 프롬프트와 JSON Schema에 같은 제한을 명시함
+- day `location`은 최대 120자로 제한하며 schema에 선언되지 않은 추가 필드는 허용하지 않음
 - active day/hourly/minute 항목은 모두 현재 world clock을 포함해야 하며, 미래 항목을 현재 항목처럼 선택하지 않는다
 - day plan만 하루 전체를 미리 생성하고, hourly/minute plan은 near future만 just-in-time으로 재귀 분해한다
 - hourly plan은 현재 시점의 active day-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다
@@ -209,6 +213,8 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
 - 계획 생성·파싱·장소/시간 검증이 실패하면 scheduler를 중단하고 `planning_error`를 WebSocket과 dashboard에 노출한다.
 - 로컬 27B planner 호출은 생성 시간 제한을 두지 않고 완료될 때까지 기다린다. 연결·파싱·검증 실패는 fallback 없이 `planning_error`로 노출한다.
 - 로컬 Qwen의 structured JSON 생성은 thinking을 끄고 출력 토큰을 최종 JSON 본문에 사용한다.
+- structured JSON의 출력 토큰 수는 응답 길이 조절 수단이 아닌 안전 상한으로 사용한다. 상한 도달 종료 사유는 일반 parse error와 구분하고, 한 번 증액 재시도한 뒤에도 잘리면 명시적 오류로 중단한다.
+- reflection/reaction/importance를 포함한 모든 JSON LLM 호출은 JSON Schema constrained decoding과 필드별 길이 제한을 사용한다.
 - day plan은 날짜가 바뀔 때 한 번 선택하고, hourly/minute plan은 active parent가 바뀔 때 JIT 생성한다.
 - active minute plan의 canonical `location`과 `action_content`가 공간 runtime의 목적지와 현재 행동에 직접 반영된다.
 - canonical 마을·건물·장소 경로와 사용자 노출 지도 라벨은 한국어 이름을 사용한다.

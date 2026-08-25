@@ -1,5 +1,7 @@
 from typing import Protocol
 
+from pydantic import BaseModel
+
 from .litellm_client import LiteLlmClient
 from .types import LlmGenerateOptions
 
@@ -12,6 +14,7 @@ class ProviderClient(Protocol):
         system: str | None = None,
         options: LlmGenerateOptions | None = None,
         format_json: bool = False,
+        response_model: type[BaseModel] | None = None,
     ) -> str: ...
 
     def embed(

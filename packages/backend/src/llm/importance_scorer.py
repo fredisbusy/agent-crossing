@@ -3,11 +3,14 @@ import re
 from dataclasses import dataclass
 from typing import Protocol, cast
 
+from pydantic import BaseModel
+
 from .clients.types import (
     JsonObject,
     LlmGenerateOptions,
 )
 from .prompt_builders import build_importance_scoring_prompt
+from .structured_outputs import ImportanceOutput
 
 
 def clamp_importance(value: int) -> int:
@@ -79,6 +82,7 @@ class ImportanceGenerateClient(Protocol):
         options: LlmGenerateOptions | None = None,
         system: str | None = None,
         format_json: bool = False,
+        response_model: type[BaseModel] | None = None,
     ) -> str: ...
 
 
@@ -91,7 +95,11 @@ class LlmImportanceScorer:
     ) -> None:
         self.client: ImportanceGenerateClient = client
         self.fallback_importance: int = clamp_importance(fallback_importance)
-        self.options: LlmGenerateOptions = options or LlmGenerateOptions()
+        self.options: LlmGenerateOptions = options or LlmGenerateOptions(
+            temperature=0.0,
+            top_p=1.0,
+            num_predict=128,
+        )
 
     def score(self, context: ImportanceScoringContext) -> int:
         prompt = self._build_prompt(context)
@@ -100,7 +108,7 @@ class LlmImportanceScorer:
             response = self.client.generate(
                 prompt=prompt,
                 options=self.options,
-                format_json=True,
+                response_model=ImportanceOutput,
             )
         except (RuntimeError, TimeoutError, ValueError):
             return self.fallback_importance

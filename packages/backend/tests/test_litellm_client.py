@@ -3,9 +3,16 @@ from __future__ import annotations
 from typing import Any
 
 import litellm
+from pydantic import BaseModel, ConfigDict, Field
 
 from llm.clients.litellm_client import LiteLlmClient
 from llm.clients.types import LlmGenerateOptions
+
+
+class StatusOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: str = Field(min_length=1, max_length=12)
 
 
 def test_generate_uses_litellm_completion_shape(monkeypatch) -> None:
@@ -59,7 +66,7 @@ def test_generate_uses_litellm_completion_shape(monkeypatch) -> None:
     assert captured["format"] == "json"
 
 
-def test_generate_uses_response_format_without_penalties_for_non_ollama_json(
+def test_generate_uses_strict_response_schema_without_penalties_for_non_ollama(
     monkeypatch,
 ) -> None:
     captured: dict[str, Any] = {}
@@ -81,14 +88,139 @@ def test_generate_uses_response_format_without_penalties_for_non_ollama_json(
             presence_penalty=0.4,
             frequency_penalty=0.1,
         ),
-        format_json=True,
+        response_model=StatusOutput,
     )
 
-    assert captured["response_format"] == {"type": "json_object"}
+    assert captured["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "StatusOutput",
+            "strict": True,
+            "schema": StatusOutput.model_json_schema(),
+        },
+    }
     assert "reasoning_effort" not in captured
     assert "repeat_penalty" not in captured
     assert "presence_penalty" not in captured
     assert "frequency_penalty" not in captured
+
+
+def test_generate_passes_pydantic_json_schema_to_ollama() -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        captured.update(kwargs)
+        return {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"content": '{"status":"ok"}'},
+                }
+            ]
+        }
+
+    original_completion = litellm.completion
+    litellm.completion = fake_completion
+    try:
+        client = LiteLlmClient(
+            default_generate_model="ollama_chat/qwen3.8:27b-mlx",
+            default_embedding_model="ollama/bge-m3",
+        )
+        response = client.generate(
+            prompt="Return status",
+            response_model=StatusOutput,
+        )
+    finally:
+        litellm.completion = original_completion
+
+    assert response == '{"status":"ok"}'
+    assert captured["format"] == StatusOutput.model_json_schema()
+    assert captured["reasoning_effort"] == "none"
+
+
+def test_generate_retries_truncated_structured_output_with_larger_budget(
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+    responses = [
+        {
+            "choices": [
+                {
+                    "finish_reason": "length",
+                    "message": {"content": '{"status":"'},
+                }
+            ]
+        },
+        {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"content": '{"status":"ok"}'},
+                }
+            ]
+        },
+    ]
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        calls.append(dict(kwargs))
+        return responses.pop(0)
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LiteLlmClient(
+        default_generate_model="ollama_chat/qwen3.8:27b-mlx",
+        default_embedding_model="ollama/bge-m3",
+    )
+
+    response = client.generate(
+        prompt="Return status",
+        options=LlmGenerateOptions(num_predict=64),
+        response_model=StatusOutput,
+    )
+
+    assert response == '{"status":"ok"}'
+    assert [call["max_tokens"] for call in calls] == [64, 192]
+
+
+def test_generate_retries_output_that_violates_text_length_schema(
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+    responses = [
+        {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"content": '{"status":"far too long for schema"}'},
+                }
+            ]
+        },
+        {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"content": '{"status":"ok"}'},
+                }
+            ]
+        },
+    ]
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        calls.append(dict(kwargs))
+        return responses.pop(0)
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LiteLlmClient(
+        default_generate_model="ollama_chat/qwen3.8:27b-mlx",
+        default_embedding_model="ollama/bge-m3",
+    )
+
+    response = client.generate(
+        prompt="Return status",
+        response_model=StatusOutput,
+    )
+
+    assert response == '{"status":"ok"}'
+    assert len(calls) == 2
 
 
 def test_generate_omits_timeout_when_local_model_has_no_deadline(monkeypatch) -> None:

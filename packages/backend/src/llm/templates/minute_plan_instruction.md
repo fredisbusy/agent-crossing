@@ -28,6 +28,8 @@ Decompose the active hourly task into concrete subtasks with durations.
 - Do not output `start_time`, `end_time`, or `location`; the simulation owns those authoritative fields.
 - Keep items ordered from earlier to later time.
 - Keep the sequence chronological and cover the requested activity with concrete steps.
+- Prefer 10-15 minute items; use 5 minutes only when the action genuinely needs a short boundary.
+- Keep each `action_content` to one concise sentence of at most $action_max_chars characters.
 - Do not simply copy hourly-plan summaries or emit one item per hourly block.
 - Focus on concrete actions that can be executed immediately.
 - Do not add numbering, bullets, markdown, explanatory text, or additional keys.

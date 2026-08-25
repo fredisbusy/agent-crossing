@@ -3,6 +3,8 @@ import json
 from dataclasses import dataclass
 from typing import cast
 
+from pydantic import BaseModel
+
 from agents.memory.memory_object import MemoryObject
 from agents.planning.graph import PlanningGraphRunner
 from agents.planning.models import (
@@ -22,6 +24,22 @@ from llm.guardrails.similarity import EmbeddingEncoder
 
 from . import prompt_builders
 from .language_policy import contains_korean_text
+from .structured_outputs import (
+    InsightsOutput,
+    SalientQuestionsOutput,
+)
+
+SALIENT_QUESTIONS_GENERATE_OPTIONS = LlmGenerateOptions(
+    temperature=0.0,
+    top_p=1.0,
+    num_predict=256,
+)
+
+INSIGHTS_GENERATE_OPTIONS = LlmGenerateOptions(
+    temperature=0.0,
+    top_p=1.0,
+    num_predict=768,
+)
 
 DAY_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
     temperature=0.0,
@@ -78,7 +96,8 @@ class LlmGateway:
         response_text = self.generation_client.generate(
             prompt=prompt,
             system=prompt_builders.language_system_prompt("ko"),
-            format_json=True,
+            options=SALIENT_QUESTIONS_GENERATE_OPTIONS,
+            response_model=SalientQuestionsOutput,
         )
 
         try:
@@ -120,7 +139,8 @@ class LlmGateway:
         response_text = self.generation_client.generate(
             prompt=prompt,
             system=prompt_builders.language_system_prompt("ko"),
-            format_json=True,
+            options=INSIGHTS_GENERATE_OPTIONS,
+            response_model=InsightsOutput,
         )
 
         try:
@@ -223,11 +243,12 @@ class LlmGateway:
         *,
         prompt: str,
         options: LlmGenerateOptions,
+        response_model: type[BaseModel],
     ) -> str:
         return self.generation_client.generate(
             prompt=prompt,
             system=prompt_builders.language_system_prompt("ko"),
-            format_json=True,
+            response_model=response_model,
             options=options,
         )
 

@@ -1,6 +1,8 @@
 import datetime
 from typing import Literal, Protocol, cast
 
+from pydantic import BaseModel
+
 from ..graph_support import GRAPH_END, GRAPH_START, GRAPH_STATE_FACTORY
 from llm import prompt_builders
 from llm.clients.types import LlmGenerateOptions
@@ -12,6 +14,7 @@ from llm.governance import (
     try_parse_hour_plan_decomposition,
     try_parse_minute_task_decomposition,
 )
+from llm.structured_outputs import DayPlanOutput, HourlyPlanOutput, MinutePlanOutput
 from typing_extensions import TypedDict
 
 from .models import (
@@ -79,6 +82,7 @@ class PlanningCompletionClient(Protocol):
         *,
         prompt: str,
         options: LlmGenerateOptions,
+        response_model: type[BaseModel],
     ) -> str: ...
 
 
@@ -297,6 +301,7 @@ class PlanningGraphRunner:
             "response_text": self.planning_client.complete_planning_prompt(
                 prompt=state["current_prompt"],
                 options=DAY_PLAN_GENERATE_OPTIONS,
+                response_model=DayPlanOutput,
             )
         }
 
@@ -366,6 +371,7 @@ class PlanningGraphRunner:
             "response_text": self.planning_client.complete_planning_prompt(
                 prompt=state["current_prompt"],
                 options=HOURLY_PLAN_GENERATE_OPTIONS,
+                response_model=HourlyPlanOutput,
             )
         }
 
@@ -437,6 +443,7 @@ class PlanningGraphRunner:
             "response_text": self.planning_client.complete_planning_prompt(
                 prompt=state["current_prompt"],
                 options=MINUTE_PLAN_GENERATE_OPTIONS,
+                response_model=MinutePlanOutput,
             )
         }
 

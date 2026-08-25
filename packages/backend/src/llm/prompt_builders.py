@@ -8,6 +8,19 @@ from agents.planning.models import DayPlanItem, HourlyPlanItem
 from agents.reaction import DialogueArc
 
 from .template_loader import render_template
+from .structured_outputs import (
+    DAY_ACTION_MAX_CHARS,
+    DAY_LOCATION_MAX_CHARS,
+    HOURLY_ACTION_MAX_CHARS,
+    IMPORTANCE_REASON_MAX_CHARS,
+    INSIGHT_MAX_CHARS,
+    MINUTE_ACTION_MAX_CHARS,
+    QUESTION_MAX_CHARS,
+    REACTION_CRITIQUE_MAX_CHARS,
+    REACTION_REASON_MAX_CHARS,
+    REACTION_THOUGHT_MAX_CHARS,
+    REACTION_UTTERANCE_MAX_CHARS,
+)
 
 REACTION_INTENT_JSON_SHAPE = (
     '{"should_react": <boolean>, "thought": "<string>", '
@@ -107,6 +120,7 @@ def build_salient_questions_prompt(
     instruction = render_template(
         "salient_questions_instruction.md",
         json_shape=SALIENT_QUESTIONS_JSON_SHAPE,
+        question_max_chars=str(QUESTION_MAX_CHARS),
     )
     return f"{memory_text}\n\n{instruction.strip()}"
 
@@ -122,6 +136,7 @@ def build_insights_with_citation_prompt(
     instruction = render_template(
         "insights_instruction.md",
         json_shape=INSIGHTS_JSON_SHAPE,
+        insight_max_chars=str(INSIGHT_MAX_CHARS),
     )
     return f"{memory_text}\n\n{instruction.strip()}"
 
@@ -142,6 +157,7 @@ def build_importance_scoring_prompt(
         identity_text=identity_text,
         current_plan_text=current_plan_text,
         observation=observation,
+        reason_max_chars=str(IMPORTANCE_REASON_MAX_CHARS),
     )
 
 
@@ -172,6 +188,8 @@ def build_day_plan_prompt(
         planning_window_start=today_date.isoformat(timespec="minutes"),
         planning_window_end=planning_window_end.isoformat(timespec="minutes"),
         json_shape=DAY_PLAN_JSON_SHAPE,
+        action_max_chars=str(DAY_ACTION_MAX_CHARS),
+        location_max_chars=str(DAY_LOCATION_MAX_CHARS),
     )
 
 
@@ -199,6 +217,7 @@ def build_hourly_plan_prompt(
         planning_window_end=planning_window_end.isoformat(timespec="minutes"),
         day_plan_lines=day_plan_lines,
         json_shape=HOURLY_PLAN_JSON_SHAPE,
+        action_max_chars=str(HOURLY_ACTION_MAX_CHARS),
     )
 
 
@@ -231,6 +250,7 @@ def build_minute_plan_prompt(
         canonical_location=hourly_plan_item.location,
         hourly_plan_lines=hourly_plan_lines,
         json_shape=MINUTE_PLAN_JSON_SHAPE,
+        action_max_chars=str(MINUTE_ACTION_MAX_CHARS),
     )
 
 
@@ -329,6 +349,12 @@ def build_reaction_intent_prompt(
             (f"Summary of relevant context from [{agent_identity.name}]'s memory:"),
             memory_summary,
             _reaction_intent_question(agent_identity.name),
+            (
+                "Keep thought and critique within "
+                f"{REACTION_THOUGHT_MAX_CHARS} and {REACTION_CRITIQUE_MAX_CHARS} "
+                f"characters respectively; keep reason within {REACTION_REASON_MAX_CHARS} "
+                "characters. Use one concise sentence per text field."
+            ),
             _reaction_intent_shape_line(),
         ]
     )
@@ -386,6 +412,12 @@ def build_reaction_utterance_prompt(
             "Few-shot calibration examples:",
             _few_shot_reaction_examples(),
             _reaction_utterance_question(agent_identity.name),
+            (
+                f"Keep utterance within {REACTION_UTTERANCE_MAX_CHARS} characters, "
+                f"reason within {REACTION_REASON_MAX_CHARS}, thought within "
+                f"{REACTION_THOUGHT_MAX_CHARS}, and critique within "
+                f"{REACTION_CRITIQUE_MAX_CHARS}. Use one concise sentence per text field."
+            ),
             _reaction_utterance_shape_line(),
         ]
     )

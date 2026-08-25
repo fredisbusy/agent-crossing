@@ -20,6 +20,7 @@ from llm.prompt_builders import (
     build_reaction_utterance_prompt,
     build_salient_questions_prompt,
 )
+from llm.structured_outputs import SalientQuestionsOutput
 
 
 class StubGenerationClient:
@@ -511,7 +512,7 @@ def test_salient_prompt_uses_strict_json_contract_line() -> None:
     assert '"questions": [' in prompt
 
 
-def test_generate_salient_questions_requests_json_format() -> None:
+def test_generate_salient_questions_requests_schema_constrained_output() -> None:
     client = StubGenerationClient(
         responses=[
             json.dumps(
@@ -543,7 +544,9 @@ def test_generate_salient_questions_requests_json_format() -> None:
     )
 
     assert len(questions) == 3
-    assert client.call_kwargs[0].get("format_json") is True
+    assert client.call_kwargs[0].get("response_model") is SalientQuestionsOutput
+    options = cast(object, client.call_kwargs[0].get("options"))
+    assert getattr(options, "num_predict") == 256
     assert "must be in Korean" in cast(str, client.call_kwargs[0].get("system"))
 
 
@@ -1005,7 +1008,9 @@ def test_generate_minute_plan_trims_the_final_boundary_to_parent_window() -> Non
     assert items[0].end_time == datetime.datetime(2026, 2, 13, 14, 0)
 
 
-def test_generate_minute_plan_fits_100_generated_minutes_into_90_minute_window() -> None:
+def test_generate_minute_plan_fits_100_generated_minutes_into_90_minute_window() -> (
+    None
+):
     client = StubGenerationClient(
         responses=[
             json.dumps(

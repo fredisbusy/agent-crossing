@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+import logging
 from typing import Any, cast
 
 import litellm
+from pydantic import BaseModel, ValidationError
 from settings import EMBEDDING_DIMENSION
 
 from .types import LlmGenerateOptions
@@ -9,6 +11,20 @@ from .types import LlmGenerateOptions
 
 class LiteLlmClientError(RuntimeError):
     pass
+
+
+class LiteLlmOutputTruncatedError(LiteLlmClientError):
+    pass
+
+
+class LiteLlmStructuredOutputError(LiteLlmClientError):
+    pass
+
+
+logger = logging.getLogger(__name__)
+
+MAX_STRUCTURED_GENERATION_ATTEMPTS = 2
+MAX_STRUCTURED_OUTPUT_TOKENS = 8192
 
 
 def _coerce_text(value: object) -> str | None:
@@ -52,6 +68,7 @@ class LiteLlmClient:
         system: str | None = None,
         options: LlmGenerateOptions | None = None,
         format_json: bool = False,
+        response_model: type[BaseModel] | None = None,
         model: str | None = None,
     ) -> str:
         final_options = options or LlmGenerateOptions()
@@ -61,6 +78,7 @@ class LiteLlmClient:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
+        structured_output = response_model is not None
         kwargs: dict[str, Any] = {
             "model": selected_model,
             "messages": messages,
@@ -81,7 +99,7 @@ class LiteLlmClient:
             # budget on reasoning_content.
             kwargs["reasoning_effort"] = (
                 "none"
-                if format_json
+                if (format_json or structured_output)
                 and selected_model.startswith(("ollama/", "ollama_chat/"))
                 else "low"
             )
@@ -93,28 +111,90 @@ class LiteLlmClient:
                 kwargs["presence_penalty"] = final_options.presence_penalty
             if final_options.frequency_penalty is not None:
                 kwargs["frequency_penalty"] = final_options.frequency_penalty
-        if format_json:
+        if format_json or structured_output:
             if selected_model.startswith(("ollama/", "ollama_chat/")):
-                kwargs["format"] = "json"
+                kwargs["format"] = (
+                    response_model.model_json_schema()
+                    if response_model is not None
+                    else "json"
+                )
             else:
-                kwargs["response_format"] = {"type": "json_object"}
+                kwargs["response_format"] = (
+                    {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": response_model.__name__,
+                            "strict": True,
+                            "schema": response_model.model_json_schema(),
+                        },
+                    }
+                    if response_model is not None
+                    else {"type": "json_object"}
+                )
 
-        try:
-            response = litellm.completion(**kwargs)
-        except Exception as exc:
-            raise LiteLlmClientError(f"LiteLLM completion failed: {exc}") from exc
+        generation_attempts = (
+            MAX_STRUCTURED_GENERATION_ATTEMPTS if structured_output else 1
+        )
+        token_budget = final_options.num_predict
+        last_validation_error = ""
+        for attempt_index in range(generation_attempts):
+            kwargs["max_tokens"] = token_budget
+            try:
+                response = litellm.completion(**kwargs)
+            except Exception as exc:
+                raise LiteLlmClientError(f"LiteLLM completion failed: {exc}") from exc
 
-        choices = _read_attr_or_key(response, "choices")
-        if not isinstance(choices, list) or not choices:
-            raise LiteLlmClientError("LiteLLM response is missing choices")
+            choices = _read_attr_or_key(response, "choices")
+            if not isinstance(choices, list) or not choices:
+                raise LiteLlmClientError("LiteLLM response is missing choices")
 
-        first_choice = cast(object, choices[0])
-        message = _read_attr_or_key(first_choice, "message")
-        content = _read_attr_or_key(message, "content")
-        text = _coerce_text(content)
-        if text is None:
-            raise LiteLlmClientError("LiteLLM response is missing message content")
-        return text
+            first_choice = cast(object, choices[0])
+            finish_reason = _coerce_text(
+                _read_attr_or_key(first_choice, "finish_reason")
+            ) or _coerce_text(_read_attr_or_key(response, "done_reason"))
+            message = _read_attr_or_key(first_choice, "message")
+            content = _read_attr_or_key(message, "content")
+            text = _coerce_text(content)
+            if text is None:
+                raise LiteLlmClientError("LiteLLM response is missing message content")
+
+            if finish_reason in {"length", "max_tokens", "max_output_tokens"}:
+                if attempt_index + 1 < generation_attempts:
+                    token_budget = min(
+                        MAX_STRUCTURED_OUTPUT_TOKENS,
+                        max(token_budget * 2, token_budget + 128),
+                    )
+                    logger.warning(
+                        "Structured LLM output reached token limit; retrying "
+                        "with max_tokens=%d",
+                        token_budget,
+                    )
+                    continue
+                raise LiteLlmOutputTruncatedError(
+                    "Structured LLM output was truncated after retry: "
+                    f"finish_reason={finish_reason}, max_tokens={token_budget}"
+                )
+
+            if response_model is not None:
+                try:
+                    response_model.model_validate_json(text)
+                except ValidationError as exc:
+                    last_validation_error = str(exc)
+                    if attempt_index + 1 < generation_attempts:
+                        logger.warning(
+                            "Structured LLM output failed schema validation; retrying"
+                        )
+                        continue
+                    raise LiteLlmStructuredOutputError(
+                        "Structured LLM output failed schema validation after retry: "
+                        f"{last_validation_error}"
+                    ) from exc
+            return text
+
+        raise LiteLlmStructuredOutputError(
+            "Structured LLM output failed without a usable response: "
+            f"{last_validation_error or 'unknown error'}"
+        )
 
     def embed(
         self,

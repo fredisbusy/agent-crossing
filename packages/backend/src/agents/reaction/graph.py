@@ -20,6 +20,7 @@ from llm.guardrails.similarity import (
 )
 from llm.governance.parsing import parse_reaction_intent, parse_reaction_utterance
 from llm.language_policy import korean_text_or_fallback
+from llm.structured_outputs import ReactionIntentOutput, ReactionUtteranceOutput
 
 from ..graph_support import GRAPH_END, GRAPH_START, GRAPH_STATE_FACTORY
 from .contracts import (
@@ -209,7 +210,7 @@ class ReactionGraphRunner:
             prompt=state["intent_prompt"],
             system=state["system_prompt"],
             options=REACTION_GENERATE_OPTIONS,
-            format_json=True,
+            response_model=ReactionIntentOutput,
         )
         intent = parse_reaction_intent(response)
         if state["input"].language == "ko":
@@ -305,7 +306,7 @@ class ReactionGraphRunner:
             prompt=state["working_prompt"],
             system=state["system_prompt"],
             options=REACTION_GENERATE_OPTIONS,
-            format_json=True,
+            response_model=ReactionUtteranceOutput,
         )
         utterance_result = parse_reaction_utterance(response)
         if state["input"].language == "ko":

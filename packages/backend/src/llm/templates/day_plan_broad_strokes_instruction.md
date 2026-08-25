@@ -40,7 +40,8 @@ Framing reference (for style, not output format):
 - The first item must start exactly at the fixed planning-window start.
 - Every item must start exactly when the previous item ends; gaps and overlaps are invalid.
 - The final item must end exactly at the fixed planning-window end.
-- Keep `location` and `action_content` behavior-oriented and non-empty.
+- Keep `location` behavior-oriented, non-empty, and at most $location_max_chars characters.
+- Keep `action_content` to one concise sentence of at most $action_max_chars characters.
 - Do not add numbering, bullets, markdown, explanatory text, or additional keys.
 
 ## Output Contract

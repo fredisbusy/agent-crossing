@@ -16,6 +16,8 @@ Score memory importance for an autonomous agent from 1 to 10.
 - Current plan: $current_plan_text
 - Observation: $observation
 
+Keep `reason` to one concise sentence of at most $reason_max_chars characters.
+
 ## Output Contract
 
 Return strict JSON only with this exact shape and no extra text: $json_shape.

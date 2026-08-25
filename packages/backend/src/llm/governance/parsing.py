@@ -11,6 +11,12 @@ from agents.reaction.contracts import (
 )
 from agents.planning.models import DayPlanItem, HourlyPlanItem, MinutePlanItem
 from llm.clients.types import JsonObject
+from llm.structured_outputs import (
+    DAY_ACTION_MAX_CHARS,
+    DAY_LOCATION_MAX_CHARS,
+    HOURLY_ACTION_MAX_CHARS,
+    MINUTE_ACTION_MAX_CHARS,
+)
 
 
 @dataclass(frozen=True)
@@ -86,6 +92,8 @@ def try_parse_day_plan(
         min_duration=1,
         require_exact_minute=True,
         reference_date=reference_date,
+        action_content_max_chars=DAY_ACTION_MAX_CHARS,
+        location_max_chars=DAY_LOCATION_MAX_CHARS,
     )
     if len(normalized) > max_items:
         normalized = normalized[:max_items]
@@ -119,6 +127,7 @@ def try_parse_hour_plan(
         min_duration=1,
         require_exact_minute=True,
         reference_date=reference_date,
+        action_content_max_chars=HOURLY_ACTION_MAX_CHARS,
     )
     if len(normalized) > max_items:
         normalized = normalized[:max_items]
@@ -159,11 +168,14 @@ def try_parse_hour_plan_decomposition(
         raw_items=authoritative_items,
         item_factory=HourlyPlanItem,
         min_duration=1,
+        max_duration=180,
         require_exact_minute=True,
         reference_date=reference_date,
     )
     if not normalized:
         raise HourPlanParseError("insufficient_hour_plan_items")
+    if len(normalized) > 24:
+        raise HourPlanParseError("too_many_hour_plan_items")
     normalized.sort(key=lambda item: item.start_time)
     return HourPlanParseResult(items=normalized)
 
@@ -192,6 +204,7 @@ def try_parse_minute_plan(
         max_duration=15,
         require_exact_minute=True,
         reference_date=reference_date,
+        action_content_max_chars=MINUTE_ACTION_MAX_CHARS,
     )
     if len(normalized) > max_items:
         normalized = normalized[:max_items]
@@ -217,9 +230,12 @@ def try_parse_minute_task_decomposition(
     raw_items = payload.get("items")
     if not isinstance(raw_items, list) or not raw_items:
         raise MinutePlanParseError("missing_or_invalid_items")
+    typed_raw_items = cast(list[object], raw_items)
+    if len(typed_raw_items) > 36:
+        raise MinutePlanParseError("too_many_task_decomposition_items")
 
     items: list[MinuteTaskDecompositionItem] = []
-    for raw_item in cast(list[object], raw_items):
+    for raw_item in typed_raw_items:
         if not isinstance(raw_item, dict):
             raise MinutePlanParseError("invalid_task_decomposition_item")
         item = cast(JsonObject, raw_item)
@@ -235,6 +251,8 @@ def try_parse_minute_task_decomposition(
         action_content = item.get("action_content")
         if not isinstance(action_content, str) or not action_content.strip():
             raise MinutePlanParseError("missing_or_invalid_action_content")
+        if len(action_content.strip()) > MINUTE_ACTION_MAX_CHARS:
+            raise MinutePlanParseError("action_content_too_long")
         items.append(
             MinuteTaskDecompositionItem(
                 action_content=action_content.strip(),
@@ -496,6 +514,8 @@ def _normalize_plan_items(
     max_duration: int | None = None,
     require_exact_minute: bool = False,
     reference_date: datetime.date | None = None,
+    action_content_max_chars: int | None = None,
+    location_max_chars: int | None = None,
 ) -> list[TPlan]:
     normalized: list[TPlan] = []
     seen: set[tuple[str, str, str, str]] = set()
@@ -528,9 +548,19 @@ def _normalize_plan_items(
         location = payload.get("location")
         if not isinstance(location, str) or not location.strip():
             continue
+        if (
+            location_max_chars is not None
+            and len(location.strip()) > location_max_chars
+        ):
+            continue
 
         action_content = payload.get("action_content")
         if not isinstance(action_content, str) or not action_content.strip():
+            continue
+        if (
+            action_content_max_chars is not None
+            and len(action_content.strip()) > action_content_max_chars
+        ):
             continue
 
         normalized_location = location.strip()

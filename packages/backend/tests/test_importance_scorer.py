@@ -6,17 +6,18 @@ from llm import (
     clamp_importance,
     parse_importance_value,
 )
+from llm.structured_outputs import ImportanceOutput
 
 
 class StubGenerationClient:
     def __init__(self, response: str | Exception):
         self.response = response
         self.calls: int = 0
-        self.last_format_json: bool | None = None
+        self.last_response_model: object = None
 
     def generate(self, **kwargs: object) -> str:
         self.calls += 1
-        self.last_format_json = kwargs.get("format_json") is True
+        self.last_response_model = kwargs.get("response_model")
         if isinstance(self.response, Exception):
             raise self.response
         return self.response
@@ -57,7 +58,7 @@ def test_llm_importance_scorer_success() -> None:
 
     assert score == 7
     assert client.calls == 1
-    assert client.last_format_json is True
+    assert client.last_response_model is ImportanceOutput
 
 
 def test_llm_importance_scorer_fallback_on_client_error() -> None:
