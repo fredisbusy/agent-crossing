@@ -213,6 +213,27 @@ class EncounterOutput(StrictStructuredOutput):
     reason: EncounterReasonText
 
 
+INTERVIEW_REASON_MAX_CHARS = 160
+
+InterviewReasonText: TypeAlias = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=INTERVIEW_REASON_MAX_CHARS,
+    ),
+]
+
+
+class InterviewOutput(StrictStructuredOutput):
+    """§7.1 interview judgment: yes/no answer grounded in numbered memory
+    statements shown in the prompt, with citation numbers back to them."""
+
+    answer_yes: bool
+    citation_statement_numbers: list[int] = Field(min_length=0, max_length=10)
+    reason: InterviewReasonText
+
+
 __all__ = [
     "DAY_ACTION_MAX_CHARS",
     "DAY_LOCATION_MAX_CHARS",
@@ -237,4 +258,6 @@ __all__ = [
     "EncounterOutput",
     "PLAN_DISRUPTION_REASON_MAX_CHARS",
     "PlanDisruptionOutput",
+    "INTERVIEW_REASON_MAX_CHARS",
+    "InterviewOutput",
 ]

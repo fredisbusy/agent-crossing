@@ -15,6 +15,7 @@ from .structured_outputs import (
     HOURLY_ACTION_MAX_CHARS,
     IMPORTANCE_REASON_MAX_CHARS,
     INSIGHT_MAX_CHARS,
+    INTERVIEW_REASON_MAX_CHARS,
     MINUTE_ACTION_MAX_CHARS,
     PLAN_DISRUPTION_REASON_MAX_CHARS,
     QUESTION_MAX_CHARS,
@@ -54,6 +55,11 @@ INSIGHTS_JSON_SHAPE = (
     '{"insight": "<text>", "citation_statement_numbers": [1, 5, 3]}, '
     '{"insight": "<text>", "citation_statement_numbers": [2, 4]}'
     "]}"
+)
+
+INTERVIEW_JSON_SHAPE = (
+    '{"answer_yes": <boolean>, "citation_statement_numbers": [1, 3], '
+    '"reason": "<short string>"}'
 )
 
 IMPORTANCE_JSON_SHAPE = '{"importance": <int 1-10>, "reason": "<short>"}'
@@ -148,6 +154,24 @@ def build_insights_with_citation_prompt(
         "insights_instruction.md",
         json_shape=INSIGHTS_JSON_SHAPE,
         insight_max_chars=str(INSIGHT_MAX_CHARS),
+    )
+    return f"{memory_text}\n\n{instruction.strip()}"
+
+
+def build_interview_prompt(
+    *,
+    agent_name: str,
+    question: str,
+    memories: list[MemoryObject],
+) -> str:
+    memory_text = _build_memory_statements_text(
+        agent_name=agent_name, memories=memories
+    )
+    instruction = render_template(
+        "interview_instruction.md",
+        json_shape=INTERVIEW_JSON_SHAPE,
+        question=question,
+        reason_max_chars=str(INTERVIEW_REASON_MAX_CHARS),
     )
     return f"{memory_text}\n\n{instruction.strip()}"
 

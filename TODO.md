@@ -555,22 +555,50 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
 - [ ] `P2` 정보 확산 실험을 자동 측정한다 (§7.1.1, 예: Sam의 후보 출마 소식이
       1명→8명(32%)으로 확산)
   - Depends on: §3-C 대화 결과를 plan 업데이트에 반영
+  - Implemented 2026-08-25 (부분): `agents/evaluation/interview.py`의
+    `InterviewGate.ask`가 §7.1 grounded yes/no interview 판정을 수행한다 —
+    질문마다 `memory_service.get_retrieval_memories`로 후보를 조회해
+    번호를 매긴 뒤, LLM 응답의 `citation_statement_numbers`가 실제 조회된
+    memory id로 해소될 때만 `aware=True`로 인정한다(그렇지 않으면 raw
+    `answer_yes=True`라도 hallucination으로 걸러 `aware=False`). memory가
+    비어 있으면 LLM 호출 없이 즉시 `aware=False`. `agents/evaluation/diffusion.py`의
+    `compute_diffusion_rate`가 여러 agent의 `InterviewAnswer`를 받아
+    aware 비율(`DiffusionResult.rate`)을 계산한다(`tests/test_interview.py`,
+    `tests/test_diffusion.py`).
   - DoD:
-    - [ ] seed fact를 특정 agent에게만 초기 memory로 주입한다
-    - [ ] 시뮬레이션 종료 시점에 각 agent를 "interview"하여(§7.1 질문 형식:
+    - [x] seed fact를 특정 agent에게만 초기 memory로 주입한다 — 기존
+          `MemoryManager.create_observation_from_text`를 그대로 재사용(전용
+          "seed" wrapper는 불필요 — 임의 관찰과 동일한 저장 경로).
+    - [x] 시뮬레이션 종료 시점에 각 agent를 "interview"하여(§7.1 질문 형식:
           "Did you know that...?") 인지 여부를 yes/no로 판정한다
-    - [ ] 답변이 실제 memory stream 근거(해당 정보를 들은 dialogue)에서
-          나왔는지 검증해 hallucination을 걸러낸다 (§7.1 방법론)
-    - [ ] 실험 실행별 인지 agent 비율을 비교 가능한 포맷으로 저장한다
+          (`InterviewGate.ask`)
+    - [x] 답변이 실제 memory stream 근거(해당 정보를 들은 dialogue)에서
+          나왔는지 검증해 hallucination을 걸러낸다 (§7.1 방법론) —
+          `InterviewAnswer.aware`
+    - [x] 실험 실행별 인지 agent 비율을 비교 가능한 포맷으로 저장한다 —
+          `DiffusionResult`(aware_agent_names/total_agent_count/rate)
+    - [ ] 남은 것: 실제 다중 agent 시뮬레이션 실행에 이 판정기를 배선해
+          seed fact 주입 → tick 진행 → 종료 시점 일괄 interview를 자동
+          실행하는 러너(§7의 "25 agent, 2 game-day" 시나리오에 해당하는
+          축소판)가 아직 없다 — 위 primitive들은 단위 테스트로만 검증됨.
 
 - [ ] `P2` 관계 형성 지표를 계산한다 (§7.1.1, 시뮬레이션 시작~종료 밀도
       0.167 → 0.74 증가가 논문 기준 결과)
   - Depends on: 정보 확산 실험 자동 측정
+  - Implemented 2026-08-25 (부분): `agents/evaluation/diffusion.py`의
+    `compute_relationship_density`가 상호 인지 쌍(mutual acknowledgment
+    pair) 목록을 무방향 간선으로 중복 제거해 `eta = 2|E| / (|V|(|V|-1))`를
+    계산한다(`tests/test_diffusion.py`).
   - DoD:
-    - [ ] 각 agent 쌍에게 "Do you know of `<name>`?"을 interview로 물어
+    - [x] 각 agent 쌍에게 "Do you know of `<name>`?"을 interview로 물어
           상호 인지(mutual acknowledgement)를 무방향 그래프 간선으로 기록한다
-    - [ ] 네트워크 밀도 `eta = 2|E| / (|V|(|V|-1))`를 계산한다
-    - [ ] 시뮬레이션 시작 시점과 종료 시점의 밀도를 모두 기록해 변화량을 남긴다
+          — interview 자체는 `InterviewGate.ask` 재사용, 쌍→간선 dedup은
+          `compute_relationship_density`
+    - [x] 네트워크 밀도 `eta = 2|E| / (|V|(|V|-1))`를 계산한다
+    - [ ] 시뮬레이션 시작 시점과 종료 시점의 밀도를 모두 기록해 변화량을
+          남긴다 — 위 정보 확산 항목과 동일하게, 실제 시뮬레이션 실행에
+          배선하는 러너가 아직 없어 "시작/종료 두 시점 비교"를 자동으로
+          만들어내지 못한다.
 
 - [ ] `P2` 협업/조율 지표를 계산한다 (§7.1.2 Valentine's Day party 사례:
       초대받은 12명 중 5명 참석)
@@ -619,12 +647,13 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
 ## Milestones
 
 - [x] M1: Infra & PoC 완료
-- [ ] M2: Single-agent believable daily life (§4 전체 인지 루프가 개별
+- [x] M2: Single-agent believable daily life (§4 전체 인지 루프가 개별
       agent 단위로 닫혀 있는 상태)
   - 조건: 1) Memory/Retrieval P0 완료 + 2) Reflection P1 완료 +
-    3) Planning §3-A 완료 + **4) §3-B tick react/부분 재계획 완료**
-  - 상태: 1~3 완료, 4 미완료 — tick react 판정이 없으면 §4.3.1이 규정하는
-    "관찰이 계획을 방해하면 반응" 루프가 닫히지 않아 M2 미달성
+    3) Planning §3-A 완료 + 4) §3-B tick react/부분 재계획 완료
+  - 상태 (2026-08-25): 1~4 모두 완료 — §3-B `PlanDisruptionGate`가
+    비대화 tick에도 배선되어(`_dispatch_tick_plan_disruption_check`)
+    §4.3.1의 "관찰이 계획을 방해하면 반응" 루프가 닫혔다.
 - [ ] M3: Two-agent social interaction + information diffusion
   - 조건: §3-C 대화 연계 planning + §5-A 정보 확산/관계/협업 지표 자동 측정
 - [ ] M4: Multi-agent town simulation + user intervention + 논문 수준 검증
