@@ -33,6 +33,10 @@ DAY_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
     temperature=0.0,
     top_p=1.0,
     num_predict=1024,
+    # Called once per agent per day; worth spending reasoning budget on since it
+    # frames the whole day's broad strokes, unlike the far more frequent hourly/minute
+    # decompositions below.
+    reasoning_effort="low",
 )
 
 HOURLY_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(

@@ -126,12 +126,18 @@ class LiteLlmClient:
         if "qwen" in selected_model.lower():
             # LiteLLM maps low/medium/high to Ollama's think=true. Structured
             # planning needs the final JSON body instead of spending the output
-            # budget on reasoning_content.
+            # budget on reasoning_content, so this defaults to "none" for structured
+            # calls. Callers can override via LlmGenerateOptions.reasoning_effort for
+            # low-frequency, high-stakes decisions that benefit from extra thought.
             kwargs["reasoning_effort"] = (
-                "none"
-                if (format_json or structured_output)
-                and selected_model.startswith(("ollama/", "ollama_chat/"))
-                else "low"
+                final_options.reasoning_effort
+                if final_options.reasoning_effort is not None
+                else (
+                    "none"
+                    if (format_json or structured_output)
+                    and selected_model.startswith(("ollama/", "ollama_chat/"))
+                    else "low"
+                )
             )
         if selected_model.startswith(("ollama/", "ollama_chat/")):
             kwargs["drop_params"] = True

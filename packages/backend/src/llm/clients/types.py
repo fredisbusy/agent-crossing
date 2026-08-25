@@ -1,7 +1,9 @@
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Literal, TypeAlias
 
 JsonObject: TypeAlias = dict[str, object]
+
+ReasoningEffort: TypeAlias = Literal["none", "low", "medium", "high"]
 
 
 @dataclass(frozen=True)
@@ -12,3 +14,10 @@ class LlmGenerateOptions:
     repeat_penalty: float | None = None
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
+    """Explicit reasoning budget override.
+
+    Low-frequency, high-stakes calls (day planning, reaction intent) can opt into a
+    non-``none`` value here. Left unset, the client falls back to its own heuristic
+    (``none`` for structured/JSON output on local Ollama Qwen models, ``low`` otherwise).
+    """
+    reasoning_effort: ReasoningEffort | None = None

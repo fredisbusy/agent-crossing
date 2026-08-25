@@ -11,6 +11,7 @@ import numpy as np
 from agents.sim_agent import SimAgent
 from agents.memory.memory_object import MemoryObject, NodeType
 from agents.planning.lifecycle import (
+    AgentPlanSnapshot,
     LifeAgent,
     PlanningCoordinator,
     PlanningGenerationError,
@@ -258,7 +259,7 @@ class WorldRuntime:
         return True
 
     async def pause_scheduler(self) -> bool:
-        """Stop at a safe boundary and wait for in-flight cognition to finish."""
+        """Stop at a safe boundary and wait for in-flight cognition/planning to finish."""
         was_running = self.scheduler_running
         task = self._scheduler_task
         if task is not None and not task.done():
@@ -271,6 +272,12 @@ class WorldRuntime:
         if cognitive_task is not None and cognitive_task.done():
             _ = cognitive_task.exception()
         self._cognitive_task = None
+        plan_task = self._plan_refresh_task
+        if plan_task is not None and not plan_task.done():
+            await plan_task
+        if plan_task is not None and plan_task.done():
+            _ = plan_task.exception()
+        self._plan_refresh_task = None
         if self.spatial_runtime is not None:
             self.spatial_runtime.update_world_state(
                 current_time=self.current_time,
@@ -362,18 +369,7 @@ class WorldRuntime:
                 )
             )
             if self.planning_coordinator is not None and not cognitive_active:
-                schedules = []
-                for agent in self.agents:
-                    schedules.append(
-                        self.planning_coordinator.ensure_current(
-                            agent=_as_life_agent(agent),
-                            now=planning_time,
-                            generate=True,
-                        )
-                    )
-                if self.spatial_runtime is not None:
-                    for schedule in schedules:
-                        self.spatial_runtime.set_schedule(schedule)
+                self._sync_or_schedule_plan_generation(planning_time)
             self._start_dialogue_for_real_encounter(planning_time)
             self.current_time = planning_time
             if self.spatial_runtime is not None:
@@ -382,6 +378,69 @@ class WorldRuntime:
                     turn=self.turn,
                     scheduler_running=self.scheduler_running,
                 )
+
+    def _sync_or_schedule_plan_generation(
+        self, planning_time: datetime.datetime
+    ) -> None:
+        """Apply already-current plans immediately; hand off regeneration to the background.
+
+        `PlanningCoordinator.ensure_current(generate=True)` can cascade into up to three
+        sequential LLM calls per agent on a day/hour/minute boundary. Running that inline
+        here would stall the tick loop (and dialogue) for as long as the local model takes
+        to answer, so this only reads the already-valid plan synchronously (no LLM I/O) and
+        offloads regeneration to `_generate_plans_blocking` via `_plan_refresh_task`. Agents
+        whose plan is mid-regeneration simply keep their last known schedule for this tick.
+        """
+        assert self.planning_coordinator is not None
+        schedules: list[AgentPlanSnapshot] = []
+        needs_generation = False
+        for agent in self.agents:
+            try:
+                schedules.append(
+                    self.planning_coordinator.ensure_current(
+                        agent=_as_life_agent(agent),
+                        now=planning_time,
+                        generate=False,
+                    )
+                )
+            except PlanningGenerationError:
+                needs_generation = True
+        if self.spatial_runtime is not None:
+            for schedule in schedules:
+                self.spatial_runtime.set_schedule(schedule)
+        if needs_generation:
+            self._ensure_plan_generation_task(planning_time)
+
+    def _ensure_plan_generation_task(self, planning_time: datetime.datetime) -> None:
+        if self._plan_refresh_task is not None and not self._plan_refresh_task.done():
+            return
+        self._plan_refresh_task = asyncio.create_task(
+            asyncio.to_thread(self._generate_plans_blocking, planning_time)
+        )
+
+    def _generate_plans_blocking(self, planning_time: datetime.datetime) -> None:
+        """Runs off the tick loop's critical path; may issue several sequential LLM calls."""
+        assert self.planning_coordinator is not None
+        try:
+            schedules = [
+                self.planning_coordinator.ensure_current(
+                    agent=_as_life_agent(agent),
+                    now=planning_time,
+                    generate=True,
+                )
+                for agent in self.agents
+            ]
+        except Exception as error:
+            with self._step_lock:
+                self._set_planning_error(error)
+                self._scheduler_stop_requested = True
+            logger.exception("Background plan generation failed")
+            return
+        with self._step_lock:
+            self._set_planning_error(None)
+            if self.spatial_runtime is not None:
+                for schedule in schedules:
+                    self.spatial_runtime.set_schedule(schedule)
 
     def _run_cognitive_turn(self) -> None:
         """Run one dialogue turn independently from the authoritative world clock."""

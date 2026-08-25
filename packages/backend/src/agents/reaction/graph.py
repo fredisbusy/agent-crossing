@@ -31,7 +31,20 @@ from .contracts import (
     ReactionUtterance,
 )
 
-REACTION_GENERATE_OPTIONS = LlmGenerateOptions(
+REACTION_INTENT_GENERATE_OPTIONS = LlmGenerateOptions(
+    temperature=0.35,
+    top_p=0.92,
+    num_predict=512,
+    repeat_penalty=1.1,
+    presence_penalty=0.2,
+    frequency_penalty=0.4,
+    # One judgment call per dialogue turn deciding whether/how to react; worth the
+    # reasoning budget. Utterance generation below stays fast since it can loop
+    # several times per turn on semantic/overlap retries.
+    reasoning_effort="low",
+)
+
+REACTION_UTTERANCE_GENERATE_OPTIONS = LlmGenerateOptions(
     temperature=0.35,
     top_p=0.92,
     num_predict=512,
@@ -209,7 +222,7 @@ class ReactionGraphRunner:
         response = self.generation_client.generate(
             prompt=state["intent_prompt"],
             system=state["system_prompt"],
-            options=REACTION_GENERATE_OPTIONS,
+            options=REACTION_INTENT_GENERATE_OPTIONS,
             response_model=ReactionIntentOutput,
         )
         intent = parse_reaction_intent(response)
@@ -305,7 +318,7 @@ class ReactionGraphRunner:
         response = self.generation_client.generate(
             prompt=state["working_prompt"],
             system=state["system_prompt"],
-            options=REACTION_GENERATE_OPTIONS,
+            options=REACTION_UTTERANCE_GENERATE_OPTIONS,
             response_model=ReactionUtteranceOutput,
         )
         utterance_result = parse_reaction_utterance(response)
@@ -383,7 +396,10 @@ class ReactionGraphRunner:
 
         if semantic_check.max_similarity >= SEMANTIC_SOFT_PENALTY_THRESHOLD:
             next_retry_count = state["semantic_retry_count"] + 1
-            if next_retry_count > 2:
+            # Capped at one retry: a local model call is expensive enough that a
+            # second consecutive semantic-overlap retry rarely pays for itself, and
+            # this can already stack with a partner nudge and an overlap retry.
+            if next_retry_count > 1:
                 return {
                     "decision": replace(
                         base_decision,
@@ -458,7 +474,8 @@ class ReactionGraphRunner:
             return {"overlap_status": "final"}
 
         next_retry_count = state["overlap_retry_count"] + 1
-        if next_retry_count > 2:
+        # Capped at one retry for the same reason as the semantic-overlap check above.
+        if next_retry_count > 1:
             return {
                 "decision": replace(
                     decision,
