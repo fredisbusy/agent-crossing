@@ -1,6 +1,6 @@
 {
   "compressionlevel": -1,
-  "height": 28,
+  "height": 44,
   "infinite": false,
   "layers": [
     {
@@ -14,7 +14,16 @@
         {"id": 4, "name": "버드나무 시장", "type": "location", "x": 128, "y": 608, "width": 288, "height": 192, "properties": [{"name": "kind", "type": "string", "value": "market"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 버드나무 시장"}, {"name": "color", "type": "color", "value": "#d98776"}, {"name": "aliases", "type": "string", "value": "Willow Market,market,시장"}, {"name": "entrance_tile_x", "type": "int", "value": 8}, {"name": "entrance_tile_y", "type": "int", "value": 24}]},
         {"id": 5, "name": "달맞이꽃 공원", "type": "location", "x": 832, "y": 576, "width": 352, "height": 256, "properties": [{"name": "kind", "type": "string", "value": "park"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 달맞이꽃 공원"}, {"name": "color", "type": "color", "value": "#86b985"}, {"name": "aliases", "type": "string", "value": "Moonflower Park,park,공원"}]},
         {"id": 6, "name": "지호의 집", "type": "location", "x": 64, "y": 352, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 지호의 집"}, {"name": "color", "type": "color", "value": "#d999a9"}, {"name": "aliases", "type": "string", "value": "Rose Cottage,Jiho home,지호 집"}, {"name": "entrance_tile_x", "type": "int", "value": 5}, {"name": "entrance_tile_y", "type": "int", "value": 15}]},
-        {"id": 7, "name": "수진의 집", "type": "location", "x": 992, "y": 336, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 수진의 집"}, {"name": "color", "type": "color", "value": "#9eb88f"}, {"name": "aliases", "type": "string", "value": "Sage Cottage,Sujin home,수진 집"}, {"name": "entrance_tile_x", "type": "int", "value": 34}, {"name": "entrance_tile_y", "type": "int", "value": 15}]}
+        {"id": 7, "name": "수진의 집", "type": "location", "x": 992, "y": 336, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 수진의 집"}, {"name": "color", "type": "color", "value": "#9eb88f"}, {"name": "aliases", "type": "string", "value": "Sage Cottage,Sujin home,수진 집"}, {"name": "entrance_tile_x", "type": "int", "value": 34}, {"name": "entrance_tile_y", "type": "int", "value": 15}]},
+        {"id": 95, "name": "민지의 집", "type": "location", "x": 32, "y": 928, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 민지의 집"}, {"name": "color", "type": "color", "value": "#c9a5d9"}, {"name": "aliases", "type": "string", "value": "Wisteria House,Minji home,민지 집"}, {"name": "entrance_tile_x", "type": "int", "value": 4}, {"name": "entrance_tile_y", "type": "int", "value": 33}]},
+        {"id": 96, "name": "정우의 집", "type": "location", "x": 288, "y": 928, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 정우의 집"}, {"name": "color", "type": "color", "value": "#7fb5c2"}, {"name": "aliases", "type": "string", "value": "Cedar House,Jungwoo home,정우 집"}, {"name": "entrance_tile_x", "type": "int", "value": 12}, {"name": "entrance_tile_y", "type": "int", "value": 33}]},
+        {"id": 97, "name": "하은의 집", "type": "location", "x": 544, "y": 928, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 하은의 집"}, {"name": "color", "type": "color", "value": "#e0b15a"}, {"name": "aliases", "type": "string", "value": "Ballpark House,Haeun home,하은 집"}, {"name": "entrance_tile_x", "type": "int", "value": 20}, {"name": "entrance_tile_y", "type": "int", "value": 33}]},
+        {"id": 98, "name": "태오의 집", "type": "location", "x": 800, "y": 928, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 태오의 집"}, {"name": "color", "type": "color", "value": "#a8c17e"}, {"name": "aliases", "type": "string", "value": "Drumbeat House,Taeo home,태오 집"}, {"name": "entrance_tile_x", "type": "int", "value": 28}, {"name": "entrance_tile_y", "type": "int", "value": 33}]},
+        {"id": 127, "name": "우식의 집", "type": "location", "x": 32, "y": 1216, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 우식의 집"}, {"name": "color", "type": "color", "value": "#5b8fd1"}, {"name": "home_style", "type": "string", "value": "tinkerer"}, {"name": "aliases", "type": "string", "value": "Gearlight House,Woosik home,우식 집"}, {"name": "entrance_tile_x", "type": "int", "value": 4}, {"name": "entrance_tile_y", "type": "int", "value": 42}]},
+        {"id": 128, "name": "용준의 집", "type": "location", "x": 288, "y": 1216, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 용준의 집"}, {"name": "color", "type": "color", "value": "#d88955"}, {"name": "home_style", "type": "string", "value": "shuttle"}, {"name": "aliases", "type": "string", "value": "Shuttle House,Yongjun home,용준 집"}, {"name": "entrance_tile_x", "type": "int", "value": 12}, {"name": "entrance_tile_y", "type": "int", "value": 42}]},
+        {"id": 129, "name": "병용의 집", "type": "location", "x": 544, "y": 1216, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 병용의 집"}, {"name": "color", "type": "color", "value": "#9a765f"}, {"name": "home_style", "type": "string", "value": "host"}, {"name": "aliases", "type": "string", "value": "Hearth Table House,Byeongyong home,병용 집"}, {"name": "entrance_tile_x", "type": "int", "value": 20}, {"name": "entrance_tile_y", "type": "int", "value": 42}]},
+        {"id": 130, "name": "원준의 집", "type": "location", "x": 800, "y": 1216, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "home"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 원준의 집"}, {"name": "color", "type": "color", "value": "#7b82b8"}, {"name": "home_style", "type": "string", "value": "archive"}, {"name": "aliases", "type": "string", "value": "Quiet Frame House,Wonjun home,원준 집"}, {"name": "entrance_tile_x", "type": "int", "value": 28}, {"name": "entrance_tile_y", "type": "int", "value": 42}]},
+        {"id": 159, "name": "별빛 주점", "type": "location", "x": 1040, "y": 928, "width": 224, "height": 160, "properties": [{"name": "kind", "type": "string", "value": "tavern"}, {"name": "location_path", "type": "string", "value": "브라이어 코브 > 별빛 주점"}, {"name": "color", "type": "color", "value": "#8f5f78"}, {"name": "aliases", "type": "string", "value": "Starlight Tavern,pub,bar,tavern,술집,주점"}, {"name": "entrance_tile_x", "type": "int", "value": 36}, {"name": "entrance_tile_y", "type": "int", "value": 33}]}
       ],
       "opacity": 1,
       "type": "objectgroup",
@@ -34,7 +43,12 @@
         {"id": 24, "name": "market-path", "type": "path", "x": 0, "y": 0, "polyline": [{"x": 272, "y": 800}, {"x": 448, "y": 800}, {"x": 448, "y": 544}, {"x": 480, "y": 448}]},
         {"id": 25, "name": "park-path", "type": "path", "x": 0, "y": 0, "polyline": [{"x": 800, "y": 448}, {"x": 944, "y": 560}, {"x": 1024, "y": 704}]},
         {"id": 26, "name": "rose-cottage-path", "type": "path", "x": 0, "y": 0, "polyline": [{"x": 176, "y": 512}, {"x": 176, "y": 544}, {"x": 384, "y": 448}]},
-        {"id": 27, "name": "sage-cottage-path", "type": "path", "x": 0, "y": 0, "polyline": [{"x": 1104, "y": 512}, {"x": 1104, "y": 544}, {"x": 896, "y": 448}]}
+        {"id": 27, "name": "sage-cottage-path", "type": "path", "x": 0, "y": 0, "polyline": [{"x": 1104, "y": 512}, {"x": 1104, "y": 544}, {"x": 896, "y": 448}]},
+        {"id": 103, "name": "south-connector", "type": "path", "x": 0, "y": 0, "polyline": [{"x": 640, "y": 832}, {"x": 640, "y": 1088}]},
+        {"id": 104, "name": "new-homes-row", "type": "path", "x": 0, "y": 0, "polyline": [{"x": 144, "y": 1088}, {"x": 400, "y": 1088}, {"x": 656, "y": 1088}, {"x": 912, "y": 1088}]},
+        {"id": 131, "name": "friends-south-connector", "type": "path", "x": 0, "y": 0, "polyline": [{"x": 640, "y": 1088}, {"x": 640, "y": 1376}]},
+        {"id": 132, "name": "friends-homes-row", "type": "path", "x": 0, "y": 0, "polyline": [{"x": 144, "y": 1376}, {"x": 400, "y": 1376}, {"x": 656, "y": 1376}, {"x": 912, "y": 1376}]},
+        {"id": 160, "name": "starlight-tavern-path", "type": "path", "x": 0, "y": 0, "polyline": [{"x": 912, "y": 1088}, {"x": 1168, "y": 1088}, {"x": 1168, "y": 1072}]}
       ],
       "opacity": 1,
       "type": "objectgroup",
@@ -67,7 +81,36 @@
         {"id": 87, "name": "lamp-northwest", "type": "solid", "x": 464, "y": 384, "width": 32, "height": 32},
         {"id": 88, "name": "lamp-northeast", "type": "solid", "x": 784, "y": 384, "width": 32, "height": 32},
         {"id": 89, "name": "lamp-southwest", "type": "solid", "x": 464, "y": 544, "width": 32, "height": 32},
-        {"id": 90, "name": "lamp-southeast", "type": "solid", "x": 784, "y": 544, "width": 32, "height": 32}
+        {"id": 90, "name": "lamp-southeast", "type": "solid", "x": 784, "y": 544, "width": 32, "height": 32},
+        {"id": 99, "name": "wisteria-house", "type": "solid", "x": 48, "y": 944, "width": 192, "height": 112},
+        {"id": 100, "name": "cedar-house", "type": "solid", "x": 304, "y": 944, "width": 192, "height": 112},
+        {"id": 101, "name": "ballpark-house", "type": "solid", "x": 560, "y": 944, "width": 192, "height": 112},
+        {"id": 102, "name": "drumbeat-house", "type": "solid", "x": 816, "y": 944, "width": 192, "height": 112},
+        {"id": 116, "name": "tree-row-1", "type": "solid", "x": 256, "y": 984, "width": 32, "height": 32},
+        {"id": 117, "name": "tree-row-2", "type": "solid", "x": 512, "y": 984, "width": 32, "height": 32},
+        {"id": 118, "name": "tree-row-3", "type": "solid", "x": 768, "y": 984, "width": 32, "height": 32},
+        {"id": 119, "name": "tree-buffer-west", "type": "solid", "x": 134, "y": 854, "width": 32, "height": 32},
+        {"id": 120, "name": "tree-buffer-east", "type": "solid", "x": 934, "y": 854, "width": 32, "height": 32},
+        {"id": 121, "name": "lamp-homes-west", "type": "solid", "x": 16, "y": 1104, "width": 32, "height": 32},
+        {"id": 122, "name": "lamp-homes-east", "type": "solid", "x": 1008, "y": 1104, "width": 32, "height": 32},
+        {"id": 123, "name": "bush-minji", "type": "solid", "x": 92, "y": 1072, "width": 24, "height": 16},
+        {"id": 124, "name": "bush-jungwoo", "type": "solid", "x": 348, "y": 1072, "width": 24, "height": 16},
+        {"id": 125, "name": "bush-haeun", "type": "solid", "x": 604, "y": 1072, "width": 24, "height": 16},
+        {"id": 126, "name": "bush-taeo", "type": "solid", "x": 860, "y": 1072, "width": 24, "height": 16},
+        {"id": 133, "name": "gearlight-house", "type": "solid", "x": 48, "y": 1232, "width": 192, "height": 112},
+        {"id": 134, "name": "shuttle-house", "type": "solid", "x": 304, "y": 1232, "width": 192, "height": 112},
+        {"id": 135, "name": "hearth-table-house", "type": "solid", "x": 560, "y": 1232, "width": 192, "height": 112},
+        {"id": 136, "name": "quiet-frame-house", "type": "solid", "x": 816, "y": 1232, "width": 192, "height": 112},
+        {"id": 137, "name": "tree-friends-row-1", "type": "solid", "x": 256, "y": 1272, "width": 32, "height": 32},
+        {"id": 138, "name": "tree-friends-row-2", "type": "solid", "x": 512, "y": 1272, "width": 32, "height": 32},
+        {"id": 139, "name": "tree-friends-row-3", "type": "solid", "x": 768, "y": 1272, "width": 32, "height": 32},
+        {"id": 140, "name": "lamp-friends-west", "type": "solid", "x": 16, "y": 1360, "width": 32, "height": 32},
+        {"id": 141, "name": "lamp-friends-east", "type": "solid", "x": 1008, "y": 1360, "width": 32, "height": 32},
+        {"id": 142, "name": "bush-woosik", "type": "solid", "x": 92, "y": 1360, "width": 24, "height": 16},
+        {"id": 143, "name": "bush-yongjun", "type": "solid", "x": 348, "y": 1360, "width": 24, "height": 16},
+        {"id": 144, "name": "bush-byeongyong", "type": "solid", "x": 604, "y": 1360, "width": 24, "height": 16},
+        {"id": 145, "name": "bush-wonjun", "type": "solid", "x": 860, "y": 1360, "width": 24, "height": 16},
+        {"id": 161, "name": "starlight-tavern", "type": "solid", "x": 1056, "y": 944, "width": 192, "height": 112}
       ],
       "opacity": 0.35,
       "type": "objectgroup",
@@ -85,7 +128,10 @@
         {"id": 42, "name": "카페 카운터", "type": "counter", "x": 288, "y": 224, "point": true, "properties": [{"name": "location_path", "type": "string", "value": "브라이어 코브 > 허니컵 카페 > 카운터"}, {"name": "affordances", "type": "string", "value": "order,work,chat"}]},
         {"id": 43, "name": "열람 테이블", "type": "table", "x": 944, "y": 208, "point": true, "properties": [{"name": "location_path", "type": "string", "value": "브라이어 코브 > 스토리하우스 도서관 > 열람 테이블"}, {"name": "affordances", "type": "string", "value": "read,study,write"}]},
         {"id": 44, "name": "시장 가판대", "type": "stall", "x": 272, "y": 704, "point": true, "properties": [{"name": "location_path", "type": "string", "value": "브라이어 코브 > 버드나무 시장 > 농산물 가판대"}, {"name": "affordances", "type": "string", "value": "buy,sell,work"}]},
-        {"id": 45, "name": "공원 벤치", "type": "bench", "x": 928, "y": 736, "point": true, "properties": [{"name": "location_path", "type": "string", "value": "브라이어 코브 > 달맞이꽃 공원 > 버드나무 벤치"}, {"name": "affordances", "type": "string", "value": "sit,rest,chat"}]}
+        {"id": 45, "name": "공원 벤치", "type": "bench", "x": 928, "y": 736, "point": true, "properties": [{"name": "location_path", "type": "string", "value": "브라이어 코브 > 달맞이꽃 공원 > 버드나무 벤치"}, {"name": "affordances", "type": "string", "value": "sit,rest,chat"}]},
+        {"id": 162, "name": "별빛 바 카운터", "type": "bar_counter", "x": 1104, "y": 976, "point": true, "properties": [{"name": "location_path", "type": "string", "value": "브라이어 코브 > 별빛 주점 > 바 카운터"}, {"name": "affordances", "type": "string", "value": "order_drink,eat_snack,chat"}]},
+        {"id": 163, "name": "다트 보드", "type": "dartboard", "x": 1216, "y": 976, "point": true, "properties": [{"name": "location_path", "type": "string", "value": "브라이어 코브 > 별빛 주점 > 다트 보드"}, {"name": "affordances", "type": "string", "value": "play_darts,challenge,watch"}]},
+        {"id": 164, "name": "카드게임 테이블", "type": "game_table", "x": 1168, "y": 1024, "point": true, "properties": [{"name": "location_path", "type": "string", "value": "브라이어 코브 > 별빛 주점 > 카드게임 테이블"}, {"name": "affordances", "type": "string", "value": "play_cards,listen_music,chat"}]}
       ],
       "opacity": 1,
       "type": "objectgroup",
@@ -103,7 +149,11 @@
         {"id": 91, "name": "Minji", "type": "agent_spawn", "x": 700, "y": 550, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Minji"}, {"name": "color", "type": "color", "value": "#8fd66b"}]},
         {"id": 92, "name": "Jungwoo", "type": "agent_spawn", "x": 350, "y": 780, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Jungwoo"}, {"name": "color", "type": "color", "value": "#d6a86b"}]},
         {"id": 93, "name": "Haeun", "type": "agent_spawn", "x": 860, "y": 800, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Haeun"}, {"name": "color", "type": "color", "value": "#a86bd6"}]},
-        {"id": 94, "name": "Taeo", "type": "agent_spawn", "x": 180, "y": 270, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Taeo"}, {"name": "color", "type": "color", "value": "#6bd6c8"}]}
+        {"id": 94, "name": "Taeo", "type": "agent_spawn", "x": 180, "y": 270, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Taeo"}, {"name": "color", "type": "color", "value": "#6bd6c8"}]},
+        {"id": 146, "name": "Woosik", "type": "agent_spawn", "x": 144, "y": 1376, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Woosik"}, {"name": "color", "type": "color", "value": "#5f8fd3"}]},
+        {"id": 147, "name": "Yongjun", "type": "agent_spawn", "x": 400, "y": 1376, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Yongjun"}, {"name": "color", "type": "color", "value": "#d37b4e"}]},
+        {"id": 148, "name": "Byeongyong", "type": "agent_spawn", "x": 656, "y": 1376, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Byeongyong"}, {"name": "color", "type": "color", "value": "#8b6f54"}]},
+        {"id": 149, "name": "Wonjun", "type": "agent_spawn", "x": 912, "y": 1376, "point": true, "properties": [{"name": "agent_id", "type": "string", "value": "Wonjun"}, {"name": "color", "type": "color", "value": "#6f78b8"}]}
       ],
       "opacity": 1,
       "type": "objectgroup",
@@ -119,7 +169,13 @@
         {"id": 60, "name": "tree", "type": "tree", "x": 64, "y": 64, "point": true}, {"id": 61, "name": "tree", "type": "tree", "x": 448, "y": 80, "point": true}, {"id": 62, "name": "tree", "type": "tree", "x": 752, "y": 64, "point": true}, {"id": 63, "name": "tree", "type": "tree", "x": 1168, "y": 80, "point": true},
         {"id": 64, "name": "tree", "type": "tree", "x": 48, "y": 576, "point": true}, {"id": 65, "name": "tree", "type": "tree", "x": 448, "y": 784, "point": true}, {"id": 66, "name": "tree", "type": "tree", "x": 768, "y": 800, "point": true}, {"id": 67, "name": "tree", "type": "tree", "x": 1216, "y": 544, "point": true},
         {"id": 68, "name": "flower-patch", "type": "flowers", "x": 464, "y": 304, "point": true}, {"id": 69, "name": "flower-patch", "type": "flowers", "x": 816, "y": 304, "point": true}, {"id": 70, "name": "flower-patch", "type": "flowers", "x": 864, "y": 768, "point": true}, {"id": 71, "name": "flower-patch", "type": "flowers", "x": 1184, "y": 784, "point": true},
-        {"id": 72, "name": "lamp", "type": "lamp", "x": 480, "y": 400, "point": true}, {"id": 73, "name": "lamp", "type": "lamp", "x": 800, "y": 400, "point": true}, {"id": 74, "name": "lamp", "type": "lamp", "x": 480, "y": 560, "point": true}, {"id": 75, "name": "lamp", "type": "lamp", "x": 800, "y": 560, "point": true}
+        {"id": 72, "name": "lamp", "type": "lamp", "x": 480, "y": 400, "point": true}, {"id": 73, "name": "lamp", "type": "lamp", "x": 800, "y": 400, "point": true}, {"id": 74, "name": "lamp", "type": "lamp", "x": 480, "y": 560, "point": true}, {"id": 75, "name": "lamp", "type": "lamp", "x": 800, "y": 560, "point": true},
+        {"id": 105, "name": "tree", "type": "tree", "x": 272, "y": 1000, "point": true}, {"id": 106, "name": "tree", "type": "tree", "x": 528, "y": 1000, "point": true}, {"id": 107, "name": "tree", "type": "tree", "x": 784, "y": 1000, "point": true}, {"id": 108, "name": "tree", "type": "tree", "x": 150, "y": 870, "point": true}, {"id": 109, "name": "tree", "type": "tree", "x": 950, "y": 870, "point": true},
+        {"id": 110, "name": "lamp", "type": "lamp", "x": 32, "y": 1120, "point": true}, {"id": 111, "name": "lamp", "type": "lamp", "x": 1024, "y": 1120, "point": true},
+        {"id": 112, "name": "bush", "type": "bush", "x": 104, "y": 1080, "point": true}, {"id": 113, "name": "bush", "type": "bush", "x": 360, "y": 1080, "point": true}, {"id": 114, "name": "bush", "type": "bush", "x": 616, "y": 1080, "point": true}, {"id": 115, "name": "bush", "type": "bush", "x": 872, "y": 1080, "point": true},
+        {"id": 150, "name": "tree", "type": "tree", "x": 272, "y": 1288, "point": true}, {"id": 151, "name": "tree", "type": "tree", "x": 528, "y": 1288, "point": true}, {"id": 152, "name": "tree", "type": "tree", "x": 784, "y": 1288, "point": true},
+        {"id": 153, "name": "lamp", "type": "lamp", "x": 32, "y": 1376, "point": true}, {"id": 154, "name": "lamp", "type": "lamp", "x": 1024, "y": 1376, "point": true},
+        {"id": 155, "name": "bush", "type": "bush", "x": 104, "y": 1368, "point": true}, {"id": 156, "name": "bush", "type": "bush", "x": 360, "y": 1368, "point": true}, {"id": 157, "name": "bush", "type": "bush", "x": 616, "y": 1368, "point": true}, {"id": 158, "name": "bush", "type": "bush", "x": 872, "y": 1368, "point": true}
       ],
       "opacity": 1,
       "type": "objectgroup",
@@ -129,7 +185,7 @@
     }
   ],
   "nextlayerid": 7,
-  "nextobjectid": 95,
+  "nextobjectid": 165,
   "orientation": "orthogonal",
   "properties": [
     {"name": "id", "type": "string", "value": "briar-cove"},

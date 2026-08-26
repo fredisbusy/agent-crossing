@@ -89,6 +89,87 @@ class FakeAgent:
         return self.identity.name
 
 
+class OwnHomeOnlyPolicy:
+    def allowed_locations(self, agent_id: str) -> tuple[str, ...]:
+        assert agent_id == "byeongyong"
+        return (
+            "브라이어 코브 > 병용의 집",
+            "브라이어 코브 > 버드나무 시장",
+            "브라이어 코브 > 스토리하우스 도서관",
+            "브라이어 코브 > 마을 광장",
+            "브라이어 코브 > 별빛 주점",
+        )
+
+
+def test_day_plan_prompt_knows_own_home_and_excludes_unapproved_homes() -> None:
+    planner = FakePlanner()
+    agent = FakeAgent(
+        identity=AgentIdentity(
+            id="byeongyong",
+            name="병용",
+            age=36,
+            traits=["차분함"],
+            home="브라이어 코브 > 병용의 집",
+            workplace="브라이어 코브 > 버드나무 시장",
+        ),
+        profile=AgentProfile(
+            fixed=FixedPersona(identity_stable_set=["원목 가구를 좋아한다."]),
+            extended=ExtendedPersona(
+                lifestyle_and_routine=["아침에는 집을 정리한다."],
+                current_plan_context=[],
+            ),
+        ),
+        brain=FakeBrain(planner=planner),
+    )
+    coordinator = PlanningCoordinator(location_access_policy=OwnHomeOnlyPolicy())
+
+    _ = coordinator.generate_day_plan(
+        agent=agent, now=datetime.datetime(2026, 8, 26, 6, 0)
+    )
+
+    request = planner.last_day_plan_request
+    assert request is not None
+    assert "내 집은 브라이어 코브 > 병용의 집" in request.persona_background
+    assert "브라이어 코브 > 별빛 주점" in request.persona_background
+    assert "다트·카드게임·음악" in request.persona_background
+    assert "브라이어 코브 > 지호의 집" not in request.allowed_locations
+
+
+def test_install_day_plan_rejects_unapproved_other_residents_home() -> None:
+    planner = FakePlanner()
+    agent = FakeAgent(
+        identity=AgentIdentity(
+            id="byeongyong",
+            name="병용",
+            age=36,
+            traits=["차분함"],
+            home="브라이어 코브 > 병용의 집",
+        ),
+        profile=AgentProfile(
+            fixed=FixedPersona(identity_stable_set=[]),
+            extended=ExtendedPersona(lifestyle_and_routine=[], current_plan_context=[]),
+        ),
+        brain=FakeBrain(planner=planner),
+    )
+    coordinator = PlanningCoordinator(location_access_policy=OwnHomeOnlyPolicy())
+    now = datetime.datetime(2026, 8, 26, 6, 0)
+
+    with pytest.raises(PlanningGenerationError, match="disallowed home"):
+        coordinator.install_day_plan(
+            agent=agent,
+            now=now,
+            day_items=[
+                DayPlanItem(
+                    start_time=now,
+                    end_time=now + datetime.timedelta(hours=1),
+                    location="브라이어 코브 > 지호의 집",
+                    action_content="남의 집 거실을 정리한다.",
+                )
+            ],
+            reason="test",
+        )
+
+
 def test_planning_coordinator_generates_hierarchy_just_in_time_and_caches() -> None:
     planner = FakePlanner()
     agent = FakeAgent(

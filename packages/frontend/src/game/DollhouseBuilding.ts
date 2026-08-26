@@ -32,6 +32,8 @@ export function drawDollhouseBuilding(
     drawLibrary(graphics, bounds);
   } else if (kind === "market") {
     drawMarket(graphics, bounds);
+  } else if (kind === "tavern") {
+    drawTavern(graphics, bounds);
   } else {
     drawCommonInterior(graphics, bounds, accentColor);
   }
@@ -70,6 +72,13 @@ function buildingActivityPositions(
     return [
       new Phaser.Math.Vector2(x + width * 0.25, y + height * 0.78),
       new Phaser.Math.Vector2(x + width * 0.75, y + height * 0.78),
+    ];
+  }
+  if (kind === "tavern") {
+    return [
+      new Phaser.Math.Vector2(x + width * 0.28, y + height * 0.7),
+      new Phaser.Math.Vector2(x + width * 0.58, y + height * 0.62),
+      new Phaser.Math.Vector2(x + width * 0.78, y + height * 0.76),
     ];
   }
   return [new Phaser.Math.Vector2(x + width / 2, y + height * 0.72)];
@@ -176,6 +185,31 @@ function drawMarket(
     width * 0.25,
     [0xd98054, 0x8bb65e],
   );
+}
+
+function drawTavern(
+  graphics: Phaser.GameObjects.Graphics,
+  bounds: BuildingBounds,
+): void {
+  const { x, y, width, height } = bounds;
+  drawCounter(graphics, x + 13, y + 16, width * 0.52, 24);
+  drawShelf(
+    graphics,
+    x + 16,
+    y + 46,
+    27,
+    height * 0.38,
+    [0x8f5f78, 0xd8a34e, 0x668d75],
+  );
+  drawTableSet(graphics, x + width * 0.48, y + height * 0.69);
+  drawTableSet(graphics, x + width * 0.76, y + height * 0.72);
+  graphics.fillStyle(0x28344c, 1);
+  graphics.fillRect(x + width - 42, y + 17, 25, 25);
+  graphics.fillStyle(0xe8c35b, 1);
+  graphics.fillRect(x + width - 31, y + 21, 4, 17);
+  graphics.fillRect(x + width - 37, y + 27, 16, 4);
+  graphics.fillStyle(0xd76755, 1);
+  graphics.fillRect(x + width - 31, y + 27, 4, 4);
 }
 
 function drawCommonInterior(

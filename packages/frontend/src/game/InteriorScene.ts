@@ -115,6 +115,8 @@ export class InteriorScene extends Phaser.Scene {
       this.drawLibrary();
     } else if (this.interior.kind === "market") {
       this.drawMarket();
+    } else if (this.interior.kind === "tavern") {
+      this.drawTavern();
     } else {
       this.drawHome();
     }
@@ -145,6 +147,29 @@ export class InteriorScene extends Phaser.Scene {
     this.drawProduceStall(270, 185, [0x68a354, 0xe9d777]);
     this.drawProduceStall(430, 185, [0xd98054, 0x8bb65e]);
     this.drawShelf(75, 330, 470, 46, [0xd5aa55, 0x6d99b5, 0xd77d6f]);
+  }
+
+  private drawTavern(): void {
+    this.drawCounter(58, 88, 255, "STARLIGHT BAR");
+    this.drawShelf(72, 165, 62, 135, [0x8f5f78, 0xd8a34e, 0x668d75]);
+    this.drawTableSet(390, 175);
+    this.drawTableSet(505, 290);
+    this.drawLongTable(290, 345);
+    const games = this.add.graphics().setDepth(150);
+    games.fillStyle(0x28344c, 1);
+    games.fillRect(520, 82, 68, 68);
+    games.fillStyle(0xe8c35b, 1);
+    games.fillRect(550, 92, 8, 48);
+    games.fillRect(530, 112, 48, 8);
+    games.fillStyle(0xd76755, 1);
+    games.fillRect(550, 112, 8, 8);
+    this.textOverlay.add({
+      id: "tavern:darts",
+      text: "DARTS",
+      x: 554,
+      y: 158,
+      tone: "location",
+    });
   }
 
   private drawHome(): void {

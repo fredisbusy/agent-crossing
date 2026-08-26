@@ -14,7 +14,7 @@ from .models import (
     MinutePlanItem,
 )
 from persistence.contracts import PlanItemSave, PlanningStateSave
-from planning_locations import CANONICAL_LOCATIONS
+from planning_locations import CANONICAL_LOCATIONS, PUBLIC_LOCATION_ACTIVITIES
 from planning_constraints import DAY_PLAN_MAX_DURATION_MINUTES
 
 
@@ -72,6 +72,10 @@ class LifeBrain(Protocol):
     planner: LifePlanner | None
 
 
+class LocationAccessPolicy(Protocol):
+    def allowed_locations(self, agent_id: str) -> tuple[str, ...]: ...
+
+
 class PlanningGenerationError(RuntimeError):
     """Raised when an authoritative LLM plan cannot be generated or validated."""
 
@@ -111,10 +115,23 @@ PlanItemT = TypeVar("PlanItemT", DayPlanItem, HourlyPlanItem, MinutePlanItem)
 class PlanningCoordinator:
     """Owns the live day/hour/minute schedule for every simulation agent."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self, *, location_access_policy: LocationAccessPolicy | None = None
+    ) -> None:
         self._states: dict[str, _AgentPlanState] = {}
         self._lock: threading.RLock = threading.RLock()
         self._agent_locks: dict[str, threading.RLock] = {}
+        self._location_access_policy: LocationAccessPolicy | None = (
+            location_access_policy
+        )
+
+    def set_location_access_policy(self, policy: LocationAccessPolicy) -> None:
+        self._location_access_policy = policy
+
+    def _allowed_locations(self, agent_id: str) -> tuple[str, ...]:
+        if self._location_access_policy is None:
+            return CANONICAL_LOCATIONS
+        return self._location_access_policy.allowed_locations(agent_id)
 
     def _agent_lock(self, agent_id: str) -> threading.RLock:
         """Per-agent lock so different agents' plan generation (each of
@@ -148,7 +165,10 @@ class PlanningCoordinator:
 
     def restore_state(self, *, agent_id: str, state: PlanningStateSave) -> None:
         restored_day_items = [_restore_day_item(item) for item in state.day_items]
-        if not _day_plan_items_are_valid(restored_day_items):
+        allowed_locations = self._allowed_locations(agent_id)
+        if not _day_plan_items_are_valid(
+            restored_day_items, allowed_locations=allowed_locations
+        ):
             restored_day_items = []
         with self._lock:
             self._states[agent_id] = _AgentPlanState(
@@ -232,6 +252,13 @@ class PlanningCoordinator:
         day_items: list[DayPlanItem],
         reason: str,
     ) -> AgentPlanSnapshot:
+        allowed_locations = self._allowed_locations(str(agent.identity.id))
+        if not _day_plan_items_are_valid(
+            day_items, allowed_locations=allowed_locations
+        ):
+            raise PlanningGenerationError(
+                f"{agent.name}: day plan contains a disallowed home or invalid location/time window"
+            )
         active_day = _require_active(
             day_items, now, agent_name=agent.name, plan_level="day"
         )
@@ -241,7 +268,10 @@ class PlanningCoordinator:
             day_plan_item=active_day,
         )
         _require_canonical_locations(
-            generated_hourly, agent_name=agent.name, plan_level="hourly"
+            generated_hourly,
+            agent_name=agent.name,
+            plan_level="hourly",
+            allowed_locations=allowed_locations,
         )
         hourly_items = _children_within(generated_hourly, active_day)
         if not hourly_items:
@@ -257,7 +287,10 @@ class PlanningCoordinator:
             hourly_plan_item=active_hourly,
         )
         _require_canonical_locations(
-            generated_minute, agent_name=agent.name, plan_level="minute"
+            generated_minute,
+            agent_name=agent.name,
+            plan_level="minute",
+            allowed_locations=allowed_locations,
         )
         minute_items = _children_within(generated_minute, active_hourly)
         if not minute_items:
@@ -313,7 +346,10 @@ class PlanningCoordinator:
                 day_plan_item=active_day,
             )
             _require_canonical_locations(
-                generated_hourly, agent_name=agent.name, plan_level="hourly"
+                generated_hourly,
+                agent_name=agent.name,
+                plan_level="hourly",
+                allowed_locations=self._allowed_locations(agent_id),
             )
             hourly_items = [
                 item
@@ -334,7 +370,10 @@ class PlanningCoordinator:
                 hourly_plan_item=active_hourly,
             )
             _require_canonical_locations(
-                generated_minute, agent_name=agent.name, plan_level="minute"
+                generated_minute,
+                agent_name=agent.name,
+                plan_level="minute",
+                allowed_locations=self._allowed_locations(agent_id),
             )
             minute_items = _children_within(generated_minute, active_hourly)
             if not minute_items:
@@ -405,7 +444,10 @@ class PlanningCoordinator:
                 day_plan_item=active_day,
             )
             _require_canonical_locations(
-                generated_hourly, agent_name=agent.name, plan_level="hourly"
+                generated_hourly,
+                agent_name=agent.name,
+                plan_level="hourly",
+                allowed_locations=self._allowed_locations(agent_id),
             )
             state.hourly_items = [
                 item
@@ -437,7 +479,10 @@ class PlanningCoordinator:
                 hourly_plan_item=active_hourly,
             )
             _require_canonical_locations(
-                generated_minute, agent_name=agent.name, plan_level="minute"
+                generated_minute,
+                agent_name=agent.name,
+                plan_level="minute",
+                allowed_locations=self._allowed_locations(agent_id),
             )
             state.minute_items = _children_within(generated_minute, active_hourly)
             if not state.minute_items:
@@ -462,12 +507,23 @@ class PlanningCoordinator:
         agent: LifeAgent,
         now: datetime.datetime,
     ) -> list[DayPlanItem]:
+        allowed_locations = self._allowed_locations(str(agent.identity.id))
         background_parts = [
             *agent.profile.fixed.identity_stable_set,
             *agent.profile.extended.lifestyle_and_routine,
         ]
         background_parts.append(
-            "사용 가능한 장소는 다음뿐이다: " + ", ".join(CANONICAL_LOCATIONS)
+            "내 집은 "
+            + (agent.identity.home or "등록되지 않음")
+            + ". 다른 주민의 집은 아래 출입 허용 목록에 있을 때만 방문한다."
+        )
+        background_parts.append(
+            "사용 가능한 장소는 다음뿐이다: " + ", ".join(allowed_locations)
+        )
+        background_parts.extend(
+            f"장소 활동: {location} — {description}"
+            for location, description in PUBLIC_LOCATION_ACTIVITIES.items()
+            if location in allowed_locations
         )
         background_parts.extend(_recent_planning_relevant_memories(agent=agent, now=now))
         generated = planner.generate_day_plan(
@@ -482,9 +538,12 @@ class PlanningCoordinator:
                 planning_window_end=datetime.datetime.combine(
                     now.date() + datetime.timedelta(days=1), datetime.time.min
                 ),
+                allowed_locations=allowed_locations,
             )
         )
-        if _day_plan_items_are_valid(generated):
+        if _day_plan_items_are_valid(
+            generated, allowed_locations=allowed_locations
+        ):
             return generated
         raise PlanningGenerationError(
             f"{agent.name}: day plan is empty or contains an invalid location/time window"
@@ -518,9 +577,13 @@ def _recent_planning_relevant_memories(
     return ["최근 기억(계획에 참고): " + " | ".join(contents)]
 
 
-def _day_plan_items_are_valid(items: list[DayPlanItem]) -> bool:
+def _day_plan_items_are_valid(
+    items: list[DayPlanItem],
+    *,
+    allowed_locations: tuple[str, ...] = CANONICAL_LOCATIONS,
+) -> bool:
     return bool(items) and all(
-        item.location in CANONICAL_LOCATIONS
+        item.location in allowed_locations
         and 5 <= item.duration_minutes <= DAY_PLAN_MAX_DURATION_MINUTES
         for item in items
     )
@@ -636,13 +699,25 @@ def _children_within(
 
 
 def _require_canonical_locations(
-    items: list[PlanItemT], *, agent_name: str, plan_level: str
+    items: list[PlanItemT],
+    *,
+    agent_name: str,
+    plan_level: str,
+    allowed_locations: tuple[str, ...] = CANONICAL_LOCATIONS,
 ) -> None:
-    invalid_locations = sorted(
+    non_canonical_locations = sorted(
         {item.location for item in items if item.location not in CANONICAL_LOCATIONS}
     )
-    if invalid_locations:
+    if non_canonical_locations:
         raise PlanningGenerationError(
             f"{agent_name}: {plan_level} plan contains non-canonical locations: "
-            + ", ".join(invalid_locations)
+            + ", ".join(non_canonical_locations)
+        )
+    unavailable_locations = sorted(
+        {item.location for item in items if item.location not in allowed_locations}
+    )
+    if unavailable_locations:
+        raise PlanningGenerationError(
+            f"{agent_name}: {plan_level} plan contains unavailable locations: "
+            + ", ".join(unavailable_locations)
         )

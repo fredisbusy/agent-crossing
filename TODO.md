@@ -415,6 +415,11 @@ end-to-end 시나리오다.
       연결되며 문 뒤 house-body는 solid라 실외 A*가 벽을 통과하지 못하도록 검증한다
     - [x] 집 문 도착(`arrived_at_door`)과 실내 진입(`inside`)을 분리하고, 오직
       `inside` 상태만 집 위치·dollhouse 점유로 인식해 외벽 근처 오판정을 막는다
+    - [x] 2026-08-26: persona의 `home`/`workplace`를 runtime identity와 planning
+      prompt에 보존하고, 자기 집·집주인이 가깝고 신뢰하는 관계·집주인의 명시적
+      초대 발화 중 하나가 있어야 다른 주민의 집을 계획하거나 실내 진입하게 한다
+    - [x] 2026-08-26: 허용되지 않은 집은 day/hour/minute 계획 설치·저장 복원과
+      실제 문 통과 양쪽에서 차단하고 문 앞 `access_denied` 상태로 유지한다
 
 - [x] `P1` WorldRuntime을 정확히 2명 고정에서 N-agent + pairwise 대화로 확장한다
       (§3.4 조우 모델 — "마을 전체가 한 방에서 듣는" 공용 채팅방이 아니라
@@ -610,6 +615,8 @@ end-to-end 시나리오다.
     - [x] cafe/library/market도 지붕 없는 kind별 interior를 메인 맵에 항상 표시한다
     - [x] 건물 문 hover/click으로 확대 interior scene에 진입한다
     - [x] cafe/library/market/home kind별 가구와 바닥 템플릿을 제공한다
+    - [x] 2026-08-26: public canonical location `별빛 주점`과 전용 tavern
+      interior를 추가하고 바 카운터·다트·카드게임 테이블 affordance를 제공한다
     - [x] `ESC`, `E`, 출구 클릭으로 outdoor scene에 복귀한다
     - [x] 확대 interior 주민을 live snapshot으로 갱신하고 선택 시 outdoor follow로 연결한다
     - [x] 새 building object는 kind 기반 interior template을 재사용할 수 있다

@@ -181,6 +181,9 @@ class DayPlanBroadStrokesRequest:
     """전체 연속 커버리지를 강제할 authoritative planning-window 종료 시각."""
     planning_window_end: datetime.datetime | None = None
 
+    """이 agent가 현재 계획에 사용할 수 있는 canonical 장소."""
+    allowed_locations: tuple[str, ...] = ()
+
     def __post_init__(self) -> None:
         if not self.agent_name.strip():
             raise ValueError("agent_name must not be blank")
@@ -201,6 +204,10 @@ class DayPlanBroadStrokesRequest:
             and self.planning_window_end <= self.today_date
         ):
             raise ValueError("planning_window_end must be later than today_date")
+        if self.allowed_locations and any(
+            not location.strip() for location in self.allowed_locations
+        ):
+            raise ValueError("allowed_locations must not contain blank values")
 
 
 @dataclass(frozen=True)

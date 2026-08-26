@@ -58,7 +58,7 @@ export const useGameStore = create<GameState>((set) => ({
   turn: 0,
   schedulerRunning: false,
   planningError: null,
-  selectedAgentId: "Jiho",
+  selectedAgentId: "jiho",
   followRequestId: 0,
   sceneContext: { kind: "world" },
   interactionNotice: null,

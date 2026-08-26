@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import datetime
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -129,6 +130,7 @@ class SpatialWorldRuntime:
         self._scheduler_running: bool = False
         self._planning_error: str | None = None
         self._position_history: PositionHistoryBuffer = PositionHistoryBuffer()
+        self._home_access_checker: Callable[[str, str], bool] | None = None
         for index, seed in enumerate(seeds):
             spawn = self._resolve_spawn(seed=seed, fallback_index=index)
             tile_position = MapPoint(
@@ -146,6 +148,11 @@ class SpatialWorldRuntime:
             # once a game-clock time is known (`self._current_time` is `None`
             # until `update_world_state` runs); the deterministic spawn tile
             # itself is always recoverable from persona seed order anyway.
+
+    def set_home_access_checker(
+        self, checker: Callable[[str, str], bool]
+    ) -> None:
+        self._home_access_checker = checker
 
     def set_plan(self, *, agent_id: str, plan: str) -> None:
         with self._lock:
@@ -448,7 +455,19 @@ class SpatialWorldRuntime:
                 agent.route = [MapPoint(x=point.x, y=point.y) for point in character.route]
                 agent.destination = destination
                 agent.explicit_location = character.explicit_location
-                agent.current_action = character.current_action
+                denied_saved_home = (
+                    character.current_action.startswith("inside:")
+                    and destination is not None
+                    and not self._can_enter_home(
+                        agent_id=character.agent_id,
+                        home_path=destination.location_path,
+                    )
+                )
+                agent.current_action = (
+                    f"access_denied:{destination.name}"
+                    if denied_saved_home and destination is not None
+                    else character.current_action
+                )
                 agent.plan = character.plan
                 agent.cognitive_kind = character.cognitive_kind
                 agent.cognitive_text = character.cognitive_text
@@ -518,9 +537,15 @@ class SpatialWorldRuntime:
             elif agent.current_action.startswith("inside:"):
                 agent.current_action = f"inside:{agent.destination.name}"
             elif not route_rebuilt and agent.current_action.startswith(
-                "arrived_at_door:"
+                ("arrived_at_door:", "access_denied:")
             ):
-                agent.current_action = f"inside:{agent.destination.name}"
+                if self._can_enter_home(
+                    agent_id=agent.agent_id,
+                    home_path=agent.destination.location_path,
+                ):
+                    agent.current_action = f"inside:{agent.destination.name}"
+                else:
+                    agent.current_action = f"access_denied:{agent.destination.name}"
             else:
                 agent.current_action = f"arrived_at_door:{agent.destination.name}"
         elif not agent.current_action.startswith("blocked:"):
@@ -562,6 +587,11 @@ class SpatialWorldRuntime:
             agent.current_action = f"arrived_at_door:{destination.name}"
         else:
             agent.current_action = f"at:{destination.name}"
+
+    def _can_enter_home(self, *, agent_id: str, home_path: str) -> bool:
+        if self._home_access_checker is None:
+            return True
+        return self._home_access_checker(agent_id, home_path)
 
     def _snapshot_unlocked(self) -> SpatialWorldSnapshot:
         return SpatialWorldSnapshot(

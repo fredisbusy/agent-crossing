@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from agents.persona_loader import PersonaLoader
+from planning_locations import CANONICAL_LOCATIONS
 
 
 PERSONA_DIR = Path(__file__).resolve().parents[1] / "persona"
@@ -82,9 +83,14 @@ def test_roster_personas_define_dashboard_demographics() -> None:
         persona = loader.load(persona_name)
         assert persona.agent.age > 0
         assert persona.agent.gender == gender
+        assert persona.agent.home in CANONICAL_LOCATIONS
+        assert persona.agent.workplace in CANONICAL_LOCATIONS
 
     for persona_name, age in NEW_RESIDENT_AGES.items():
         assert loader.load(persona_name).agent.age == age
+
+    homes = [persona.agent.home for persona in loader.load_all()]
+    assert len(homes) == len(set(homes))
 
 
 def test_roster_personas_encode_boundaries_and_repair_after_social_missteps() -> None:

@@ -112,6 +112,36 @@ def test_home_arrival_requires_a_separate_inside_transition() -> None:
     assert jiho.current_action == "inside:지호의 집"
 
 
+def test_home_door_denies_visitor_until_access_policy_allows_entry() -> None:
+    runtime = _runtime()
+    allowed = False
+    runtime.set_home_access_checker(
+        lambda agent_id, home_path: (
+            agent_id == "jiho"
+            or home_path != "브라이어 코브 > 지호의 집"
+            or allowed
+        )
+    )
+    runtime.set_plan(agent_id="sujin", plan="지호의 집에 방문한다.")
+
+    sujin = next(
+        agent for agent in runtime.snapshot().agents if agent.agent_id == "sujin"
+    )
+    for _ in range(80):
+        snapshot = runtime.tick()
+        sujin = next(agent for agent in snapshot.agents if agent.agent_id == "sujin")
+        if sujin.current_action.startswith("access_denied:"):
+            break
+
+    assert sujin.tile_position == MapPoint(5, 15)
+    assert sujin.current_action == "access_denied:지호의 집"
+
+    allowed = True
+    snapshot = runtime.tick()
+    sujin = next(agent for agent in snapshot.agents if agent.agent_id == "sujin")
+    assert sujin.current_action == "inside:지호의 집"
+
+
 def test_spatial_runtime_keeps_unmapped_plan_idle() -> None:
     runtime = _runtime()
     runtime.set_plan(agent_id="jiho", plan="Jiho thinks quietly about tomorrow.")

@@ -134,7 +134,7 @@ export class MainScene extends Phaser.Scene {
   private readonly indoorAgentViews = new Map<string, IndoorResidentView>();
   private gridMovement?: ServerGridMovement;
   private unsubscribeStore?: () => void;
-  private followedAgentId = "Jiho";
+  private followedAgentId = "jiho";
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private dragOrigin?: Phaser.Math.Vector2;
   private pinchStartDistance?: number;
@@ -318,6 +318,11 @@ export class MainScene extends Phaser.Scene {
           .image(decoration.x, decoration.y, "lamp")
           .setOrigin(0.5, 0.85)
           .setDepth(decoration.y + 18);
+      } else if (decoration.type === "bush") {
+        this.add
+          .image(decoration.x, decoration.y, "bush")
+          .setOrigin(0.5, 0.82)
+          .setDepth(decoration.y + 6);
       }
     }
   }
@@ -396,13 +401,23 @@ export class MainScene extends Phaser.Scene {
 
   private drawAgents(): void {
     for (const spawn of getLayer("spawns")) {
-      const id = getProperty(spawn, "agent_id", spawn.name);
+      // Lowercased to match the backend's `agent_id` (e.g. "jiho"), which is
+      // how `applyAgentStates` looks views up on every snapshot. The map's
+      // `agent_id` property is capitalized ("Jiho") for map-authoring
+      // readability only.
+      const id = getProperty(spawn, "agent_id", spawn.name).toLowerCase();
       const color = parseColor(getProperty(spawn, "color"), 0x6487d6);
       const container = this.add
         .container(spawn.x, spawn.y)
         .setDepth(spawn.y + 40)
         .setSize(44, 44)
-        .setInteractive();
+        .setInteractive()
+        // Hidden until the first real snapshot for this agent_id arrives —
+        // there is no meaningful "default position" to show; the Tiled
+        // spawn coordinate exists only to seed Grid Engine's startPosition
+        // and the (indoor) view's initial transform, not as a place to
+        // visibly render an agent that hasn't loaded yet.
+        .setVisible(false);
       const shadow = this.add.rectangle(0, 13, 22, 7, 0x183328, 0.35);
       const leftLeg = this.add.rectangle(-5, 10, 6, 9, 0x41372f);
       const rightLeg = this.add.rectangle(5, 10, 6, 9, 0x41372f);
@@ -414,14 +429,14 @@ export class MainScene extends Phaser.Scene {
         -23,
         19,
         7,
-        id === "Sujin" ? 0x4b2f2c : 0x34302d,
+        id === "sujin" ? 0x4b2f2c : 0x34302d,
       );
       const fringe = this.add.rectangle(
         -6,
         -19,
         5,
         6,
-        id === "Sujin" ? 0x4b2f2c : 0x34302d,
+        id === "sujin" ? 0x4b2f2c : 0x34302d,
       );
       const eyes = this.add.rectangle(0, -16, 10, 2, 0x3d3835);
       container.add([
@@ -530,7 +545,7 @@ export class MainScene extends Phaser.Scene {
     this.gridEngine.create(navigationMap, {
       numberOfDirections: NumberOfDirections.FOUR,
       characters: getLayer("spawns").flatMap((spawn) => {
-        const id = getProperty(spawn, "agent_id", spawn.name);
+        const id = getProperty(spawn, "agent_id", spawn.name).toLowerCase();
         const view = this.agentViews.get(id);
         if (!view) return [];
         return [
@@ -558,9 +573,11 @@ export class MainScene extends Phaser.Scene {
     const roomOccupancy = new Map<string, number>();
     const buildingOccupancy = new Map<string, number>();
     for (const [id, state] of Object.entries(states)) {
-      const characterId = this.agentViews.has(id)
-        ? id
-        : state.name.split(" ")[0];
+      // `id` is the backend's lowercase agent_id, which `drawAgents` now
+      // keys every view map by directly (see the note there) — no name-based
+      // fallback needed, and none would be reliable: `state.name` is the
+      // Korean display name, not an English identifier.
+      const characterId = id;
       const view = this.agentViews.get(characterId);
       if (!view) continue;
       const home = [...this.homeViews.values()].find((candidate) =>

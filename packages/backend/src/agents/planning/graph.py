@@ -378,6 +378,18 @@ class PlanningGraphRunner:
                 )
                 if window_error:
                     raise DayPlanParseError(window_error)
+            allowed_locations = state["request"].allowed_locations
+            denied_locations = sorted(
+                {
+                    item.location
+                    for item in parsed.items
+                    if allowed_locations and item.location not in allowed_locations
+                }
+            )
+            if denied_locations:
+                raise DayPlanParseError(
+                    "day_plan_location_not_allowed: " + ", ".join(denied_locations)
+                )
             return {"plan_items": parsed.items, "parse_error": ""}
         except DayPlanParseError as exc:
             return {"plan_items": [], "parse_error": exc.reason}

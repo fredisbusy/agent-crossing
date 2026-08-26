@@ -193,6 +193,20 @@ export function createPixelTextures(scene: Phaser.Scene): void {
     context.fillRect(17, 10, 9, 5);
   });
 
+  paintTexture(scene, "bush", 28, 22, (context) => {
+    context.fillStyle = "rgba(38,65,43,.22)";
+    context.fillRect(3, 18, 22, 4);
+    context.fillStyle = "#3f7a42";
+    context.fillRect(2, 8, 24, 12);
+    context.fillRect(6, 3, 16, 10);
+    context.fillStyle = "#519455";
+    context.fillRect(4, 6, 9, 8);
+    context.fillRect(15, 2, 9, 7);
+    context.fillStyle = "#6cae64";
+    context.fillRect(9, 2, 7, 4);
+    context.fillRect(3, 11, 6, 4);
+  });
+
   paintTexture(scene, "lamp", 16, 40, (context) => {
     context.fillStyle = "rgba(255,226,120,.28)";
     context.fillRect(0, 0, 16, 16);

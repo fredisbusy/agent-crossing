@@ -294,9 +294,12 @@ react 정책:
   `home_style`은 우식의 실험 작업대, 용준의 배드민턴 장비와 기록판, 병용의 큰
   원목 테이블과 음료장, 원준의 사진·영상 작업대를 관찰 가능한 실내 소품으로만
   표현한다. 이 장식은 persona나 계획의 의미를 대신 결정하지 않는다.
-- cafe/library/market도 지붕 없는 kind별 dollhouse interior를 메인 맵에 항상
+- cafe/library/market/tavern도 지붕 없는 kind별 dollhouse interior를 메인 맵에 항상
   노출한다. 문 portal은 같은 semantic `kind`의 확대 interior scene template에
   연결하고 출구 portal로 outdoor scene에 복귀한다.
+- `별빛 주점`은 모든 주민이 이용할 수 있는 public canonical location이다. 바
+  카운터, 다트 보드, 카드게임 테이블 affordance를 제공하며 planning prompt에는
+  음료·안주·다트·카드게임·음악·주민 교류가 가능한 저녁 여가 장소로 설명한다.
 - 일반 building은 backend 상태가 해당 문에 도착한 경우에만, `home`은 문 도착 다음
   tick에 `inside:<집 이름>` 상태로 전환된 경우에만 outdoor avatar 대신 dollhouse의
   충돌하지 않는 activity slot에 표시한다. `arrived_at_door:<집 이름>`은 실외 문 앞
@@ -350,9 +353,17 @@ react 정책:
   타일까지 이동한 뒤 semantic dollhouse interior로 투영되며 집 벽이나 본체를
   통과해 실내 좌표로 이동하지 않는다. 프런트엔드는 동일한 문 좌표에 벽 개구부,
   문짝, 문턱을 표시한다. home route 완료 tick은 `arrived_at_door`, 그 다음 tick은
-  `inside`이며 오직 `inside`만 집의 semantic location으로 인정한다. 목적지가
+  home access policy를 통과한 경우에만 `inside`로 바뀌며 오직 `inside`만 집의
+  semantic location으로 인정한다. 접근이 거부되면 문 앞에서
+  `access_denied:<집 이름>` 상태를 유지한다. 목적지가
   바뀌면 이 상태를 먼저 해제하고 실외 route를 따른다. 같은 문 좌표라도 한 주민이
   실내이고 다른 주민이 실외라면 서로 조우한 것으로 처리하지 않는다.
+- persona의 canonical `home`과 `workplace`는 `AgentIdentity`에 보존해 planning에
+  전달한다. 자기 집은 항상 허용한다. 다른 주민의 집은 집주인 관점의 방향성 관계가
+  `가깝고 신뢰하는 관계`이거나, 방문자의 observation memory에 집주인이 자기 집으로
+  명시적으로 초대한 발화가 있을 때만 허용한다. planning prompt에는 허용된 장소만
+  제공하며 day/hour/minute plan 설치와 저장 상태 복원에서도 같은 allowlist를
+  검증한다. spatial runtime은 문에서 동일 정책을 다시 검사한다.
 - 건물·물·간판·분수·벤치·나무·가로등 collision은 통과할 수 없고, agent tile도
   tick 동안 동적 collision으로 취급해 같은 tile 점유와 자리 맞바꾸기를 금지한다.
 - backend 4방향 A\*는 authored path/광장/공원의 이동 비용을 `1`, 그 밖의

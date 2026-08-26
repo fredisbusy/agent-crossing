@@ -23,6 +23,7 @@ from agents.decision_diagnostics import (
     build_encounter_diagnostics,
     build_plan_disruption_diagnostics,
 )
+from agents.home_access import HomeAccessPolicy
 from agents.reaction.encounter import (
     EncounterDecision,
     EncounterDecisionInput,
@@ -197,6 +198,20 @@ class WorldRuntime:
             (str(agent.identity.id) for agent in agents),
             baselines=relationship_baselines,
         )
+        self.home_access_policy: HomeAccessPolicy | None = None
+        if all(getattr(agent.identity, "home", "") for agent in agents):
+            self.home_access_policy = HomeAccessPolicy(
+                agents=agents,
+                relationships=self.relationships,
+            )
+            if self.planning_coordinator is not None:
+                self.planning_coordinator.set_location_access_policy(
+                    self.home_access_policy
+                )
+            if self.spatial_runtime is not None:
+                self.spatial_runtime.set_home_access_checker(
+                    self.home_access_policy.can_enter_home
+                )
         self.planning_error: str | None = None
 
     def step(self) -> SimulationStepResult:
