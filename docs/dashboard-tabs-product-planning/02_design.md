@@ -1,7 +1,7 @@
 # 대시보드 탭 제품 기획
 
-> 구현 상태: 2026-08-26 승인된 P0/P1 개선 완료. 공개 화면은 redacted observer
-> view이며 상세 변경과 검증은 `03_changelog.md`, `04_verification.md`를 따른다.
+> 구현 상태: 2026-08-26 승인된 P0/P1 개선 완료. 로그인 제한 없이 기억·성찰·관계
+> 근거 원문을 공개하며 상세 변경과 검증은 `03_changelog.md`, `04_verification.md`를 따른다.
 
 > 상태: 현재 구현 분석과 개선 방향 확정, 구현 전
 
@@ -111,7 +111,7 @@ flowchart LR
 - 기억 0개
 - 필터 결과 0개
 - 더 오래된 기억이 있으나 현재 페이지에 없음
-- private 원문을 볼 권한 없음
+- 원문 응답 누락 또는 형식 오류
 
 ### 3.4 계획 — "무엇을 하기로 했고 현재 어디까지 왔는가"
 
@@ -162,7 +162,7 @@ day plan이 비면 "없음", "생성 중", "생성 실패", "아직 시간창 �
 
 **보안 경계**
 
-현재 live sanitizer는 정확한 `raw_response`, `prompt`, `api_key` key만 제거하지만 persisted sanitizer는 더 넓은 case-insensitive 목록을 사용한다. 두 경로를 하나의 allowlist 기반 sanitizer로 통일한다. 인증 전에는 `model_thought`, private memory, full decision/governance trace를 공개하지 않는다. 제품에 필요한 것은 모델의 비공개 추론 원문이 아니라 운영 가능한 구조화 결과와 실패 원인이다.
+memory·reflection·관계 근거는 실제 제품 상태이므로 원문을 공개한다. 반면 provider `raw_response`, prompt, API key, embedding과 `model_thought`, self critique, full decision/governance trace는 제품 데이터 계약에 넣지 않는다. 공개 여부는 로그인 유무가 아니라 명시적인 DTO allowlist로 결정한다.
 
 ## 4. 데이터 흐름 개선
 

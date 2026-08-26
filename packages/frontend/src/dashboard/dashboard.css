@@ -529,6 +529,11 @@
   font-size: 13px;
   line-height: 1.5;
 }
+.dashboard-memory-row > p,
+.dashboard-relationship-evidence p {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .dashboard-memory-row small {
   color: #81775f;
   font-size: 8px;

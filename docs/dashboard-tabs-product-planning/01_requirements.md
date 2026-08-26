@@ -15,7 +15,7 @@
 | FR-C05 | 상태를 명확히 구분한다      | loading, empty, stale-cache, partial, offline, runtime/planning error가 서로 다른 문구와 동작을 가진다 |
 | FR-C06 | 운영 오류를 노출한다        | `planning_error`뿐 아니라 `cognitive_runtime_error`와 미가용 상태를 놓치지 않는다                      |
 | FR-C07 | 한국어 표현을 일관되게 쓴다 | 사람이 읽는 제목·상태·단위에 불필요한 영문/내부 action code가 없다                                     |
-| FR-C08 | 민감정보 정책을 적용한다    | 인증·권한이 확정되고 모든 live/persisted diagnostics가 동일 allowlist/redaction을 통과한다             |
+| FR-C08 | 공개 데이터 경계를 지킨다   | 기억·성찰·관계 근거 원문은 공개하고 provider 원문·prompt·API key·embedding·내부 trace는 제외한다       |
 
 ## 탭별 기능 요구사항
 
@@ -67,23 +67,23 @@
 
 ### 진단 로그
 
-| ID     | 요구사항                          | 수용 기준                                                          |
-| ------ | --------------------------------- | ------------------------------------------------------------------ |
-| FR-L01 | 선택 agent 로그를 독립 필터링한다 | 우측 전역 rail 필터를 바꿔도 중앙 탭 결과가 바뀌지 않는다          |
-| FR-L02 | 운영 검색을 지원한다              | agent, turn/시간, 성공/실패, event type, 텍스트로 필터링할 수 있다 |
-| FR-L03 | sequence 연속성을 알린다          | buffer 잘림이나 gap이 있으면 최초/최신 sequence와 함께 안내한다    |
-| FR-L04 | 상세 trace를 안전하게 제공한다    | 권한 있는 사용자만 허용된 diagnostics를 펼치고 복사할 수 있다      |
-| FR-L05 | 실시간 관찰을 제어한다            | 자동 따라가기 일시정지/재개와 신규 event 표시가 있다               |
+| ID     | 요구사항                            | 수용 기준                                                                        |
+| ------ | ----------------------------------- | -------------------------------------------------------------------------------- |
+| FR-L01 | 선택 agent 로그를 독립 필터링한다   | 우측 전역 rail 필터를 바꿔도 중앙 탭 결과가 바뀌지 않는다                        |
+| FR-L02 | 운영 검색을 지원한다                | agent, turn/시간, 성공/실패, event type, 텍스트로 필터링할 수 있다               |
+| FR-L03 | sequence 연속성을 알린다            | buffer 잘림이나 gap이 있으면 최초/최신 sequence와 함께 안내한다                  |
+| FR-L04 | 내부 trace를 제품 데이터와 분리한다 | 공개 로그에는 허용된 판단 요약만 있고 model thought·governance trace 원문은 없다 |
+| FR-L05 | 실시간 관찰을 제어한다              | 자동 따라가기 일시정지/재개와 신규 event 표시가 있다                             |
 
 ## 비기능 요구사항
 
-| ID     | 영역        | 기준                                                                                                      |
-| ------ | ----------- | --------------------------------------------------------------------------------------------------------- |
-| NFR-01 | 정확성      | 한 화면의 revision/turn/sequence 기준을 명시하고 혼합 snapshot 가능성을 표시 또는 제거한다                |
-| NFR-02 | 성능        | 숨긴 탭의 대량 데이터를 매초 재전송하지 않으며 느린 요청이 다음 요청에 계속 취소되지 않는다               |
-| NFR-03 | 보안        | 공개 endpoint가 private memory, model thought, prompt 변형, token/authorization 값을 누출하지 않는다      |
-| NFR-04 | 접근성      | tablist/tab/tabpanel, `aria-selected`, 방향키, focus-visible, status/alert, progress semantics를 제공한다 |
-| NFR-05 | 터치/가독성 | 터치 대상 44px 이상, 본문 14px 이상, 보조 문구 12px 이상을 기본으로 한다                                  |
-| NFR-06 | 반응형      | 390px에서 가로 넘침 없이 모든 상태와 조작을 사용할 수 있고 runtime 정보가 사라지지 않는다                 |
-| NFR-07 | 회복성      | polling은 완료 후 재예약 또는 in-flight skip, exponential backoff, 수동 재시도를 지원한다                 |
-| NFR-08 | 테스트      | 각 탭 정상/empty/error, 필터 독립성, URL 복원, polling 복구, keyboard 흐름을 자동 검증한다                |
+| ID     | 영역        | 기준                                                                                                       |
+| ------ | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| NFR-01 | 정확성      | 한 화면의 revision/turn/sequence 기준을 명시하고 혼합 snapshot 가능성을 표시 또는 제거한다                 |
+| NFR-02 | 성능        | 숨긴 탭의 대량 데이터를 매초 재전송하지 않으며 느린 요청이 다음 요청에 계속 취소되지 않는다                |
+| NFR-03 | 데이터 경계 | 공개 endpoint는 memory 원문을 보존하되 model thought, prompt, token/authorization, embedding을 싣지 않는다 |
+| NFR-04 | 접근성      | tablist/tab/tabpanel, `aria-selected`, 방향키, focus-visible, status/alert, progress semantics를 제공한다  |
+| NFR-05 | 터치/가독성 | 터치 대상 44px 이상, 본문 14px 이상, 보조 문구 12px 이상을 기본으로 한다                                   |
+| NFR-06 | 반응형      | 390px에서 가로 넘침 없이 모든 상태와 조작을 사용할 수 있고 runtime 정보가 사라지지 않는다                  |
+| NFR-07 | 회복성      | polling은 완료 후 재예약 또는 in-flight skip, exponential backoff, 수동 재시도를 지원한다                  |
+| NFR-08 | 테스트      | 각 탭 정상/empty/error, 필터 독립성, URL 복원, polling 복구, keyboard 흐름을 자동 검증한다                 |

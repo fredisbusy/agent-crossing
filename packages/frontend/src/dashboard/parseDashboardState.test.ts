@@ -97,7 +97,6 @@ const fixture = {
           created_at: "2026-08-24T08:55:00",
           last_accessed_at: "2026-08-24T08:55:00",
           importance: 5,
-          content_redacted: false,
         },
       ],
     },
@@ -146,20 +145,25 @@ describe("parseDashboardState", () => {
 });
 
 describe("parseDashboardMemoryPage", () => {
-  it("accepts a redacted cursor page", () => {
+  it("accepts a visible-content cursor page", () => {
     const memory = structuredClone(fixture.agents[0].memories[0]);
-    memory.content = "공개 화면에서 숨긴 기억입니다.";
-    memory.content_redacted = true;
-    expect(
-      parseDashboardMemoryPage({
-        items: [memory],
-        total: 7,
-        filtered_total: 4,
-        has_more: true,
-        next_cursor: 3,
-        snapshot_memory_max_id: 7,
-      }),
-    ).toMatchObject({ total: 7, filtered_total: 4, next_cursor: 3 });
+    memory.content = "하은은 공원에서 노을을 스케치했다.";
+    const parsed = parseDashboardMemoryPage({
+      items: [memory],
+      total: 7,
+      filtered_total: 4,
+      has_more: true,
+      next_cursor: 3,
+      snapshot_memory_max_id: 7,
+    });
+    expect(parsed).toMatchObject({
+      total: 7,
+      filtered_total: 4,
+      next_cursor: 3,
+    });
+    expect(parsed?.items[0]?.content).toBe(
+      "하은은 공원에서 노을을 스케치했다.",
+    );
   });
 
   it("rejects an invalid cursor", () => {

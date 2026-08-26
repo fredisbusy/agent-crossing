@@ -370,10 +370,7 @@ function RelationshipPanel({
             <section>
               <h3>관계 요약</h3>
               <p className="dashboard-relationship-summary">
-                {relationship.summary_status === "redacted"
-                  ? "공개 화면에서는 비공개 관계 근거를 표시하지 않습니다."
-                  : (relationship.summary ??
-                    "아직 기록된 관계 근거가 없습니다.")}
+                {relationship.summary ?? "아직 기록된 관계 근거가 없습니다."}
               </p>
               <p className="dashboard-relationship-freshness">
                 마지막 상호작용 {displayTime(relationship.last_interaction_at)}{" "}
@@ -405,7 +402,14 @@ function RelationshipPanel({
                 </div>
                 {relationship.has_more_evidence ? (
                   <small>
-                    비공개 또는 추가 근거는 공개 화면에서 표시하지 않습니다.
+                    최근 {relationship.evidence.length}개를 표시합니다. 추가
+                    근거{" "}
+                    {Math.max(
+                      0,
+                      relationship.evidence_total -
+                        relationship.evidence.length,
+                    )}
+                    개가 있습니다.
                   </small>
                 ) : null}
               </details>
@@ -575,6 +579,13 @@ export function Dashboard() {
   const [memoryHasMore, setMemoryHasMore] = useState(true);
   const [memoryLoading, setMemoryLoading] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [reflectionMemories, setReflectionMemories] = useState<
+    DashboardMemory[]
+  >([]);
+  const [reflectionCursor, setReflectionCursor] = useState<number | null>(null);
+  const [reflectionHasMore, setReflectionHasMore] = useState(false);
+  const [reflectionLoading, setReflectionLoading] = useState(false);
+  const [reflectionError, setReflectionError] = useState<string | null>(null);
   const [logQuery, setLogQuery] = useState("");
   const [logFailuresOnly, setLogFailuresOnly] = useState(false);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -620,12 +631,44 @@ export function Dashboard() {
     data?.agents.find((agent) => agent.agent_id === selectedAgentId) ??
     data?.agents[0] ??
     null;
+  const selectedAgentKey = selectedAgent?.agent_id ?? null;
   useEffect(() => {
     setOlderMemories([]);
     setMemoryCursor(null);
     setMemoryHasMore(true);
     setMemoryError(null);
   }, [memoryType, selectedAgent?.agent_id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setReflectionMemories([]);
+    setReflectionCursor(null);
+    setReflectionHasMore(false);
+    setReflectionError(null);
+    if (tab !== "reflection" || !selectedAgentKey) return;
+    setReflectionLoading(true);
+    void loadMemories(selectedAgentKey, null, "REFLECTION")
+      .then((page) => {
+        if (cancelled) return;
+        setReflectionMemories(page.items);
+        setReflectionCursor(page.next_cursor);
+        setReflectionHasMore(page.has_more);
+      })
+      .catch((loadError: unknown) => {
+        if (cancelled) return;
+        setReflectionError(
+          loadError instanceof Error
+            ? loadError.message
+            : "성찰 목록 불러오기 실패",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setReflectionLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadMemories, selectedAgentKey, tab]);
   const railEvents = useMemo(() => {
     return selectRailEvents(data?.events ?? [], eventAgentFilter);
   }, [data?.events, eventAgentFilter]);
@@ -718,6 +761,31 @@ export function Dashboard() {
       );
     } finally {
       setMemoryLoading(false);
+    }
+  }
+
+  async function handleLoadOlderReflections(): Promise<void> {
+    if (!selectedAgent || reflectionLoading || reflectionCursor === null)
+      return;
+    setReflectionLoading(true);
+    setReflectionError(null);
+    try {
+      const page = await loadMemories(
+        selectedAgent.agent_id,
+        reflectionCursor,
+        "REFLECTION",
+      );
+      setReflectionMemories((current) => [...current, ...page.items]);
+      setReflectionCursor(page.next_cursor);
+      setReflectionHasMore(page.has_more);
+    } catch (loadError) {
+      setReflectionError(
+        loadError instanceof Error
+          ? loadError.message
+          : "성찰 목록 불러오기 실패",
+      );
+    } finally {
+      setReflectionLoading(false);
     }
   }
 
@@ -915,15 +983,22 @@ export function Dashboard() {
                       <Database size={14} /> Memory Stream
                     </span>
                     <strong>
-                      표시 {visibleMemories.length} / 총{" "}
-                      {selectedAgent.memory_total}
+                      검색 결과 {visibleMemories.length}개 · 불러온{" "}
+                      {
+                        new Set(
+                          [...selectedAgent.memories, ...olderMemories].map(
+                            (memory) => memory.id,
+                          ),
+                        ).size
+                      }
+                      / 전체 {selectedAgent.memory_total}개
                     </strong>
                   </div>
                   <div className="dashboard-toolbar">
                     <input
                       value={memoryQuery}
                       onChange={(event) => setMemoryQuery(event.target.value)}
-                      placeholder="표시된 기억 검색"
+                      placeholder="불러온 기억 원문 검색"
                       aria-label="기억 검색"
                     />
                     <select
@@ -938,8 +1013,7 @@ export function Dashboard() {
                     </select>
                   </div>
                   <p className="dashboard-privacy-note">
-                    공개 화면에서는 기억 원문을 숨기고 유형·중요도·시각만
-                    표시합니다.
+                    기억 원문과 유형·중요도·생성 및 최근 접근 시각을 표시합니다.
                   </p>
                   <div className="dashboard-memory-list">
                     {visibleMemories.length ? (
@@ -953,7 +1027,9 @@ export function Dashboard() {
                       <p className="dashboard-empty-copy">
                         {selectedAgent.memory_total === 0
                           ? "저장된 기억이 없습니다."
-                          : "현재 필터에 맞는 기억이 없습니다."}
+                          : selectedAgent.memory_has_more
+                            ? "현재 불러온 기억에는 일치 항목이 없습니다. 이전 기억을 더 불러올 수 있습니다."
+                            : "현재 필터에 맞는 기억이 없습니다."}
                       </p>
                     )}
                   </div>
@@ -1058,25 +1134,47 @@ export function Dashboard() {
                     점 · 전체 {selectedAgent.reflection_status.reflection_total}
                     개
                   </p>
+                  <p className="dashboard-privacy-note">
+                    마지막 성찰{" "}
+                    {displayTime(
+                      selectedAgent.reflection_status.last_reflection_at,
+                    )}
+                  </p>
                   <div className="dashboard-memory-list">
-                    {selectedAgent.memories.filter(
-                      (memory) => memory.node_type === "REFLECTION",
-                    ).length ? (
-                      selectedAgent.memories
-                        .filter((memory) => memory.node_type === "REFLECTION")
-                        .map((memory) => (
-                          <MemoryRow
-                            key={`reflection-${memory.id}`}
-                            memory={memory}
-                          />
-                        ))
+                    {reflectionMemories.length ? (
+                      reflectionMemories.map((memory) => (
+                        <MemoryRow
+                          key={"reflection-" + memory.id}
+                          memory={memory}
+                        />
+                      ))
+                    ) : reflectionLoading ? (
+                      <p className="dashboard-empty-copy">
+                        성찰 목록을 불러오는 중입니다.
+                      </p>
                     ) : (
                       <p className="dashboard-empty-copy">
-                        아직 표시할 성찰이 없습니다. 임계치에 도달하면
-                        생성됩니다.
+                        {selectedAgent.reflection_status.reflection_total === 0
+                          ? "아직 생성된 성찰이 없습니다. 임계치에 도달하면 생성됩니다."
+                          : "저장된 성찰을 불러오지 못했습니다."}
                       </p>
                     )}
                   </div>
+                  {reflectionError ? (
+                    <p className="dashboard-inline-error" role="alert">
+                      {reflectionError}
+                    </p>
+                  ) : null}
+                  {reflectionHasMore ? (
+                    <button
+                      type="button"
+                      className="dashboard-load-more"
+                      disabled={reflectionLoading}
+                      onClick={() => void handleLoadOlderReflections()}
+                    >
+                      {reflectionLoading ? "불러오는 중…" : "이전 성찰 더 보기"}
+                    </button>
+                  ) : null}
                 </section>
               ) : null}
               {tab === "logs" ? (

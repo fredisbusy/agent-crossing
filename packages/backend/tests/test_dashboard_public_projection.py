@@ -79,14 +79,14 @@ def test_public_dashboard_event_excludes_private_model_diagnostics() -> None:
     }
 
 
-def test_public_dashboard_memory_exposes_metadata_but_not_private_content() -> None:
+def test_public_dashboard_memory_exposes_content_but_not_embedding() -> None:
     now = datetime.datetime(2026, 8, 26, 10, 0)
     response = _dashboard_memory_response(
         MemoryObject(
             id=12,
             node_type=NodeType.OBSERVATION,
             citations=None,
-            content="PRIVATE_MEMORY_SENTINEL",
+            content="하은은 공원에서 노을을 스케치했다.",
             created_at=now,
             last_accessed_at=now,
             importance=7,
@@ -94,8 +94,8 @@ def test_public_dashboard_memory_exposes_metadata_but_not_private_content() -> N
         )
     ).model_dump()
 
-    assert "PRIVATE_MEMORY_SENTINEL" not in repr(response)
-    assert response["content_redacted"] is True
+    assert response["content"] == "하은은 공원에서 노을을 스케치했다."
+    assert "embedding" not in response
     assert response["importance"] == 7
 
 
@@ -147,8 +147,8 @@ async def test_dashboard_memory_page_uses_stable_descending_id_cursor() -> None:
         MemoryObject(
             id=index,
             node_type=NodeType.REFLECTION if index % 2 else NodeType.OBSERVATION,
-            citations=None,
-            content=f"PRIVATE_MEMORY_{index}",
+            citations=[0] if index % 2 else None,
+            content=f"기억 {index}",
             created_at=now,
             last_accessed_at=now,
             importance=(index % 10) + 1,
@@ -174,4 +174,15 @@ async def test_dashboard_memory_page_uses_stable_descending_id_cursor() -> None:
     assert first.total == 7
     assert first.has_more is True
     assert second.next_cursor == 1
-    assert all(item.content_redacted for item in first.items + second.items)
+    assert [item.content for item in first.items] == ["기억 6", "기억 5", "기억 4"]
+
+    reflections = await get_dashboard_agent_memories(
+        "jiho", limit=10, node_type="REFLECTION"
+    )
+    assert [item.id for item in reflections.items] == [5, 3, 1]
+    assert [item.content for item in reflections.items] == [
+        "기억 5",
+        "기억 3",
+        "기억 1",
+    ]
+    assert all(item.citations == [0] for item in reflections.items)

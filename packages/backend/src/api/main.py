@@ -9,6 +9,7 @@ import uuid
 
 from agents.persona_loader import PersonaLoader
 from agents.planning.lifecycle import PlanItemSnapshot
+from agents.relationship_diagnostics import build_relationship_snapshot
 from agents.relationships.rules import relationship_status_label
 from agents.memory.memory_manager import ObservationContext
 from agents.memory.memory_object import MemoryObject
@@ -18,6 +19,7 @@ from api.schemas import (
     DashboardMemoryResponse,
     DashboardMemoryPageResponse,
     DashboardReflectionStatusResponse,
+    DashboardRelationshipEvidenceResponse,
     DashboardRelationshipEventResponse,
     DashboardRelationshipMetricsResponse,
     DashboardRelationshipResponse,
@@ -577,16 +579,15 @@ def _dashboard_plan_item(item: PlanItemSnapshot | None) -> PlanItemResponse | No
 
 
 def _dashboard_memory_response(memory: MemoryObject) -> DashboardMemoryResponse:
-    """Project private memory metadata without exposing its content publicly."""
+    """Project a memory for the public dashboard without its embedding."""
     return DashboardMemoryResponse(
         id=memory.id,
         node_type=memory.node_type.value,
         citations=memory.citations,
-        content="공개 화면에서 숨긴 기억입니다.",
+        content=memory.content,
         created_at=memory.created_at.isoformat(),
         last_accessed_at=memory.last_accessed_at.isoformat(),
         importance=memory.importance,
-        content_redacted=True,
     )
 
 
@@ -655,6 +656,14 @@ def _dashboard_state_response(
             target_agent_id = str(target_agent.identity.id)
             if target_agent_id == spatial_agent.agent_id:
                 continue
+            relationship = build_relationship_snapshot(
+                identity_stable_set=list(
+                    runtime_agent.profile.fixed.identity_stable_set
+                ),
+                memories=all_memories,
+                target_agent_id=target_agent_id,
+                target_name=target_agent.name,
+            )
             relationship_state, relationship_events = (
                 runtime.relationships.pair_snapshot(
                     spatial_agent.agent_id, target_agent_id
@@ -662,8 +671,8 @@ def _dashboard_state_response(
             )
             relationships.append(
                 DashboardRelationshipResponse(
-                    target_agent_id=target_agent_id,
-                    target_name=target_agent.name,
+                    target_agent_id=relationship.target_agent_id,
+                    target_name=relationship.target_name,
                     measurement="modeled_v1",
                     metrics=DashboardRelationshipMetricsResponse(
                         **vars(relationship_state.metrics)
@@ -680,10 +689,10 @@ def _dashboard_state_response(
                         if relationship_state.last_interaction_at is not None
                         else None
                     ),
-                    summary=None,
-                    summary_status="redacted",
-                    evidence_total=0,
-                    has_more_evidence=False,
+                    summary=relationship.summary,
+                    summary_status=relationship.summary_status,
+                    evidence_total=relationship.evidence_total,
+                    has_more_evidence=relationship.has_more_evidence,
                     recent_events=[
                         DashboardRelationshipEventResponse(
                             id=event.id,
@@ -700,7 +709,25 @@ def _dashboard_state_response(
                         )
                         for event in relationship_events
                     ],
-                    evidence=[],
+                    evidence=[
+                        DashboardRelationshipEvidenceResponse(
+                            source=evidence.source,
+                            content=evidence.content,
+                            memory_id=evidence.memory_id,
+                            node_type=(
+                                evidence.node_type.value
+                                if evidence.node_type is not None
+                                else None
+                            ),
+                            importance=evidence.importance,
+                            created_at=(
+                                evidence.created_at.isoformat()
+                                if evidence.created_at is not None
+                                else None
+                            ),
+                        )
+                        for evidence in relationship.evidence
+                    ],
                 )
             )
         agents.append(

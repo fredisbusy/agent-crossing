@@ -66,7 +66,6 @@ export interface DashboardMemory {
   created_at: string;
   last_accessed_at: string;
   importance: number;
-  content_redacted: boolean;
 }
 
 export interface DashboardMemoryPage {
@@ -104,7 +103,7 @@ export interface DashboardRelationship {
   updated_at: string | null;
   last_interaction_at: string | null;
   summary: string | null;
-  summary_status: "available" | "no_explicit_evidence" | "redacted";
+  summary_status: "available" | "no_explicit_evidence";
   evidence_total: number;
   has_more_evidence: boolean;
   recent_events: DashboardRelationshipEvent[];

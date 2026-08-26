@@ -205,7 +205,6 @@ class DashboardMemoryResponse(BaseModel):
     created_at: str
     last_accessed_at: str
     importance: int
-    content_redacted: bool
 
 
 class DashboardMemoryPageResponse(BaseModel):
@@ -272,7 +271,7 @@ class DashboardRelationshipResponse(BaseModel):
     updated_at: str | None
     last_interaction_at: str | None
     summary: str | None
-    summary_status: Literal["available", "no_explicit_evidence", "redacted"]
+    summary_status: Literal["available", "no_explicit_evidence"]
     evidence_total: int = Field(ge=0)
     has_more_evidence: bool
     recent_events: list[DashboardRelationshipEventResponse]

@@ -33,8 +33,8 @@ No API endpoint or WebSocket schema was added. The UI derives truthful presentat
 
 - `GET /dashboard/state` adds `snapshot_generated_at`, `oldest_sequence`, location
   source, reflection totals/timestamps, memory totals/has-more, and last replan reason.
-- Public memories contain metadata and `content_redacted=true`; relationship qualitative
-  evidence is redacted. Public events use an explicit safe-field allowlist.
+- Public memories contain original content without embeddings; relationship qualitative
+  summary/evidence is included. Public events retain an explicit safe-field allowlist.
 - `GET /dashboard/agents/{agent_id}/memories` supports stable `before_id`, `limit`,
-  `node_type`, and `min_importance` cursor queries under the same redaction policy.
+  `node_type`, and `min_importance` cursor queries with original content.
 - `/dashboard/events?after=` is consumed independently from state polling.

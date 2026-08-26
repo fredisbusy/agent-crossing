@@ -27,5 +27,8 @@ memory data; numeric relationship state is intentionally not persisted or fabric
 ## 2026-08-26 dashboard tabs improvement
 
 No migration is required. Memory pagination reads existing stable IDs and diagnostics
-remain in the existing bounded runtime buffer. Public redaction is an API projection,
-not a destructive rewrite of persisted operator data.
+remain in the existing bounded runtime buffer. Public data selection is an API
+projection, not a destructive rewrite of persisted runtime data.
+
+The later public-content decision still requires no migration: API projection now keeps
+memory/reflection text while continuing to omit embeddings and internal diagnostics.

@@ -101,11 +101,14 @@ break, master-detail screen, and live session save/load evidence.
 
 - Public state dropped from the earlier 280,413-byte sample to 117,828 bytes with
   `memory_limit=50&event_limit=0`; all six agents resolved a physical or arrival location.
-- Public projection exposed zero private event fields, unredacted memories, or relationship evidence.
+- Public projection now preserves memory/reflection/relationship evidence text by user
+  decision while exposing zero private event trace fields or embeddings.
 - Targeted backend tests: 12 passed. Frontend: 27 passed across 6 files. Ruff and
   recursive workspace build passed.
-- Public browser verification passed for tab URL state, ArrowRight navigation, memory
-  redaction, plan status, and diagnostics filters. The in-app browser lacked viewport
+- Public browser verification passed for tab URL state, ArrowRight navigation, original
+  memory content, plan status, and diagnostics filters. The in-app browser lacked viewport
   resizing, so final physical-device mobile QA remains a deployment check.
+- Final public browser verification showed all 45 Haeun reflections through the dedicated
+  reflection cursor with no placeholder, login copy, alert, or console error.
 - Full backend suite: 228 passed, 11 skipped, 5 unrelated failures in existing dirty
   planning/settings work; dashboard-targeted tests passed.

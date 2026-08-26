@@ -69,5 +69,5 @@
 - Unit-test public event/memory projection, physical-vs-arrival location, and memory cursor.
 - Unit-test URL parsing/serialization, independent log selectors, plan gaps/overlaps, and strict parsing.
 - Run targeted backend tests, frontend tests, Ruff, shared/frontend/workspace builds, and diff check.
-- Verify the public API has no private event fields or unredacted memory and all agents
-  have a location source; exercise tab URL and keyboard behavior in the public browser.
+- Verify public memory/reflection/relationship text is preserved while private event
+  trace fields and embeddings remain absent; verify every agent has a location source.

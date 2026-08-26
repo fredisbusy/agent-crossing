@@ -16,9 +16,9 @@
 
 - 1차 사용자: 에이전트의 인지 상태와 장애 원인을 확인하는 개발자·운영자
 - 2차 독자: dashboard 기능을 구현·검증하는 frontend/backend/QA 담당자
-- 결정: 현재 공개 route는 일반 관람객도 볼 수 있는 redacted observer view다.
-  private memory 본문과 내부 diagnostics는 향후 인증된 operator surface가 생기기
-  전까지 공개하지 않는다.
+- 결정: 현재 공개 route에는 로그인이나 접근 제한을 두지 않는다. memory,
+  reflection, 관계 summary/evidence 원문은 일반 관람객에게도 표시한다. provider
+  원문·prompt·API key·embedding·내부 model trace는 제품 데이터가 아니므로 제외한다.
 
 ## 범위
 
@@ -62,6 +62,6 @@
 
 - 응답 크기: 117,828 bytes (`memory_limit=50`, `event_limit=0`)
 - agent 6명 모두 physical map 또는 명시적인 arrival source로 위치 해석
-- memory 원문과 관계 evidence는 전부 redacted, public diagnostics private field 0개
+- memory 원문과 관계 evidence를 표시하며 public diagnostics 내부 trace field는 0개
 - scheduler running, planning/cognitive runtime error 없음
 - 탭 URL·키보드 이동과 기억/계획/로그 화면을 공개 브라우저에서 확인

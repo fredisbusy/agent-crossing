@@ -42,5 +42,5 @@ and compare relationship revisions and event IDs before and after restore.
 - The Vite dev proxy must route `/dashboard/agents` in addition to state/events.
 - Verify public state with `memory_limit=50&event_limit=0`, then verify the six tabs,
   URL persistence, keyboard navigation, freshness status, and mobile layout.
-- Do not enable private memory or internal diagnostic text until a separate authenticated
-  operator surface and authorization policy exist.
+- No login gate is required. Verify memory/reflection/relationship text is visible while
+  provider secrets, embeddings, and internal diagnostic traces remain absent.

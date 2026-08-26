@@ -625,14 +625,14 @@ end-to-end 시나리오다.
   - Depends on: agent inspector, 방향성 관계 탭 구현
   - DoD:
     - [x] 진단 로그 탭과 우측 전역 로그의 agent filter 상태를 분리한다
-    - [x] 공개 dashboard를 private 본문 없는 redacted observer view로 확정한다
+    - [x] 로그인 제한 없이 memory·reflection·관계 근거 원문을 공개하도록 확정한다
     - [x] 공개 diagnostics 직렬화를 명시적 allowlist projection으로 제한한다
     - [x] 공개 runtime의 `current_location_path` 정확성과 runtime 오류 표시를 복구한다
     - [x] 완료 기반 state polling과 독립 event cursor polling/backoff를 적용한다
-    - [x] 기억·성찰에 total/cursor/status를, 관계에는 공개 redaction과 명시적 상태를 제공한다
+    - [x] 기억·성찰에 원문·total/cursor/status를, 관계에는 summary/evidence를 제공한다
     - [x] 계획 phase, gap/overlap, last replan reason과 runtime planning error를 제공한다
     - [x] 탭 키보드 탐색, URL 상태, 44px 터치 영역과 모바일 runtime 요약을 적용한다
-    - [x] 탭 URL/필터 독립성/계획 검증/public redaction·cursor 회귀 테스트를 추가한다
+    - [x] 탭 URL/필터 독립성/계획 검증/원문·내부 trace 경계/cursor 회귀 테스트를 추가한다
 
 - [x] `P2` God mode 입력으로 perception event를 주입한다 (§3.2 User Controls,
       §8.1 "Isabella's apartment: kitchen: stove is burning" 예시)

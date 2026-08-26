@@ -48,8 +48,7 @@ function parseMemory(value: unknown): DashboardMemory | null {
     typeof value.content !== "string" ||
     typeof value.created_at !== "string" ||
     typeof value.last_accessed_at !== "string" ||
-    typeof value.importance !== "number" ||
-    typeof value.content_redacted !== "boolean"
+    typeof value.importance !== "number"
   ) {
     return null;
   }
@@ -61,7 +60,6 @@ function parseMemory(value: unknown): DashboardMemory | null {
     created_at: value.created_at,
     last_accessed_at: value.last_accessed_at,
     importance: value.importance,
-    content_redacted: value.content_redacted,
   };
 }
 
@@ -138,7 +136,7 @@ function parseRelationship(value: unknown): DashboardRelationship | null {
     (value.last_interaction_at !== null &&
       !isDateTimeString(value.last_interaction_at)) ||
     (value.summary !== null && typeof value.summary !== "string") ||
-    !["available", "no_explicit_evidence", "redacted"].includes(
+    !["available", "no_explicit_evidence"].includes(
       String(value.summary_status),
     ) ||
     !isNonNegativeInteger(value.evidence_total) ||
