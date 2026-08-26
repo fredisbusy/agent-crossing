@@ -14,6 +14,15 @@ EXPECTED_SIGNATURES: dict[str, tuple[str, ...]] = {
     "Taeo": ("손북", "과장", "피크닉"),
 }
 
+EXPECTED_MBTI: dict[str, str] = {
+    "Haeun": "ISFP",
+    "Jiho": "INFJ",
+    "Jungwoo": "ISTP",
+    "Minji": "ENFP",
+    "Sujin": "ESTJ",
+    "Taeo": "ESFP",
+}
+
 
 def test_roster_personas_have_distinct_non_work_behavioral_anchors() -> None:
     loader = PersonaLoader(PERSONA_DIR)
@@ -53,3 +62,32 @@ def test_roster_personas_encode_boundaries_and_repair_after_social_missteps() ->
     assert "사과" in minji_text
     assert "선택권" in taeo_text
 
+
+def test_roster_personas_translate_mbti_and_romantic_preferences_into_behavior() -> None:
+    loader = PersonaLoader(PERSONA_DIR)
+
+    for persona_name, mbti in EXPECTED_MBTI.items():
+        persona = loader.load(persona_name)
+        prompt_visible_identity = " ".join(persona.identity_stable_set[:3])
+
+        assert mbti in persona.agent.traits
+        assert mbti in prompt_visible_identity
+        assert any(
+            marker in prompt_visible_identity for marker in ("끌린다", "설렐")
+        )
+        assert any(
+            marker in prompt_visible_identity
+            for marker in ("호감이 낮", "마음이 멀", "거리를 둔다")
+        )
+
+
+def test_introverted_personas_encode_repeated_unwanted_contact_as_a_boundary() -> None:
+    loader = PersonaLoader(PERSONA_DIR)
+
+    for persona_name in ("Haeun", "Jiho", "Jungwoo"):
+        identity_text = " ".join(loader.load(persona_name).identity_stable_set[:3])
+        assert any(
+            marker in identity_text
+            for marker in ("계속 말을", "거듭 침범", "재촉")
+        )
+        assert "호감이 낮" in identity_text

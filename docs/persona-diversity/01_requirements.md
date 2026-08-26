@@ -16,6 +16,16 @@
   through occupation.
 - [x] Keep Jiho's private affection and Sujin's autonomous perspective
   asymmetric.
+- [x] Give every resident an MBTI label and translate its dimensions into
+  observable social energy, information preference, decision style, and
+  planning behavior.
+- [x] Give every resident a gender-neutral romantic preference covering
+  attractive behavior, aversion or boundary, and relationship pace.
+- [x] Let repeated unwanted approaches at low familiarity inform colder
+  reactions and pass-by decisions without treating introversion itself as a
+  penalty.
+- [x] Do not infer romantic attraction from MBTI compatibility, ordinary
+  kindness, or a single pleasant conversation.
 
 ## Non-functional requirements
 
@@ -26,4 +36,3 @@
 - [x] Add a regression test for each resident's distinctive signature.
 - [x] Avoid copyrighted dialogue, character names, or copied prose from the
   reference games.
-

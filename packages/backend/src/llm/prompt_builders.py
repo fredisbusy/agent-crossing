@@ -538,6 +538,14 @@ def build_encounter_prompt(
             "immediate context of this encounter (context_summary). Finally decide: "
             "should they pass by without stopping, or converse?"
         ),
+        (
+            "Treat MBTI only as a behavioral writing cue, never as compatibility "
+            "evidence. Do not infer attraction from a type label or ordinary "
+            "friendliness. At low familiarity, repeated unwanted approaches, "
+            "ignored requests for quiet, and pressure after refusal are valid "
+            "reasons for lower internal affinity or passing by; introversion alone "
+            "is not. Respect boundaries and use observed behavior and memories."
+        ),
         f"Keep every text field within {ENCOUNTER_REASON_MAX_CHARS} characters.",
         (
             "Return strict JSON only with this exact shape and no extra text: "

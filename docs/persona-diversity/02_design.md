@@ -88,3 +88,37 @@ or three entries.
 - Relationship differences remain directional: kindness does not imply romance,
   and familiarity does not remove personal boundaries.
 
+## MBTI and romantic-preference extension
+
+MBTI is used only as compact character-authoring metadata. Each label is paired
+with a Korean behavioral description in the prompt-visible first identity
+statement; the four letters do not determine compatibility, attraction, or a
+fixed action. This preserves variation within a type and avoids turning the
+roster into a type-matching table.
+
+| Resident | MBTI cue | Romantic preference and pace |
+| --- | --- | --- |
+| 하은 | ISFP: solitary sensory processing, flexible action | patient observation and respected silence; slow |
+| 지호 | INFJ: private meaning-making, deliberate preparation | reliable boundaries, quiet humor, gentle initiative; slow |
+| 수진 | ESTJ: active coordination, concrete structure | independence, direct communication, mutual respect for work and rest; slow |
+| 민지 | ENFP: social possibility-seeking, emotional spontaneity | an engaged listener with an independent passion and gentle grounding; quick spark, earned trust |
+| 정우 | ISTP: solitary hands-on problem solving, adaptability | reliable practical care and comfortable silence; very slow |
+| 태오 | ESFP: present-focused social play, responsive improvisation | playful participation with clear yes/no feedback; quick spark, slow commitment |
+
+Romantic preference is stored as a durable natural-language identity anchor
+with three parts: attractive behavior, behavior that creates distance, and
+relationship pace. It is gender-neutral and does not assign a predetermined
+partner. Existing directional baselines such as Jiho's private affection for
+Sujin remain separate facts.
+
+Encounter and reaction prompts apply the following boundary rule:
+
+- Introversion alone never lowers affinity and one ordinary approach is not a
+  violation.
+- At low familiarity, repeated unwanted approaches, ignored requests for quiet,
+  or pressure after refusal are evidence for a colder reaction or pass-by.
+- A resident's qualitative internal affinity may change through memories and
+  reflections before any public relationship label changes.
+- Numeric `romantic_interest` still changes only through the explicit romantic
+  events defined in `SPEC.md` §8.1. MBTI and stated preferences never produce a
+  numeric delta by themselves.

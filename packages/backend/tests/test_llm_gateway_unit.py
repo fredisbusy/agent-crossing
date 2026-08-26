@@ -329,6 +329,9 @@ def test_reaction_prompt_includes_concise_utterance_constraint() -> None:
 
     assert "Keep utterance concise and short" in prompt
     assert "80 Korean characters" in prompt
+    assert "MBTI as a character-writing cue" in prompt
+    assert "Repeated unwanted contact" in prompt
+    assert "introversion alone" in prompt
 
 
 def test_reaction_prompt_includes_few_shot_and_reflection_anchor() -> None:

@@ -49,6 +49,8 @@ def test_encounter_gate_returns_converse_decision() -> None:
     assert decision.relationship_summary
     assert decision.context_summary
     assert "[Agent's Summary Description]" in client.last_prompt
+    assert "introversion alone is not" in client.last_prompt
+    assert "repeated unwanted approaches" in client.last_prompt
 
 
 def test_encounter_gate_returns_pass_by_decision() -> None:
