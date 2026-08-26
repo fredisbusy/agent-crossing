@@ -140,6 +140,34 @@ def test_dashboard_location_does_not_replace_a_moving_location_with_destination(
     assert source == "unknown"
 
 
+def test_dashboard_location_does_not_treat_home_facade_as_interior() -> None:
+    location_path, source = _dashboard_location(
+        world_map=load_world_map(),
+        agent=_spatial_agent(
+            pixel_position=MapPoint(176, 496),
+            destination="브라이어 코브 > 지호의 집",
+            current_action="arrived_at_door:지호의 집",
+        ),
+    )
+
+    assert location_path is None
+    assert source == "unknown"
+
+
+def test_dashboard_location_requires_explicit_inside_state_for_home() -> None:
+    location_path, source = _dashboard_location(
+        world_map=load_world_map(),
+        agent=_spatial_agent(
+            pixel_position=MapPoint(176, 496),
+            destination="브라이어 코브 > 지호의 집",
+            current_action="inside:지호의 집",
+        ),
+    )
+
+    assert location_path == "브라이어 코브 > 지호의 집"
+    assert source == "interior"
+
+
 @pytest.mark.anyio
 async def test_dashboard_memory_page_uses_stable_descending_id_cursor() -> None:
     now = datetime.datetime(2026, 8, 26, 10, 0)

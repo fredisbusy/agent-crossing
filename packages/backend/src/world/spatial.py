@@ -163,11 +163,11 @@ class SpatialWorldRuntime:
             agent = self._require_agent(schedule.agent_id)
             plan = schedule.active_minute.action_content
             location = schedule.active_minute.location
-            changed = agent.plan != plan or agent.explicit_location != location
+            location_changed = agent.explicit_location != location
             agent.plan = plan
             agent.explicit_location = location
             agent.schedule = schedule
-            if changed:
+            if location_changed:
                 agent.destination = None
                 agent.goal = None
                 agent.route = []
@@ -417,6 +417,18 @@ class SpatialWorldRuntime:
                     raise ValueError(
                         f"unknown saved destination: {character.destination_path}"
                     )
+                if character.current_action.startswith("inside:") and (
+                    destination is None
+                    or destination.kind != "home"
+                    or destination.entrance
+                    != MapPoint(
+                        x=character.tile_position.x,
+                        y=character.tile_position.y,
+                    )
+                ):
+                    raise ValueError(
+                        "saved inside state must be anchored to its home entrance"
+                    )
                 agent.tile_position = MapPoint(
                     x=character.tile_position.x,
                     y=character.tile_position.y,
@@ -454,12 +466,14 @@ class SpatialWorldRuntime:
         route_exhausted_before_goal = (
             not (agent.route or []) and agent.goal != agent.tile_position
         )
+        route_rebuilt = False
         if destination_changed or agent.goal is None or route_exhausted_before_goal:
             self._build_route(
                 agent=agent,
                 destination=resolved_destination,
                 blocked_tiles=blocked_tiles,
             )
+            route_rebuilt = True
 
         route = agent.route or []
         if route and route[0] in blocked_tiles:
@@ -468,6 +482,7 @@ class SpatialWorldRuntime:
                 destination=resolved_destination,
                 blocked_tiles=blocked_tiles,
             )
+            route_rebuilt = True
             route = agent.route or []
         if route:
             agent.tile_position = route.pop(0)
@@ -481,13 +496,26 @@ class SpatialWorldRuntime:
                 and agent.goal == agent.tile_position
                 and agent.destination is not None
             ):
-                agent.current_action = f"arrived_at:{agent.destination.name}"
+                agent.current_action = (
+                    f"arrived_at_door:{agent.destination.name}"
+                    if agent.destination.kind == "home"
+                    else f"arrived_at:{agent.destination.name}"
+                )
             return
 
         if agent.destination is None:
             agent.current_action = "idle:no_mapped_destination"
         elif agent.goal == agent.tile_position:
-            agent.current_action = f"at:{agent.destination.name}"
+            if agent.destination.kind != "home":
+                agent.current_action = f"at:{agent.destination.name}"
+            elif agent.current_action.startswith("inside:"):
+                agent.current_action = f"inside:{agent.destination.name}"
+            elif not route_rebuilt and agent.current_action.startswith(
+                "arrived_at_door:"
+            ):
+                agent.current_action = f"inside:{agent.destination.name}"
+            else:
+                agent.current_action = f"arrived_at_door:{agent.destination.name}"
         elif not agent.current_action.startswith("blocked:"):
             agent.current_action = f"waiting_for_clear_path:{agent.destination.name}"
 
@@ -521,11 +549,12 @@ class SpatialWorldRuntime:
             agent.current_action = "blocked:no_route"
             return
         agent.route = path[1:]
-        agent.current_action = (
-            f"at:{destination.name}"
-            if goal == agent.tile_position
-            else f"moving_to:{destination.name}"
-        )
+        if goal != agent.tile_position:
+            agent.current_action = f"moving_to:{destination.name}"
+        elif destination.kind == "home":
+            agent.current_action = f"arrived_at_door:{destination.name}"
+        else:
+            agent.current_action = f"at:{destination.name}"
 
     def _snapshot_unlocked(self) -> SpatialWorldSnapshot:
         return SpatialWorldSnapshot(

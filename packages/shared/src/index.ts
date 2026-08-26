@@ -166,7 +166,7 @@ export interface DashboardAgent {
   current_action: string;
   destination: string | null;
   current_location_path: string | null;
-  current_location_source: "map" | "arrival" | "unknown";
+  current_location_source: "map" | "arrival" | "interior" | "unknown";
   tile_position: AgentPosition;
   route_remaining: number;
   bubble_kind: "speech" | "thought" | "action";

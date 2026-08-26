@@ -701,20 +701,36 @@ def _dashboard_event_response(event: DashboardEvent) -> DashboardEventResponse:
 
 def _dashboard_location(
     *, world_map: WorldMap, agent: SpatialAgentSnapshot
-) -> tuple[str | None, Literal["map", "arrival", "unknown"]]:
-    """Resolve a tile's physical map label, with an explicit arrival fallback."""
+) -> tuple[str | None, Literal["map", "arrival", "interior", "unknown"]]:
+    """Resolve physical public areas and explicit semantic interiors.
+
+    A home's broad render bounds include its facade and door approach, so
+    merely standing near that rectangle must never count as being indoors.
+    """
     location = world_map.location_at(agent.pixel_position)
-    if location is not None:
+    if location is not None and location.kind != "home":
         return location.location_path, "map"
+    destination = (
+        world_map.resolve_location(agent.destination)
+        if agent.destination is not None
+        else None
+    )
+    if (
+        agent.current_action.startswith("inside:")
+        and destination is not None
+        and destination.kind == "home"
+    ):
+        return destination.location_path, "interior"
     if (
         agent.route_remaining == 0
-        and agent.current_action.startswith("at:")
-        and agent.destination is not None
+        and agent.current_action.startswith(("at:", "arrived_at:"))
+        and destination is not None
+        and destination.kind != "home"
     ):
         # Authored building doors can sit one walkable tile outside their bounds.
         # The spatial runtime's completed route/destination is authoritative for
         # semantic arrival, but keep the source visible to dashboard clients.
-        return agent.destination, "arrival"
+        return destination.location_path, "arrival"
     return None, "unknown"
 
 

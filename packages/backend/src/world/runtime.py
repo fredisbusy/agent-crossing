@@ -424,11 +424,14 @@ class WorldRuntime:
             distance = abs(first.tile_position.x - second.tile_position.x) + abs(
                 first.tile_position.y - second.tile_position.y
             )
+            first_inside = first.current_action.startswith("inside:")
+            second_inside = second.current_action.startswith("inside:")
             both_arrived = first.current_action.startswith(
-                ("at:", "arrived_at:")
-            ) and second.current_action.startswith(("at:", "arrived_at:"))
+                ("at:", "arrived_at:", "inside:")
+            ) and second.current_action.startswith(("at:", "arrived_at:", "inside:"))
             if not (
                 both_arrived
+                and first_inside == second_inside
                 and first.destination is not None
                 and first.destination == second.destination
                 and distance <= 1

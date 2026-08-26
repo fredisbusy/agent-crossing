@@ -30,6 +30,8 @@ function agent(overrides: Partial<SpatialAgentState> = {}): SpatialAgentState {
 describe("resident presentation", () => {
   it.each([
     ["moving_to:cafe", "이동 중"],
+    ["arrived_at_door:지호의 집", "문 앞 도착"],
+    ["inside:지호의 집", "실내 활동 중"],
     ["planning_route:cafe", "경로 계산 중"],
     ["blocked:cafe", "이동 불가"],
     ["idle:waiting", "대기 중"],

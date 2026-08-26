@@ -286,7 +286,7 @@ function parseAgent(value: unknown): DashboardAgent | null {
     (value.destination !== null && typeof value.destination !== "string") ||
     (value.current_location_path !== null &&
       typeof value.current_location_path !== "string") ||
-    !["map", "arrival", "unknown"].includes(
+    !["map", "arrival", "interior", "unknown"].includes(
       String(value.current_location_source),
     ) ||
     typeof value.tile_position.x !== "number" ||

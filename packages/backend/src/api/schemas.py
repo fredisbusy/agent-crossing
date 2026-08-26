@@ -288,7 +288,7 @@ class DashboardAgentResponse(BaseModel):
     current_action: str
     destination: str | None
     current_location_path: str | None
-    current_location_source: Literal["map", "arrival", "unknown"]
+    current_location_source: Literal["map", "arrival", "interior", "unknown"]
     tile_position: WorldMapPointResponse
     route_remaining: int
     bubble_kind: Literal["speech", "thought", "action"]

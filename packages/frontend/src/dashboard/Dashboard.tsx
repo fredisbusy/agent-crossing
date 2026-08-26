@@ -72,6 +72,10 @@ function displayShortTime(value: string): string {
 
 function actionLabel(action: string): string {
   if (action.startsWith("moving_to:")) return `${action.slice(10)}로 이동 중`;
+  if (action.startsWith("arrived_at_door:"))
+    return `${action.slice(16)} 문 앞에 도착`;
+  if (action.startsWith("inside:"))
+    return `${action.slice(7)} 실내에 머무는 중`;
   if (action.startsWith("arrived_at:")) return `${action.slice(11)}에 도착`;
   if (action.startsWith("at:")) return `${action.slice(3)}에 머무는 중`;
   if (action === "planning_route") return "이동 경로 계산 중";

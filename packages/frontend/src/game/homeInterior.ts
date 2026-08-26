@@ -136,6 +136,17 @@ export function isAgentAtLocation(
   );
 }
 
+export function isAgentInsideHome(
+  agent: SpatialAgentState,
+  locationName: string,
+): boolean {
+  const destination = agent.destination?.toLocaleLowerCase() ?? "";
+  return (
+    destination.includes(locationName.toLocaleLowerCase()) &&
+    agent.current_action.toLocaleLowerCase().startsWith("inside:")
+  );
+}
+
 export function homeActionLabel(agent: SpatialAgentState): string {
   const movementAction = agent.current_action.replace(/^[^:]+:/, "").trim();
   const detail = agent.plan.trim() || movementAction || "집에서 쉬는 중";

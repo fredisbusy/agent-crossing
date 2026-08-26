@@ -287,8 +287,10 @@ react 정책:
 - cafe/library/market도 지붕 없는 kind별 dollhouse interior를 메인 맵에 항상
   노출한다. 문 portal은 같은 semantic `kind`의 확대 interior scene template에
   연결하고 출구 portal로 outdoor scene에 복귀한다.
-- agent는 backend 상태가 해당 building/home의 문 또는 문 앞 대기 tile에 도착한
-  경우에만 outdoor avatar 대신 dollhouse의 충돌하지 않는 activity slot에 표시한다.
+- 일반 building은 backend 상태가 해당 문에 도착한 경우에만, `home`은 문 도착 다음
+  tick에 `inside:<집 이름>` 상태로 전환된 경우에만 outdoor avatar 대신 dollhouse의
+  충돌하지 않는 activity slot에 표시한다. `arrived_at_door:<집 이름>`은 실외 문 앞
+  상태이며 집 bounds, 외벽, 문 근처 좌표만으로는 실내로 판정하지 않는다.
   `current_action`과 `plan`의 행동 키워드는 관찰용 실내 위치와 말풍선에만 사용하며
   canonical tile/navigation 상태를 변경하지 않는다.
 - React text overlay는 카메라 투영 후 캐릭터 말풍선/nameplate의 screen-space
@@ -337,7 +339,10 @@ react 정책:
   `load_world_map()`은 이 조건 중 하나라도 어기면 부팅을 거부한다. 실외 A*는 문
   타일까지 이동한 뒤 semantic dollhouse interior로 투영되며 집 벽이나 본체를
   통과해 실내 좌표로 이동하지 않는다. 프런트엔드는 동일한 문 좌표에 벽 개구부,
-  문짝, 문턱을 표시한다.
+  문짝, 문턱을 표시한다. home route 완료 tick은 `arrived_at_door`, 그 다음 tick은
+  `inside`이며 오직 `inside`만 집의 semantic location으로 인정한다. 목적지가
+  바뀌면 이 상태를 먼저 해제하고 실외 route를 따른다. 같은 문 좌표라도 한 주민이
+  실내이고 다른 주민이 실외라면 서로 조우한 것으로 처리하지 않는다.
 - 건물·물·간판·분수·벤치·나무·가로등 collision은 통과할 수 없고, agent tile도
   tick 동안 동적 collision으로 취급해 같은 tile 점유와 자리 맞바꾸기를 금지한다.
 - backend 4방향 A\*는 authored path/광장/공원의 이동 비용을 `1`, 그 밖의
@@ -502,8 +507,10 @@ Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하�
 - diagnostics event는 별도 bounded buffer가 소유하며 Brain의 `ActionLoopResult`에
   대시보드 전용 필드를 추가하지 않는다.
 - `current_location_path`는 destination이 아니라 authoritative physical pixel을
-  기준으로 계산한다. 문 출입 완료처럼 authored door가 location bounds 밖에 있는
-  경우에만 도착 상태를 별도 source로 표시하며 이동 중 destination으로 대체하지 않는다.
+  기준으로 계산한다. 일반 건물의 문 출입 완료는 `arrival`, home의 명시적 `inside`
+  상태는 `interior` source로 표시한다. home의 broad bounds에는 외벽과 문 접근부가
+  포함되므로 pixel bounds나 `arrived_at_door`만으로 home location을 노출하지 않으며,
+  이동 중 destination으로 현재 위치를 대체하지 않는다.
 - 공개 응답에서는 embedding, provider `raw_response`, prompt, API key와 내부
   diagnostics trace를 제외한다. 이 제한은 memory/reflection 원문 공개 여부와
   별개다.

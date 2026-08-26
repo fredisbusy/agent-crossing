@@ -902,6 +902,31 @@ def test_start_dialogue_picks_the_qualifying_pair_among_three_agents() -> None:
     assert {agent.name for agent in opened_session.agents} == {"Sujin", "Minji"}
 
 
+def test_start_dialogue_does_not_bridge_home_wall() -> None:
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(
+                agent_id="jiho",
+                current_action="inside:지호의 집",
+                tile_position=_tile(5, 15),
+                destination="지호의 집",
+            ),
+            FakeAgentSnapshot(
+                agent_id="sujin",
+                current_action="arrived_at_door:지호의 집",
+                tile_position=_tile(5, 15),
+                destination="지호의 집",
+            ),
+        )
+    )
+    runtime = _encounter_test_runtime(spatial_runtime=spatial_runtime)
+    runtime.sessions.clear()
+
+    runtime._start_dialogue_for_real_encounter(runtime.current_time)
+
+    assert runtime.sessions == {}
+
+
 def test_start_dialogue_respects_per_pair_cooldown_independently() -> None:
     """A-B 쌍의 쿨다운이 C-D 쌍의 조우를 막지 않는다."""
     spatial_runtime = FakeSpatialRuntime(

@@ -26,6 +26,8 @@ export function residentStatusLabel(
   if (action.startsWith("moving_to:") || action.includes("moving")) {
     return "이동 중";
   }
+  if (action.startsWith("arrived_at_door:")) return "문 앞 도착";
+  if (action.startsWith("inside:")) return "실내 활동 중";
   if (action.startsWith("planning_route")) return "경로 계산 중";
   if (action.startsWith("blocked:")) return "이동 불가";
   if (action.startsWith("idle:")) return "대기 중";

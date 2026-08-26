@@ -128,6 +128,19 @@ describe("parseDashboardState", () => {
     expect(parsed?.agents[0]?.persona[0]).toContain("사서");
   });
 
+  it("accepts an explicit home interior location source", () => {
+    const interior = structuredClone(fixture);
+    interior.agents[0].current_action = "inside:지호의 집";
+    interior.agents[0].destination = "브라이어 코브 > 지호의 집";
+    interior.agents[0].current_location_path = "브라이어 코브 > 지호의 집";
+    interior.agents[0].current_location_source = "interior";
+
+    expect(parseDashboardState(interior)?.agents[0]).toMatchObject({
+      current_action: "inside:지호의 집",
+      current_location_source: "interior",
+    });
+  });
+
   it("rejects malformed public persona fields", () => {
     const malformed = structuredClone(fixture);
     malformed.agents[0].age = -1;

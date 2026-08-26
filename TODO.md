@@ -399,6 +399,8 @@ end-to-end 시나리오다.
     - [x] persona 로딩, 나이·성별, 지도 위치·스폰·집 입구·경로를 회귀 테스트로 고정한다
     - [x] 모든 집에 눈에 보이는 문과 벽 개구부를 만들고, authored path가 문에
       연결되며 문 뒤 house-body는 solid라 실외 A*가 벽을 통과하지 못하도록 검증한다
+    - [x] 집 문 도착(`arrived_at_door`)과 실내 진입(`inside`)을 분리하고, 오직
+      `inside` 상태만 집 위치·dollhouse 점유로 인식해 외벽 근처 오판정을 막는다
 
 - [x] `P1` WorldRuntime을 정확히 2명 고정에서 N-agent + pairwise 대화로 확장한다
       (§3.4 조우 모델 — "마을 전체가 한 방에서 듣는" 공용 채팅방이 아니라
@@ -593,7 +595,7 @@ end-to-end 시나리오다.
   - DoD:
     - [x] home kind는 지붕 없이 침실/주방/공용실/욕실을 메인 맵에 표시한다
     - [x] 침대/책상/책장/테이블/주방/욕실 fixture를 재사용 템플릿으로 렌더링한다
-    - [x] 집에 도착한 agent를 행동에 맞는 방에 표시하고 현재 계획을 말풍선으로 보여준다
+    - [x] 집 실내로 진입한 agent만 행동에 맞는 방에 표시하고 현재 계획을 말풍선으로 보여준다
     - [x] 실내 관찰 위치가 backend canonical tile이나 4방향 route를 변경하지 않는다
 
 - [x] `P2` Tiled map + collision을 연결한다

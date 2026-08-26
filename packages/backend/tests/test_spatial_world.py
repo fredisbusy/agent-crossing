@@ -88,6 +88,30 @@ def test_spatial_runtime_replans_when_agent_plan_changes() -> None:
     assert jiho.current_action == "moving_to:스토리하우스 도서관"
 
 
+def test_home_arrival_requires_a_separate_inside_transition() -> None:
+    runtime = _runtime()
+    runtime.set_plan(agent_id="jiho", plan="지호의 집에서 조용히 쉰다.")
+
+    jiho = next(
+        agent for agent in runtime.snapshot().agents if agent.agent_id == "jiho"
+    )
+    for _ in range(80):
+        snapshot = runtime.tick()
+        jiho = next(agent for agent in snapshot.agents if agent.agent_id == "jiho")
+        if jiho.current_action.startswith("arrived_at_door:"):
+            break
+
+    assert jiho.destination == "브라이어 코브 > 지호의 집"
+    assert jiho.tile_position == MapPoint(5, 15)
+    assert jiho.current_action == "arrived_at_door:지호의 집"
+
+    snapshot = runtime.tick()
+    jiho = next(agent for agent in snapshot.agents if agent.agent_id == "jiho")
+
+    assert jiho.tile_position == MapPoint(5, 15)
+    assert jiho.current_action == "inside:지호의 집"
+
+
 def test_spatial_runtime_keeps_unmapped_plan_idle() -> None:
     runtime = _runtime()
     runtime.set_plan(agent_id="jiho", plan="Jiho thinks quietly about tomorrow.")

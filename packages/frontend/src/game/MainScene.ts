@@ -23,7 +23,12 @@ import { createPixelTextures, TILE, TILE_SIZE } from "./pixelTextures";
 import { ServerGridMovement } from "./gridMovement";
 import { agentBubbleLabel } from "./agentBubble";
 import { GameTextOverlayController } from "./gameText";
-import { HOME_ROOMS, isAgentAtLocation, resolveHomeRoom } from "./homeInterior";
+import {
+  HOME_ROOMS,
+  isAgentAtLocation,
+  isAgentInsideHome,
+  resolveHomeRoom,
+} from "./homeInterior";
 
 const WORLD_WIDTH = townMap.width * townMap.tilewidth;
 const WORLD_HEIGHT = townMap.height * townMap.tileheight;
@@ -559,7 +564,7 @@ export class MainScene extends Phaser.Scene {
       const view = this.agentViews.get(characterId);
       if (!view) continue;
       const home = [...this.homeViews.values()].find((candidate) =>
-        isAgentAtLocation(state, candidate.name),
+        isAgentInsideHome(state, candidate.name),
       );
       const building = [...this.buildingViews.values()].find((candidate) =>
         isAgentAtLocation(state, candidate.name),
