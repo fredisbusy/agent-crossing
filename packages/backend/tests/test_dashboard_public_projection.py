@@ -53,7 +53,7 @@ def test_public_dashboard_event_excludes_private_model_diagnostics() -> None:
             reply="안녕하세요.",
             silent_reason="",
             parse_failure=False,
-            thought="PRIVATE_THOUGHT_SENTINEL",
+            display_thought="PRIVATE_THOUGHT_SENTINEL",
             model_thought="PRIVATE_MODEL_SENTINEL",
             self_critique="PRIVATE_CRITIQUE_SENTINEL",
             decision_reason="대화에 응답함",

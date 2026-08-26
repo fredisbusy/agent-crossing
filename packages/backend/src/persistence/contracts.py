@@ -110,10 +110,11 @@ class PositionHistorySave(BaseModel):
 class DashboardEventSave(BaseModel):
     """Persisted snapshot of one `world.observability.DashboardEvent`.
 
-    `thought` mirrors `DashboardEvent.thought`: curated display text
-    (critique, falling back to reason), not the model's raw reasoning —
-    that lives in `model_thought`. Kept as `thought` (not renamed) so
-    existing saved-session snapshots stay restorable.
+    `display_thought` mirrors `DashboardEvent.display_thought`: curated
+    display text (critique, falling back to reason), not the model's raw
+    reasoning — that lives in `model_thought`. Renamed from `thought` for
+    clarity; existing saved-session snapshots that still have the old key
+    are not migrated and will fail to restore.
     """
 
     sequence: int = Field(gt=0)
@@ -124,7 +125,7 @@ class DashboardEventSave(BaseModel):
     reply: str
     silent_reason: str
     parse_failure: bool
-    thought: str
+    display_thought: str
     model_thought: str
     self_critique: str
     decision_reason: str

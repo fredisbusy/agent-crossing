@@ -114,7 +114,7 @@ def _run_simulation(
             turn=turn,
             tag="CRITIQUE_OR_REASON",
             speaker_name=speaker_name,
-            message=observability.thought,
+            message=observability.display_thought,
         )
         if observability.model_thought:
             _print_log_line(

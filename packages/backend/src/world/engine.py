@@ -44,7 +44,7 @@ class SimulationStepResult:
 class SimulationStepObservability:
     """행동 판단 과정의 요약 사고 텍스트."""
 
-    thought: str
+    display_thought: str
     """모델이 생성한 내부 사고 텍스트."""
     model_thought: str
     """모델 자기 비평 텍스트."""
@@ -209,7 +209,7 @@ class SimulationEngine:
             action_result=action_result, reaction_decision=reaction_decision
         )
         return SimulationStepObservability(
-            thought=diagnostics.thought if diagnostics else "",
+            display_thought=diagnostics.display_thought if diagnostics else "",
             model_thought=diagnostics.model_thought if diagnostics else "",
             self_critique=diagnostics.self_critique if diagnostics else "",
             decision_reason=diagnostics.decision_reason if diagnostics else "",
@@ -278,7 +278,7 @@ class SimulationEngine:
             silent_reason="dialogue_session_ended",
             parse_failure=False,
             observability=SimulationStepObservability(
-                thought="",
+                display_thought="",
                 model_thought="",
                 self_critique="",
                 decision_reason="dialogue_session_ended",
@@ -359,7 +359,7 @@ def build_failed_step_result(
         silent_reason="action_loop_error",
         parse_failure=True,
         observability=SimulationStepObservability(
-            thought="",
+            display_thought="",
             model_thought="",
             self_critique="",
             decision_reason="action_loop_error",

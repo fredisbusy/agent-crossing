@@ -303,10 +303,10 @@ class SessionCognitiveLogRecord(Base):
     reply: Mapped[str] = mapped_column(Text, nullable=False)
     silent_reason: Mapped[str] = mapped_column(Text, nullable=False)
     parse_failure: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    # `thought` is curated display text for the in-world thought bubble
-    # (critique, falling back to reason) — NOT the model's raw reasoning.
-    # Query `model_thought` for that; see ActionDiagnostics/DashboardEvent.
-    thought: Mapped[str] = mapped_column(Text, nullable=False)
+    # Curated display text for the in-world thought bubble (critique,
+    # falling back to reason) — NOT the model's raw reasoning. Query
+    # `model_thought` for that; see ActionDiagnostics/DashboardEvent.
+    display_thought: Mapped[str] = mapped_column(Text, nullable=False)
     model_thought: Mapped[str] = mapped_column(Text, nullable=False)
     self_critique: Mapped[str] = mapped_column(Text, nullable=False)
     decision_reason: Mapped[str] = mapped_column(Text, nullable=False)

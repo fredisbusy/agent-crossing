@@ -271,11 +271,11 @@ class WorldRuntime:
                         kind="speech",
                         text=step_result.reply,
                     )
-                elif step_result.observability.thought:
+                elif step_result.observability.display_thought:
                     self.spatial_runtime.set_cognitive_overlay(
                         agent_id=speaker.identity.id,
                         kind="thought",
-                        text=step_result.observability.thought,
+                        text=step_result.observability.display_thought,
                     )
             if pair_key is not None and dialogue_was_active and not session.is_active:
                 self._record_completed_dialogue_relationships(
@@ -1079,11 +1079,11 @@ class WorldRuntime:
                         kind="speech",
                         text=step_result.reply,
                     )
-                elif step_result.observability.thought:
+                elif step_result.observability.display_thought:
                     self.spatial_runtime.set_cognitive_overlay(
                         agent_id=speaker.identity.id,
                         kind="thought",
-                        text=step_result.observability.thought,
+                        text=step_result.observability.display_thought,
                     )
             if dialogue_was_active and not session.is_active:
                 self._record_completed_dialogue_relationships(
@@ -1331,7 +1331,7 @@ class WorldRuntime:
                         reply=event.reply[:8192],
                         silent_reason=event.silent_reason[:8192],
                         parse_failure=event.parse_failure,
-                        thought=event.thought[:8192],
+                        display_thought=event.display_thought[:8192],
                         model_thought=event.model_thought[:8192],
                         self_critique=event.self_critique[:8192],
                         decision_reason=event.decision_reason[:8192],
@@ -1514,7 +1514,7 @@ class WorldRuntime:
                         reply=event.reply,
                         silent_reason=event.silent_reason,
                         parse_failure=event.parse_failure,
-                        thought=event.thought,
+                        display_thought=event.display_thought,
                         model_thought=event.model_thought,
                         self_critique=event.self_critique,
                         decision_reason=event.decision_reason,

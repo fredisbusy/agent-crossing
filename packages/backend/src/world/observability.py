@@ -10,9 +10,9 @@ from .engine import SimulationStepResult
 class DashboardEvent:
     """Diagnostics-owned record of one completed cognitive decision.
 
-    `thought` is the curated, display-safe text (critique, falling back to
-    reason) used for the in-world thought bubble overlay — it is not the
-    model's raw reasoning. The unedited model output lives in
+    `display_thought` is the curated, display-safe text (critique, falling
+    back to reason) used for the in-world thought bubble overlay — it is
+    not the model's raw reasoning. The unedited model output lives in
     `model_thought`; see `agents.decision_diagnostics.ActionDiagnostics`.
     """
 
@@ -24,7 +24,7 @@ class DashboardEvent:
     reply: str
     silent_reason: str
     parse_failure: bool
-    thought: str
+    display_thought: str
     model_thought: str
     self_critique: str
     decision_reason: str
@@ -61,7 +61,7 @@ class DashboardEventBuffer:
                 reply=result.reply,
                 silent_reason=result.silent_reason,
                 parse_failure=result.parse_failure,
-                thought=result.observability.thought,
+                display_thought=result.observability.display_thought,
                 model_thought=result.observability.model_thought,
                 self_critique=result.observability.self_critique,
                 decision_reason=result.observability.decision_reason,

@@ -269,7 +269,7 @@ async def test_get_world_state_returns_runtime_snapshot() -> None:
             silent_reason="",
             parse_failure=False,
             observability=SimulationStepObservability(
-                thought="hi",
+                display_thought="hi",
                 model_thought="",
                 self_critique="",
                 decision_reason="",
@@ -319,7 +319,7 @@ async def test_post_world_step_returns_metrics_and_trace() -> None:
             silent_reason="",
             parse_failure=False,
             observability=SimulationStepObservability(
-                thought="greet",
+                display_thought="greet",
                 model_thought="",
                 self_critique="",
                 decision_reason="",
@@ -366,7 +366,7 @@ async def test_world_tick_start_and_stop_return_scheduler_state() -> None:
             silent_reason="",
             parse_failure=False,
             observability=SimulationStepObservability(
-                thought="greet",
+                display_thought="greet",
                 model_thought="",
                 self_critique="",
                 decision_reason="",

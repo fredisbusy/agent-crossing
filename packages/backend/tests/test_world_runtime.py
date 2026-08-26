@@ -93,7 +93,7 @@ class BlockingEngine:
             silent_reason="",
             parse_failure=False,
             observability=SimulationStepObservability(
-                thought="",
+                display_thought="",
                 model_thought="",
                 self_critique="",
                 decision_reason="",
@@ -190,7 +190,7 @@ def test_world_runtime_updates_counters_on_step() -> None:
                         silent_reason="llm_declined",
                         parse_failure=True,
                         observability=SimulationStepObservability(
-                            thought="",
+                            display_thought="",
                             model_thought="",
                             self_critique="",
                             decision_reason="",
@@ -231,7 +231,7 @@ def test_world_runtime_tick_uses_single_step_clock() -> None:
                         silent_reason="",
                         parse_failure=False,
                         observability=SimulationStepObservability(
-                            thought="",
+                            display_thought="",
                             model_thought="",
                             self_critique="",
                             decision_reason="",
@@ -300,7 +300,7 @@ async def _assert_authoritative_plan_refresh_holds_world_time_until_ready() -> N
                         silent_reason="dialogue_session_ended",
                         parse_failure=False,
                         observability=SimulationStepObservability(
-                            thought="",
+                            display_thought="",
                             model_thought="",
                             self_critique="",
                             decision_reason="",
@@ -351,7 +351,7 @@ async def _assert_initial_plan_refresh_isolates_one_failure() -> None:
                         silent_reason="",
                         parse_failure=False,
                         observability=SimulationStepObservability(
-                            thought="",
+                            display_thought="",
                             model_thought="",
                             self_critique="",
                             decision_reason="",
@@ -462,7 +462,7 @@ def test_world_tick_installs_agent_schedules_atomically() -> None:
                         silent_reason="",
                         parse_failure=False,
                         observability=SimulationStepObservability(
-                            thought="",
+                            display_thought="",
                             model_thought="",
                             self_critique="",
                             decision_reason="",
@@ -512,7 +512,7 @@ async def _assert_world_runtime_scheduler_starts_and_stops() -> None:
                         silent_reason="",
                         parse_failure=False,
                         observability=SimulationStepObservability(
-                            thought="",
+                            display_thought="",
                             model_thought="",
                             self_critique="",
                             decision_reason="",
@@ -565,7 +565,7 @@ def test_world_runtime_bridges_speech_and_public_thought_to_spatial_state() -> N
             silent_reason="",
             parse_failure=False,
             observability=SimulationStepObservability(
-                thought="",
+                display_thought="",
                 model_thought="노출하면 안 되는 내부 사고",
                 self_critique="노출하면 안 되는 자기비평",
                 decision_reason="",
@@ -600,7 +600,7 @@ def test_world_runtime_bridges_speech_and_public_thought_to_spatial_state() -> N
         silent_reason="상대의 말을 생각하는 중",
         parse_failure=False,
         observability=SimulationStepObservability(
-            thought="지호의 안부를 반갑게 받아들인다",
+            display_thought="지호의 안부를 반갑게 받아들인다",
             model_thought="노출하면 안 되는 더 자세한 내부 사고",
             self_critique="",
             decision_reason="",
@@ -722,7 +722,7 @@ def _encounter_test_runtime(
                         silent_reason="",
                         parse_failure=False,
                         observability=SimulationStepObservability(
-                            thought="",
+                            display_thought="",
                             model_thought="",
                             self_critique="",
                             decision_reason="",
@@ -1281,7 +1281,7 @@ class ConcurrencyTrackingEngine:
             silent_reason="",
             parse_failure=False,
             observability=SimulationStepObservability(
-                thought="",
+                display_thought="",
                 model_thought="",
                 self_critique="",
                 decision_reason="",

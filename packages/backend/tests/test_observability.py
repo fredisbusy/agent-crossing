@@ -13,7 +13,7 @@ def _result(*, minute: int, reply: str = "") -> SimulationStepResult:
         silent_reason="" if reply else "no_reaction",
         parse_failure=False,
         observability=SimulationStepObservability(
-            thought="상대의 의도를 살핀다.",
+            display_thought="상대의 의도를 살핀다.",
             model_thought="대화를 이어갈지 판단한다.",
             self_critique="성급하게 결론 내리지 않는다.",
             decision_reason="지금은 듣는 편이 자연스럽다.",
@@ -50,7 +50,7 @@ def test_dashboard_event_buffer_preserves_structured_observability() -> None:
         result=_result(minute=7),
     )
 
-    assert event.thought == "상대의 의도를 살핀다."
+    assert event.display_thought == "상대의 의도를 살핀다."
     assert event.self_critique == "성급하게 결론 내리지 않는다."
     assert event.decision_process["action"] == {"speak_decision": False}
     assert event.silent_reason == "no_reaction"

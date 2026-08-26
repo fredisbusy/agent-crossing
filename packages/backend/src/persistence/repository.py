@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 from db.models import (
+    AgentRosterRecord,
     GameSessionRecord,
     GameSessionStatus,
     MemoryNodeType,
@@ -42,6 +43,12 @@ class PositionHistoryPoint:
 
 
 @dataclass(frozen=True)
+class AgentRosterSetting:
+    agent_id: str
+    enabled: bool
+
+
+@dataclass(frozen=True)
 class SessionSummary:
     id: uuid.UUID
     name: str
@@ -56,6 +63,49 @@ class SessionSummary:
 
 
 class GameSessionRepository:
+    def sync_agent_roster(self, *, agent_ids: list[str]) -> list[AgentRosterSetting]:
+        """Register newly authored personas without overwriting saved choices."""
+        ordered_ids = list(dict.fromkeys(agent_ids))
+        with SessionLocal.begin() as db:
+            existing = {
+                record.agent_id: record
+                for record in db.scalars(
+                    select(AgentRosterRecord).where(
+                        AgentRosterRecord.agent_id.in_(ordered_ids)
+                    )
+                ).all()
+            }
+            for agent_id in ordered_ids:
+                if agent_id not in existing:
+                    record = AgentRosterRecord(agent_id=agent_id, enabled=True)
+                    db.add(record)
+                    existing[agent_id] = record
+            db.flush()
+            return [
+                AgentRosterSetting(
+                    agent_id=agent_id,
+                    enabled=existing[agent_id].enabled,
+                )
+                for agent_id in ordered_ids
+            ]
+
+    def set_agent_enabled(
+        self, *, agent_id: str, enabled: bool
+    ) -> AgentRosterSetting | None:
+        now = datetime.datetime.now(datetime.UTC)
+        with SessionLocal.begin() as db:
+            record = db.scalar(
+                select(AgentRosterRecord)
+                .where(AgentRosterRecord.agent_id == agent_id)
+                .with_for_update()
+            )
+            if record is None:
+                return None
+            record.enabled = enabled
+            record.updated_at = now
+            db.flush()
+            return AgentRosterSetting(agent_id=record.agent_id, enabled=record.enabled)
+
     def list_sessions(self, *, limit: int = 50) -> list[SessionSummary]:
         bounded_limit = max(1, min(limit, 100))
         with SessionLocal() as db:
@@ -459,7 +509,7 @@ def _write_projection(
                 reply=event.reply,
                 silent_reason=event.silent_reason,
                 parse_failure=event.parse_failure,
-                thought=event.thought,
+                display_thought=event.display_thought,
                 model_thought=event.model_thought,
                 self_critique=event.self_critique,
                 decision_reason=event.decision_reason,
