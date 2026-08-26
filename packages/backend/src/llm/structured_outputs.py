@@ -231,6 +231,46 @@ class InterviewOutput(StrictStructuredOutput):
     reason: InterviewReasonText
 
 
+INTERVIEW_ANSWER_MAX_CHARS = 400
+
+InterviewAnswerText: TypeAlias = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=INTERVIEW_ANSWER_MAX_CHARS,
+    ),
+]
+
+
+class InterviewAnswerOutput(StrictStructuredOutput):
+    """§6.1 25-question interview evaluator: free-text, in-character answer
+    grounded in numbered memory statements, with citation numbers back to
+    them (empty list is valid when the agent answers from general identity
+    rather than a specific memory)."""
+
+    answer: InterviewAnswerText
+    citation_statement_numbers: list[int] = Field(min_length=0, max_length=10)
+
+
+INTERVIEW_SCORE_REASON_MAX_CHARS = 160
+
+
+class InterviewScoreOutput(StrictStructuredOutput):
+    """§6.1/§6.2 absolute scoring of one interview answer (1=incoherent or
+    ungrounded, 5=specific, consistent, and well-grounded in memory)."""
+
+    score: Annotated[int, Field(ge=1, le=5)]
+    reasoning: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=INTERVIEW_SCORE_REASON_MAX_CHARS,
+        ),
+    ]
+
+
 __all__ = [
     "DAY_ACTION_MAX_CHARS",
     "DAY_LOCATION_MAX_CHARS",
@@ -258,4 +298,8 @@ __all__ = [
     "PlanDisruptionOutput",
     "INTERVIEW_REASON_MAX_CHARS",
     "InterviewOutput",
+    "INTERVIEW_ANSWER_MAX_CHARS",
+    "InterviewAnswerOutput",
+    "INTERVIEW_SCORE_REASON_MAX_CHARS",
+    "InterviewScoreOutput",
 ]

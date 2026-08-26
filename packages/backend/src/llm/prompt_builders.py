@@ -16,7 +16,9 @@ from .structured_outputs import (
     HOURLY_ACTION_MAX_CHARS,
     IMPORTANCE_REASON_MAX_CHARS,
     INSIGHT_MAX_CHARS,
+    INTERVIEW_ANSWER_MAX_CHARS,
     INTERVIEW_REASON_MAX_CHARS,
+    INTERVIEW_SCORE_REASON_MAX_CHARS,
     MINUTE_ACTION_MAX_CHARS,
     PLAN_DISRUPTION_REASON_MAX_CHARS,
     QUESTION_MAX_CHARS,
@@ -50,6 +52,12 @@ ENCOUNTER_JSON_SHAPE = (
 SALIENT_QUESTIONS_JSON_SHAPE = (
     '{"questions": ["<question 1>", "<question 2>", "<question 3>"]}'
 )
+
+INTERVIEW_ANSWER_JSON_SHAPE = (
+    '{"answer": "<string>", "citation_statement_numbers": [1, 3]}'
+)
+
+INTERVIEW_SCORE_JSON_SHAPE = '{"score": <integer 1-5>, "reasoning": "<short string>"}'
 
 INSIGHTS_JSON_SHAPE = (
     '{"insights": ['
@@ -173,6 +181,45 @@ def build_interview_prompt(
         json_shape=INTERVIEW_JSON_SHAPE,
         question=question,
         reason_max_chars=str(INTERVIEW_REASON_MAX_CHARS),
+    )
+    return f"{memory_text}\n\n{instruction.strip()}"
+
+
+def build_interview_answer_prompt(
+    *,
+    agent_name: str,
+    question: str,
+    memories: list[MemoryObject],
+) -> str:
+    memory_text = _build_memory_statements_text(
+        agent_name=agent_name, memories=memories
+    )
+    instruction = render_template(
+        "interview_answer_instruction.md",
+        json_shape=INTERVIEW_ANSWER_JSON_SHAPE,
+        agent_name=agent_name,
+        question=question,
+        answer_max_chars=str(INTERVIEW_ANSWER_MAX_CHARS),
+    )
+    return f"{memory_text}\n\n{instruction.strip()}"
+
+
+def build_interview_score_prompt(
+    *,
+    agent_name: str,
+    question: str,
+    answer: str,
+    memories: list[MemoryObject],
+) -> str:
+    memory_text = _build_memory_statements_text(
+        agent_name=agent_name, memories=memories
+    )
+    instruction = render_template(
+        "interview_score_instruction.md",
+        json_shape=INTERVIEW_SCORE_JSON_SHAPE,
+        question=question,
+        answer=answer,
+        reasoning_max_chars=str(INTERVIEW_SCORE_REASON_MAX_CHARS),
     )
     return f"{memory_text}\n\n{instruction.strip()}"
 

@@ -847,23 +847,39 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
 
 ### 5-B. Interview evaluator + Ablation (§6 Controlled Evaluation)
 
-- [ ] `P2` interview evaluator(25문항, 5카테고리 x 5문항) 실행기를 구현한다
+- [x] `P2` interview evaluator(25문항, 5카테고리 x 5문항) 실행기를 구현한다
       (§6.1: self-knowledge, memory, plans, reactions, reflections)
   - Depends on: Reflection Loop 핵심 완료
+  - Implemented 2026-08-27: `agents/evaluation/interview_evaluator.py`의
+    `INTERVIEW_QUESTIONS`가 5카테고리 x 5문항(총 25개)을 한국어로 정의하고,
+    `InterviewEvaluator.run`이 질문마다 `memory_service.get_retrieval_memories`로
+    관련 기억을 조회해 `interview_answer_instruction.md` 프롬프트로 in-character
+    자유 응답(citation 포함)을 생성한 뒤, `interview_score_instruction.md`
+    프롬프트로 1~5점 절대 점수를 매긴다(`llm/structured_outputs.py`의
+    `InterviewAnswerOutput`/`InterviewScoreOutput`). `agents/evaluation/interview.py`의
+    grounded yes/no `InterviewGate`(§7.1 diffusion용)와는 별개 모듈 —
+    자유 응답 채점이라는 다른 계약이 필요해 분리했다.
   - DoD:
-    - [ ] 5개 카테고리 각각 5개 질문(총 25개)을 정의한다 — 논문 Appendix B
+    - [x] 5개 카테고리 각각 5개 질문(총 25개)을 정의한다 — 논문 Appendix B
           형식을 참고하되 이 프로젝트의 한국어 페르소나에 맞게 재작성한다
-    - [ ] 질문마다 agent의 memory stream을 조회해 답변을 생성한다
-    - [ ] 문항별 점수와 근거(사용된 memory id)를 저장한다
+    - [x] 질문마다 agent의 memory stream을 조회해 답변을 생성한다
+    - [x] 문항별 점수와 근거(사용된 memory id)를 저장한다
+          (`InterviewQuestionResult.citation_memory_ids`/`score_reasoning`)
 
-- [ ] `P2` interview 자동 채점/결과 포맷을 확정한다
+- [x] `P2` interview 자동 채점/결과 포맷을 확정한다
   - Depends on: interview evaluator 실행기 구현
+  - Implemented 2026-08-27: `InterviewEvaluationReport`가
+    `total_score`/`max_possible_score`/`category_scores`/`failed_question_count`를
+    계산하고 `to_json()`으로 직렬화한다. 파싱 실패는 예외를 던지지 않고
+    최저점(1점) + `*_parse_success=False`로 기록되어 `failed_question_count`에
+    잡힌다(`tests/test_interview_evaluator.py`).
   - DoD:
-    - [ ] 총점/카테고리 점수/실패 케이스를 한 포맷으로 저장한다
-    - [ ] 반복 실행 간 비교가 가능하다
-    - [ ] 논문처럼 순위 기반 비교가 필요하면 TrueSkill 등 상대 평가 대신,
+    - [x] 총점/카테고리 점수/실패 케이스를 한 포맷으로 저장한다
+    - [x] 반복 실행 간 비교가 가능하다 — 동일 JSON 포맷으로 여러 실행을
+          나란히 비교할 수 있다(비교 스크립트 자체는 범위 밖)
+    - [x] 논문처럼 순위 기반 비교가 필요하면 TrueSkill 등 상대 평가 대신,
           이 프로젝트 규모에 맞는 절대 점수 채점을 우선한다 (인간 평가자
-          100명 리크루트는 범위 밖)
+          100명 리크루트는 범위 밖) — 1~5점 절대 채점으로 확정
 
 - [ ] `P2` ablation 실험 플래그를 추가한다 (§6.2 conditions: no-observation,
       no-reflection-no-planning, no-reflection, full architecture)
