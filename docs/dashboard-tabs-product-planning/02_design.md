@@ -28,6 +28,9 @@
   snapshot에는 이미지 binary나 URL을 추가하지 않는다.
 - 목록은 작은 정사각형 crop, 개요는 얼굴 전체가 보이는 큰 `contain` 렌더링을
   사용한다. 미등록 주민은 깨진 이미지 대신 이름 첫 글자를 표시한다.
+- 후속 주민은 `.agents/skills/agent-crossing-portraits/`의 project skill을
+  사용한다. 이 skill은 persona 기반 prompt, 기존 asset의 style-reference 사용,
+  512×512 RGBA 정규화와 alpha 검증을 같은 계약으로 반복한다.
 
 1. **전역 상태**: 세계 시각, scheduler/cognition, 오류, 신선도
 2. **선택 agent 상태**: 개요와 5개 상세 탭

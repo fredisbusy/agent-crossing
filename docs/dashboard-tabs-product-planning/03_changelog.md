@@ -21,6 +21,8 @@
   traits, 고정 페르소나 문장 전체를 표시한다.
 - 6명의 게임풍 픽셀 초상화를 추가하고 주민 목록 썸네일과 개요 프로필에
   연결했다. 알 수 없는 `agent_id`는 기존 이니셜로 대체한다.
+- 같은 화풍을 재사용하도록 `agent-crossing-portraits` project skill과 prompt
+  template, 초상화 준비·검증 script를 추가했다.
 
 ## 의도적으로 남긴 범위
 

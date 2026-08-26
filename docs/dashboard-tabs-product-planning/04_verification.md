@@ -59,3 +59,6 @@ planning/settings 작업(`test_litellm_day_plan_retry`, planning graph 2건, set
 - 현재 공개 dashboard state/events API가 503으로 runtime agent 목록을 제공하지 않아,
   데이터가 결합된 목록·개요 화면의 공개 브라우저 최종 확인은 수행하지 못했다.
   정적 asset 응답, mapping/fallback 테스트와 production build까지 검증했다.
+- project backend virtualenv로 skill `quick_validate.py`를 실행해 `Skill is valid!`를
+  확인했다. 준비 script는 일반 RGBA와 실제 체크무늬 원본을 각각 512×512 투명
+  PNG로 변환했고, 검증 script는 현재 6개 asset을 모두 통과시켰다.

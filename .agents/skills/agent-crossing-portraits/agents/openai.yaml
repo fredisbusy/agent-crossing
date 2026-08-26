@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Crossing Portraits"
+  short_description: "게임풍 주민 초상화를 일관되게 생성하고 검증합니다"
+  default_prompt: "Use $agent-crossing-portraits to create a matching portrait for an Agent Crossing resident."
