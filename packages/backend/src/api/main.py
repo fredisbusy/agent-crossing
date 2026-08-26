@@ -9,6 +9,7 @@ import uuid
 from agents.persona_loader import PersonaLoader
 from agents.planning.lifecycle import PlanItemSnapshot
 from agents.relationship_diagnostics import build_relationship_snapshot
+from agents.relationships.rules import relationship_status_label
 from agents.memory.memory_manager import ObservationContext
 from api.schemas import (
     DashboardAgentResponse,
@@ -16,6 +17,8 @@ from api.schemas import (
     DashboardMemoryResponse,
     DashboardReflectionStatusResponse,
     DashboardRelationshipEvidenceResponse,
+    DashboardRelationshipEventResponse,
+    DashboardRelationshipMetricsResponse,
     DashboardRelationshipResponse,
     DashboardStateResponse,
     DashboardWorldResponse,
@@ -69,7 +72,9 @@ from persistence.repository import (
 logger = logging.getLogger(__name__)
 
 
-def _runtime_config(*, persona_dir: Path, persona_names: list[str]) -> WorldRuntimeConfig:
+def _runtime_config(
+    *, persona_dir: Path, persona_names: list[str]
+) -> WorldRuntimeConfig:
     return WorldRuntimeConfig(
         agent_persona_names=persona_names,
         base_url=LLM_BASE_URL,
@@ -210,9 +215,7 @@ async def on_shutdown() -> None:
         try:
             await runtime.pause_scheduler()
             if repository is not None and current_session_id is not None:
-                state = runtime.export_save_state(
-                    scheduler_was_running=was_running
-                )
+                state = runtime.export_save_state(scheduler_was_running=was_running)
                 await asyncio.to_thread(
                     repository.save,
                     session_id=current_session_id,
@@ -339,9 +342,7 @@ async def post_current_session_save(
     request: SessionSaveRequest,
 ) -> SessionSummaryResponse:
     repository = _require_session_repository()
-    session_id = cast(
-        uuid.UUID | None, getattr(app.state, "current_session_id", None)
-    )
+    session_id = cast(uuid.UUID | None, getattr(app.state, "current_session_id", None))
     if session_id is None:
         raise HTTPException(status_code=409, detail="there is no active session")
     lock = cast(asyncio.Lock, app.state.session_lock)
@@ -525,11 +526,7 @@ def _spatial_response(snapshot: SpatialWorldSnapshot) -> SpatialWorldResponse:
     return SpatialWorldResponse(
         session_id=(
             str(current_session_id)
-            if (
-                current_session_id := getattr(
-                    app.state, "current_session_id", None
-                )
-            )
+            if (current_session_id := getattr(app.state, "current_session_id", None))
             else None
         ),
         revision=snapshot.revision,
@@ -625,6 +622,7 @@ def _dashboard_state_response(
         if runtime_agent is None:
             continue
         reflection = runtime_agent.brain.reflection_graph.reflection
+        all_memories = list(runtime_agent.memory_service.memory_stream.snapshot())
         memories = runtime_agent.memory_service.get_recent_memories(limit=memory_limit)
         relationships: list[DashboardRelationshipResponse] = []
         for target_agent in runtime.agents:
@@ -635,17 +633,55 @@ def _dashboard_state_response(
                 identity_stable_set=list(
                     runtime_agent.profile.fixed.identity_stable_set
                 ),
-                memories=memories,
+                memories=all_memories,
                 target_agent_id=target_agent_id,
                 target_name=target_agent.name,
+            )
+            relationship_state, relationship_events = (
+                runtime.relationships.pair_snapshot(
+                    spatial_agent.agent_id, target_agent_id
+                )
             )
             relationships.append(
                 DashboardRelationshipResponse(
                     target_agent_id=relationship.target_agent_id,
                     target_name=relationship.target_name,
-                    affinity_score=relationship.affinity_score,
-                    measurement=relationship.measurement,
+                    measurement="modeled_v1",
+                    metrics=DashboardRelationshipMetricsResponse(
+                        **vars(relationship_state.metrics)
+                    ),
+                    status_label=relationship_status_label(relationship_state.metrics),
+                    revision=relationship_state.revision,
+                    updated_at=(
+                        relationship_state.updated_at.isoformat()
+                        if relationship_state.updated_at is not None
+                        else None
+                    ),
+                    last_interaction_at=(
+                        relationship_state.last_interaction_at.isoformat()
+                        if relationship_state.last_interaction_at is not None
+                        else None
+                    ),
                     summary=relationship.summary,
+                    summary_status=relationship.summary_status,
+                    evidence_total=relationship.evidence_total,
+                    has_more_evidence=relationship.has_more_evidence,
+                    recent_events=[
+                        DashboardRelationshipEventResponse(
+                            id=event.id,
+                            event_type=event.event_type.value,
+                            occurred_at=event.occurred_at.isoformat(),
+                            familiarity_delta=event.applied_delta.familiarity,
+                            trust_delta=event.applied_delta.trust,
+                            affinity_delta=event.applied_delta.affinity,
+                            tension_delta=event.applied_delta.tension,
+                            romantic_interest_delta=(
+                                event.applied_delta.romantic_interest
+                            ),
+                            rule_version=event.rule_version,
+                        )
+                        for event in relationship_events
+                    ],
                     evidence=[
                         DashboardRelationshipEvidenceResponse(
                             source=evidence.source,
@@ -673,6 +709,16 @@ def _dashboard_state_response(
                 name=spatial_agent.name,
                 current_action=spatial_agent.current_action,
                 destination=spatial_agent.destination,
+                current_location_path=(
+                    location.location_path
+                    if (
+                        location := _require_spatial_runtime().world_map.location_at(
+                            spatial_agent.tile_position
+                        )
+                    )
+                    is not None
+                    else None
+                ),
                 tile_position=_map_point_response(spatial_agent.tile_position),
                 route_remaining=spatial_agent.route_remaining,
                 bubble_kind=spatial_agent.bubble_kind,

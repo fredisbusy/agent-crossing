@@ -14,7 +14,10 @@
       "태오는 낯가림 없이 먼저 말을 걸고 금방 친해지는 성격이다.",
       "태오는 수진의 친절함에 호감을 느끼고 카페에 자주 들르지만, 아직 마을의 다른 사정은 잘 모른다.",
       "태오는 사람들과 어울리는 걸 좋아해 마을 행사나 모임에 적극적으로 끼고 싶어 한다."
-    ]
+    ],
+    "relationship_baselines": {
+      "sujin": { "familiarity": 35, "trust": 20, "affinity": 45, "tension": 0, "romantic_interest": 35 }
+    }
   },
   "extended_persona": {
     "lifestyle_and_routine": [

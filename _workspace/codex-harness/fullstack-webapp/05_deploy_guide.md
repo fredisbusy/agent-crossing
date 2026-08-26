@@ -29,3 +29,9 @@ No deployment configuration change is required. The existing Vite development se
 
 No deployment configuration change is required. The existing dashboard state endpoint
 and frontend bundle carry the additive relationship contract.
+
+## 2026-08-26 rollout
+
+Apply Alembic revision `0004` before the updated backend writes projections. Deploy the
+backend/shared/frontend as one coordinated contract change, then save/reload a session
+and compare relationship revisions and event IDs before and after restore.

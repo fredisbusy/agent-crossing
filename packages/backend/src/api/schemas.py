@@ -1,5 +1,6 @@
 from typing import Literal
 
+from agents.relationships import RelationshipEventType
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -220,12 +221,49 @@ class DashboardRelationshipEvidenceResponse(BaseModel):
     created_at: str | None
 
 
+class DashboardRelationshipMetricsResponse(BaseModel):
+    familiarity: int = Field(ge=0, le=100)
+    trust: int = Field(ge=-100, le=100)
+    affinity: int = Field(ge=-100, le=100)
+    tension: int = Field(ge=0, le=100)
+    romantic_interest: int = Field(ge=0, le=100)
+
+
+class DashboardRelationshipEventResponse(BaseModel):
+    id: str
+    event_type: RelationshipEventType
+    occurred_at: str
+    familiarity_delta: int = Field(ge=-100, le=100)
+    trust_delta: int = Field(ge=-100, le=100)
+    affinity_delta: int = Field(ge=-100, le=100)
+    tension_delta: int = Field(ge=-100, le=100)
+    romantic_interest_delta: int = Field(ge=-100, le=100)
+    rule_version: Literal["relationship-v1"]
+
+
 class DashboardRelationshipResponse(BaseModel):
     target_agent_id: str
     target_name: str
-    affinity_score: int | None
-    measurement: Literal["not_modeled"]
+    measurement: Literal["modeled_v1"]
+    metrics: DashboardRelationshipMetricsResponse
+    status_label: Literal[
+        "긴장된 관계",
+        "불신하는 관계",
+        "거리감 있는 관계",
+        "아직 낯선 사이",
+        "가깝고 신뢰하는 관계",
+        "인간적으로 호감 있는 관계",
+        "신뢰하는 관계",
+        "알아가는 관계",
+    ]
+    revision: int = Field(ge=0)
+    updated_at: str | None
+    last_interaction_at: str | None
     summary: str | None
+    summary_status: Literal["available", "no_explicit_evidence"]
+    evidence_total: int = Field(ge=0)
+    has_more_evidence: bool
+    recent_events: list[DashboardRelationshipEventResponse]
     evidence: list[DashboardRelationshipEvidenceResponse]
 
 
@@ -234,6 +272,7 @@ class DashboardAgentResponse(BaseModel):
     name: str
     current_action: str
     destination: str | None
+    current_location_path: str | None
     tile_position: WorldMapPointResponse
     route_remaining: int
     bubble_kind: Literal["speech", "thought", "action"]

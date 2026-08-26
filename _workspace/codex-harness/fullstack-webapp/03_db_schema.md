@@ -14,3 +14,12 @@ across backend restarts remains a separate append-only event-journal enhancement
 
 No migration is required. Summaries are derived at read time from existing persona and
 memory data; numeric relationship state is intentionally not persisted or fabricated.
+
+## 2026-08-26 migrations 0004–0005
+
+- `session_relationship_states`: one bounded five-axis state per session/subject/target.
+- `session_relationship_events`: deterministic event ID, source key, applied deltas,
+  before/after metrics, rule version, and occurrence time.
+- Both tables cascade with the session and are rebuilt from snapshot v4 on save.
+- `0005` adds `romantic_interest` and its event delta independently from interpersonal
+  `affinity`, preserving existing snapshots and rows at a neutral zero baseline.

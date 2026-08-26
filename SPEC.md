@@ -347,7 +347,7 @@ react 정책:
   발화를 상대 agent의 observation memory로 저장하며, day plan 생성이
   `PlanningCoordinator._generate_day_plan`을 통해 최근 관련 기억을 retrieval 후보로
   포함해 실제 계획에 반영한다(§3.4.3 coordination 패턴, 특정 시나리오에 하드코딩하지 않음).
-- 관계 영향에는 별도 수치 가중치 공식이 없다. 논문 원문(§4.3.1)은 관계/맥락 영향을
+- 논문 원문의 관계 영향에는 별도 수치 가중치 공식이 없다. 논문 원문(§4.3.1)은 관계/맥락 영향을
   "What is [observer]'s relationship with the [observed entity]?" /
   "[Observed entity] is [action status of the observed entity]" 두 retrieval
   질의의 답을 요약해 프롬프트에 넣는 방식으로만 정의한다("The context summary is
@@ -355,9 +355,50 @@ react 정책:
   their answers summarized together."). §7.1.1/§7.1.2의 네트워크 밀도 `eta`는 평가
   지표일 뿐 계획 우선순위 가중치가 아니다. 따라서 위 두 요약을 retrieval
   candidate/persona_background에 반영하는 현재 구현(`EncounterGate`,
-  `_recent_planning_relevant_memories`)이 논문 스펙을 충족하는 전부이며, 전용
-  `RelationshipState` 가중치 공식을 추가로 설계할 필요는 없다.
+  `_recent_planning_relevant_memories`)이 논문 스펙을 충족한다. 아래 수치 모델은
+  논문 공식을 사칭하지 않는 Agent Crossing 제품 확장이며 정성 retrieval을 대체하거나
+  계획·행동 프롬프트에 feedback하지 않는다.
 - 정보 확산 측정 지표: seed fact 인지 agent 비율 (미구현, §5-A)
+
+### 8.1 방향성 관계 상태 (Agent Crossing extension, relationship-v1)
+
+- 관계는 game session 안에서 `(subject_agent_id, target_agent_id)` 방향별로 독립한다.
+  자기 관계는 금지한다. persona에 명시 baseline이 있으면 그 값을 사용하고 미지정
+  방향쌍은 중립값으로 생성한다. 자연어 persona를 런타임에서 숫자로 추측하지 않는다.
+- 축은 `familiarity 0..100`, `trust -100..100`, `affinity -100..100`,
+  `tension 0..100`, `romantic_interest 0..100`이다. `affinity`는 친구·이웃·동료로서의
+  인간적 호감이고 `romantic_interest`는 연애 관계에 대한 관심이다. 연애 의향 없음은
+  0으로 나타내며 불편함·불신은 tension/trust로 표현한다.
+- 평범한 대화·도움은 `romantic_interest`를 올리지 않는다. 이 축은
+  `ROMANTIC_INTEREST_RECOGNIZED +8`, `ROMANTIC_GESTURE_WELCOMED +8`,
+  `ROMANTIC_BOUNDARY_SET -10`처럼 명시적인 애정·경계 event에서만 변한다.
+  모든 축은 범위를 clamp하고 state `revision`을 증가시킨다.
+- LLM은 delta 숫자를 만들지 않는다. 확정 도메인 이벤트만 고정 NORMAL delta를
+  요청하며 동일 `(subject,target,source_event_id,event_type)`은 한 번만 적용한다.
+
+| 이벤트                          |  친숙도 |    신뢰 |    호감 |     긴장 |
+| ------------------------------- | ------: | ------: | ------: | -------: |
+| `DIALOGUE_COMPLETED`            |      +2 |       0 |      +2 |       -2 |
+| `HELP_GIVEN` / `HELP_RECEIVED`  | +2 / +2 | +2 / +6 | +2 / +4 |  -2 / -2 |
+| `PERSONAL_DISCLOSURE_RECEIVED`  |      +4 |      +4 |      +2 |        0 |
+| `COMPLIMENT_RECEIVED`           |      +2 |      +2 |      +4 |       -2 |
+| `PROMISE_MADE` / `PROMISE_KEPT` | +2 / +2 | +2 / +8 | +2 / +4 |   0 / -4 |
+| `PROMISE_BROKEN`                |       0 |     -10 |      -4 |       +6 |
+| `CONFLICT` / `INSULT_RECEIVED`  |  +2 / 0 | -4 / -6 | -6 / -8 | +8 / +10 |
+| `APOLOGY_ACCEPTED`              |      +2 |      +4 |      +4 |       -8 |
+
+- game-day/방향쌍별 gross cap은 친숙도 12, 신뢰 24, 인간적 호감 20, 긴장 24,
+  이성적 관심 16이다.
+- 공개 상태 라벨은 backend가 다음 우선순위로 결정한다: 긴장≥60 `긴장된 관계`,
+  신뢰≤-40 `불신하는 관계`, 인간적 호감≤-40 `거리감 있는 관계`, 친숙도<15
+  `아직 낯선 사이`, 신뢰≥50이면서 인간적 호감≥50 `가깝고 신뢰하는 관계`,
+  인간적 호감≥40 `인간적으로 호감 있는 관계`, 신뢰≥40 `신뢰하는 관계`, 나머지
+  `알아가는 관계`. 프런트엔드는 별도 임계값을 만들지 않는다.
+- v1 자동 연결은 실제 발화가 있는 대화가 끝날 때 양방향
+  `DIALOGUE_COMPLETED`를 1회 기록하는 것까지다. 도움·약속·갈등 규칙은 향후
+  canonical committed action signal만 호출한다. plan/current_action 문자열은 쓰지 않는다.
+- `WorldRuntime.relationships`가 상태와 event ledger를 소유한다. `RuntimeSaveState`
+  schema v4 snapshot이 복원 SSOT이고 DB 관계 테이블은 재생성 가능한 projection이다.
 
 관계 형성 지표:
 
@@ -412,9 +453,9 @@ Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하�
 - 선택 agent의 관계 요약은 해당 agent 자신의 `identity_stable_set`과 private
   memory stream에서 상대를 언급한 근거만 사용한다. 역방향 agent의 기억으로
   관계 정보를 보완하거나 대칭 복사하지 않는다.
-- 숫자형 affinity는 별도 `RelationshipState`와 업데이트 공식이 정의되기 전까지
-  `null / not_modeled`로 반환한다. memory importance와 retrieval score는 호감도가
-  아니므로 관계 점수로 변환하지 않는다.
+- 관계 API는 `measurement=modeled_v1`, 다섯 축, revision, 최근 event와 적용 delta를
+  반환한다. 정성 evidence도 함께 제공하되 memory importance/retrieval score를
+  관계 점수로 변환하지 않는다.
 
 God mode 입력:
 

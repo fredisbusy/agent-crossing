@@ -54,3 +54,12 @@
 - Verify missing evidence yields no summary and no numeric score.
 - Unit-test strict parsing of relationship evidence and malformed evidence rejection.
 - Build the frontend and verify both the overview panel and Relationship tab publicly.
+
+## Modeled relationship verification — 2026-08-26
+
+- Test directionality, idempotency, clamps, daily caps, and snapshot round-trip.
+- Test that ordinary social events leave romantic interest unchanged and only explicit
+  romantic events change it.
+- Test strict score/event parsing and malformed range rejection.
+- Verify master-detail selection, Korean labels, 44px controls, 390/720px layouts,
+  authoritative current location, and public diagnostic-string filtering.

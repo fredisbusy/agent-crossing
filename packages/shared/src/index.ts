@@ -85,10 +85,64 @@ export interface DashboardRelationshipEvidence {
 export interface DashboardRelationship {
   target_agent_id: AgentId;
   target_name: string;
-  affinity_score: number | null;
-  measurement: "not_modeled";
+  measurement: "modeled_v1";
+  metrics: DashboardRelationshipMetrics;
+  status_label: DashboardRelationshipStatusLabel;
+  revision: number;
+  updated_at: string | null;
+  last_interaction_at: string | null;
   summary: string | null;
+  summary_status: "available" | "no_explicit_evidence";
+  evidence_total: number;
+  has_more_evidence: boolean;
+  recent_events: DashboardRelationshipEvent[];
   evidence: DashboardRelationshipEvidence[];
+}
+
+export type DashboardRelationshipStatusLabel =
+  | "긴장된 관계"
+  | "불신하는 관계"
+  | "거리감 있는 관계"
+  | "아직 낯선 사이"
+  | "가깝고 신뢰하는 관계"
+  | "인간적으로 호감 있는 관계"
+  | "신뢰하는 관계"
+  | "알아가는 관계";
+
+export interface DashboardRelationshipMetrics {
+  familiarity: number;
+  trust: number;
+  affinity: number;
+  tension: number;
+  romantic_interest: number;
+}
+
+export type DashboardRelationshipEventType =
+  | "DIALOGUE_COMPLETED"
+  | "HELP_GIVEN"
+  | "HELP_RECEIVED"
+  | "PERSONAL_DISCLOSURE_RECEIVED"
+  | "COMPLIMENT_RECEIVED"
+  | "PROMISE_MADE"
+  | "PROMISE_KEPT"
+  | "PROMISE_BROKEN"
+  | "CONFLICT"
+  | "INSULT_RECEIVED"
+  | "APOLOGY_ACCEPTED"
+  | "ROMANTIC_INTEREST_RECOGNIZED"
+  | "ROMANTIC_GESTURE_WELCOMED"
+  | "ROMANTIC_BOUNDARY_SET";
+
+export interface DashboardRelationshipEvent {
+  id: string;
+  event_type: DashboardRelationshipEventType;
+  occurred_at: string;
+  familiarity_delta: number;
+  trust_delta: number;
+  affinity_delta: number;
+  tension_delta: number;
+  romantic_interest_delta: number;
+  rule_version: string;
 }
 
 export interface DashboardAgent {
@@ -96,6 +150,7 @@ export interface DashboardAgent {
   name: string;
   current_action: string;
   destination: string | null;
+  current_location_path: string | null;
   tile_position: AgentPosition;
   route_remaining: number;
   bubble_kind: "speech" | "thought" | "action";

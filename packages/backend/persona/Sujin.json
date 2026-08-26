@@ -14,7 +14,10 @@
       "수진과 지호는 책과 일상 이야기를 편안하게 나누는 오랜 친구다.",
       "수진은 지호를 믿을 만한 친구로 여기며 그 이상의 관계를 전제하지 않는다.",
       "수진은 타인의 기대보다 자신의 판단과 삶의 리듬에 따라 관계를 선택한다."
-    ]
+    ],
+    "relationship_baselines": {
+      "jiho": { "familiarity": 75, "trust": 65, "affinity": 35, "tension": 0, "romantic_interest": 0 }
+    }
   },
   "extended_persona": {
     "lifestyle_and_routine": [

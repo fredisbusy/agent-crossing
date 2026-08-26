@@ -3,6 +3,7 @@ import datetime
 import itertools
 import logging
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,13 @@ from agents.decision_diagnostics import (
     build_plan_disruption_diagnostics,
 )
 from agents.reaction.encounter import EncounterDecisionInput, EncounterGate
+from agents.relationships import (
+    RelationshipEvent,
+    RelationshipEventType,
+    RelationshipMetrics,
+    RelationshipService,
+    RelationshipState,
+)
 from agents.planning.react_gate import (
     PlanDisruptionDecision,
     PlanDisruptionGate,
@@ -38,6 +46,10 @@ from persistence.contracts import (
     CharacterSave,
     DashboardEventSave,
     MemorySave,
+    RelationshipDeltaSave,
+    RelationshipEventSave,
+    RelationshipMetricsSave,
+    RelationshipStateSave,
     RuntimeSaveState,
     sanitized_diagnostics,
 )
@@ -166,6 +178,26 @@ class WorldRuntime:
         self._last_perceived_action: dict[str, str] = {}
         self._plan_react_thread: threading.Thread | None = None
         self._dashboard_events: DashboardEventBuffer = DashboardEventBuffer()
+        relationship_baselines: dict[tuple[str, str], RelationshipMetrics] = {}
+        for agent in agents:
+            profile = getattr(agent, "profile", None)
+            fixed = getattr(profile, "fixed", None)
+            for target_id, baseline in getattr(
+                fixed, "relationship_baselines", {}
+            ).items():
+                relationship_baselines[(str(agent.identity.id), target_id)] = (
+                    RelationshipMetrics(
+                        familiarity=baseline.familiarity,
+                        trust=baseline.trust,
+                        affinity=baseline.affinity,
+                        tension=baseline.tension,
+                        romantic_interest=baseline.romantic_interest,
+                    )
+                )
+        self.relationships = RelationshipService(
+            (str(agent.identity.id) for agent in agents),
+            baselines=relationship_baselines,
+        )
         self.planning_error: str | None = None
 
     def step(self) -> SimulationStepResult:
@@ -225,6 +257,11 @@ class WorldRuntime:
                         text=step_result.observability.thought,
                     )
             if pair_key is not None and dialogue_was_active and not session.is_active:
+                self._record_completed_dialogue_relationships(
+                    pair_key=pair_key,
+                    session=session,
+                    occurred_at=self.current_time,
+                )
                 self._pair_cooldown_until[pair_key] = self.current_time
                 self.sessions.pop(pair_key, None)
             if self.spatial_runtime is not None:
@@ -887,6 +924,11 @@ class WorldRuntime:
                         text=step_result.observability.thought,
                     )
             if dialogue_was_active and not session.is_active:
+                self._record_completed_dialogue_relationships(
+                    pair_key=pair_key,
+                    session=session,
+                    occurred_at=self.current_time,
+                )
                 self._pair_cooldown_until[pair_key] = self.current_time
                 self.sessions.pop(pair_key, None)
             if step_result.parse_failure:
@@ -894,6 +936,28 @@ class WorldRuntime:
             if not step_result.reply:
                 self.silent_turns += 1
             self._record_dashboard_event(speaker=speaker, result=step_result)
+
+    def _record_completed_dialogue_relationships(
+        self,
+        *,
+        pair_key: str,
+        session: WorldConversationSession,
+        occurred_at: datetime.datetime,
+    ) -> None:
+        """Apply one deterministic, bidirectional update per completed dialogue."""
+        if not session.history:
+            return
+        source_event_id = f"dialogue:{pair_key}:{self.turn}"
+        left, right = session.agents
+        for subject, target in ((left, right), (right, left)):
+            self.relationships.record_event(
+                subject_agent_id=str(subject.identity.id),
+                target_agent_id=str(target.identity.id),
+                event_type=RelationshipEventType.DIALOGUE_COMPLETED,
+                source_event_id=source_event_id,
+                occurred_at=occurred_at,
+                source_kind="dialogue",
+            )
 
     def _record_dashboard_event(
         self, *, speaker: SimAgent, result: SimulationStepResult
@@ -998,7 +1062,14 @@ class WorldRuntime:
     def export_save_state(self, *, scheduler_was_running: bool) -> RuntimeSaveState:
         if self.spatial_runtime is None:
             raise RuntimeError("spatial runtime is required for session persistence")
-        if self.scheduler_running or self.cognitive_active:
+        cognitive_turn_in_flight = any(
+            not task.done() for task in self._cognitive_tasks.values()
+        )
+        plan_refresh_in_flight = bool(
+            self._plan_refresh_thread is not None
+            and self._plan_refresh_thread.is_alive()
+        )
+        if self.scheduler_running or cognitive_turn_in_flight or plan_refresh_in_flight:
             raise RuntimeError("runtime must be quiescent before it can be saved")
         with self._step_lock:
             spatial_snapshot = self.spatial_runtime.snapshot()
@@ -1109,6 +1180,40 @@ class WorldRuntime:
                 characters=characters,
                 dashboard_events=dashboard_events,
                 position_history=self.spatial_runtime.export_position_history(),
+                relationship_states=[
+                    RelationshipStateSave(
+                        subject_agent_id=state.subject_agent_id,
+                        target_agent_id=state.target_agent_id,
+                        metrics=RelationshipMetricsSave(**vars(state.metrics)),
+                        last_interaction_at=state.last_interaction_at,
+                        updated_at=state.updated_at,
+                        revision=state.revision,
+                    )
+                    for state in self.relationships.states()
+                ],
+                relationship_events=[
+                    RelationshipEventSave(
+                        id=event.id,
+                        source_event_id=event.source_event_id,
+                        subject_agent_id=event.subject_agent_id,
+                        target_agent_id=event.target_agent_id,
+                        event_type=event.event_type.value,
+                        occurred_at=event.occurred_at,
+                        requested_delta=RelationshipDeltaSave(
+                            **vars(event.requested_delta)
+                        ),
+                        applied_delta=RelationshipDeltaSave(
+                            **vars(event.applied_delta)
+                        ),
+                        before=RelationshipMetricsSave(**vars(event.before)),
+                        after=RelationshipMetricsSave(**vars(event.after)),
+                        rule_version=event.rule_version,
+                        source_kind=event.source_kind,
+                    )
+                    for event in self.relationships.events()
+                ],
+                relationship_event_namespace=str(self.relationships.event_namespace),
+                relationship_event_ids_verified=(self.relationships.event_ids_verified),
             )
 
     def restore_save_state(self, state: RuntimeSaveState) -> None:
@@ -1231,6 +1336,43 @@ class WorldRuntime:
                     for event in state.dashboard_events
                 ]
             )
+            if state.relationship_states:
+                self.relationships.restore(
+                    states=[
+                        RelationshipState(
+                            subject_agent_id=item.subject_agent_id,
+                            target_agent_id=item.target_agent_id,
+                            metrics=RelationshipMetrics(**item.metrics.model_dump()),
+                            last_interaction_at=item.last_interaction_at,
+                            updated_at=item.updated_at,
+                            revision=item.revision,
+                        )
+                        for item in state.relationship_states
+                    ],
+                    events=[
+                        RelationshipEvent(
+                            id=item.id,
+                            source_event_id=item.source_event_id,
+                            subject_agent_id=item.subject_agent_id,
+                            target_agent_id=item.target_agent_id,
+                            event_type=RelationshipEventType(item.event_type),
+                            occurred_at=item.occurred_at,
+                            requested_delta=RelationshipMetrics(
+                                **item.requested_delta.model_dump()
+                            ),
+                            applied_delta=RelationshipMetrics(
+                                **item.applied_delta.model_dump()
+                            ),
+                            before=RelationshipMetrics(**item.before.model_dump()),
+                            after=RelationshipMetrics(**item.after.model_dump()),
+                            rule_version=item.rule_version,
+                            source_kind=item.source_kind,
+                        )
+                        for item in state.relationship_events
+                    ],
+                    event_namespace=uuid.UUID(state.relationship_event_namespace),
+                    verify_event_ids=state.relationship_event_ids_verified,
+                )
 
 
 def build_world_runtime(

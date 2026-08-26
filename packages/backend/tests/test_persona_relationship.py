@@ -23,3 +23,7 @@ def test_jiho_crush_is_private_and_sujin_retains_autonomy() -> None:
     assert "숨은 감정" not in sujin_knowledge
     assert "그 이상의 관계를 전제하지 않는다" in sujin_knowledge
     assert "자신의 판단" in sujin_knowledge
+    assert jiho.relationship_baselines["sujin"].affinity == 65
+    assert jiho.relationship_baselines["sujin"].romantic_interest == 65
+    assert sujin.relationship_baselines["jiho"].affinity == 35
+    assert sujin.relationship_baselines["jiho"].romantic_interest == 0

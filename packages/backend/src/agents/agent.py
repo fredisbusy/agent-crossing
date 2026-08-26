@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -11,9 +11,21 @@ class AgentIdentity:
     traits: list[str]  # 성격 특성 (예: 친절함, 호기심 등)
 
 
+@dataclass(frozen=True)
+class RelationshipBaseline:
+    familiarity: int
+    trust: int
+    affinity: int
+    tension: int
+    romantic_interest: int = 0
+
+
 @dataclass
 class FixedPersona:
     identity_stable_set: list[str]
+    relationship_baselines: dict[str, RelationshipBaseline] = field(
+        default_factory=dict
+    )
 
 
 @dataclass

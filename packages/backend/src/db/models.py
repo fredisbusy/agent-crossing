@@ -84,13 +84,19 @@ class GameSessionRecord(Base):
     save_version: Mapped[int] = mapped_column(Integer, nullable=False)
     snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
     )
     updated_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
     )
     saved_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
     )
 
 
@@ -106,7 +112,9 @@ class SessionCharacterRecord(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     session_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("game_sessions.id", ondelete="CASCADE"),
+        nullable=False,
     )
     agent_id: Mapped[str] = mapped_column(String(80), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -161,9 +169,13 @@ class SessionMemoryRecord(Base):
         Vector(EMBEDDING_DIMENSION), nullable=False
     )
     game_created_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
-    last_accessed_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    last_accessed_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False
+    )
     inserted_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
     )
 
 
@@ -275,7 +287,9 @@ class SessionCognitiveLogRecord(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     session_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("game_sessions.id", ondelete="CASCADE"),
+        nullable=False,
     )
     character_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -324,7 +338,9 @@ class SessionPositionHistoryRecord(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     session_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("game_sessions.id", ondelete="CASCADE"),
+        nullable=False,
     )
     character_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -338,3 +354,99 @@ class SessionPositionHistoryRecord(Base):
     tile_y: Mapped[int] = mapped_column(Integer, nullable=False)
     destination_path: Mapped[str | None] = mapped_column(Text)
     current_action: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class SessionRelationshipStateRecord(Base):
+    __tablename__ = "session_relationship_states"
+    __table_args__ = (
+        UniqueConstraint("session_id", "subject_character_id", "target_character_id"),
+        CheckConstraint(
+            "subject_character_id <> target_character_id",
+            name="session_relationship_states_no_self_check",
+        ),
+        CheckConstraint(
+            "familiarity BETWEEN 0 AND 100 AND trust BETWEEN -100 AND 100 "
+            "AND affinity BETWEEN -100 AND 100 AND tension BETWEEN 0 AND 100 "
+            "AND romantic_interest BETWEEN 0 AND 100",
+            name="session_relationship_states_metric_range_check",
+        ),
+        Index(
+            "session_relationship_states_subject_idx",
+            "session_id",
+            "subject_character_id",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("game_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    subject_character_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("session_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    target_character_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("session_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    familiarity: Mapped[int] = mapped_column(Integer, nullable=False)
+    trust: Mapped[int] = mapped_column(Integer, nullable=False)
+    affinity: Mapped[int] = mapped_column(Integer, nullable=False)
+    tension: Mapped[int] = mapped_column(Integer, nullable=False)
+    romantic_interest: Mapped[int] = mapped_column(Integer, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_interaction_at: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+    updated_at: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+
+
+class SessionRelationshipEventRecord(Base):
+    __tablename__ = "session_relationship_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id",
+            "subject_character_id",
+            "target_character_id",
+            "source_event_id",
+            "event_type",
+        ),
+        Index(
+            "session_relationship_events_pair_time_idx",
+            "session_id",
+            "subject_character_id",
+            "target_character_id",
+            "occurred_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("game_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    subject_character_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("session_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    target_character_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("session_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_event_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    familiarity_delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    trust_delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    affinity_delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    tension_delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    romantic_interest_delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    before_metrics: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
+    after_metrics: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
+    occurred_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    rule_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    source_kind: Mapped[str] = mapped_column(String(40), nullable=False)

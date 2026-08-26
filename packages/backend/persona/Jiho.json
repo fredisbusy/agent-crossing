@@ -14,7 +14,10 @@
       "지호는 수진의 오랜 친구이며 혼자 그녀를 좋아하지만, 그 마음을 관계의 의무나 압박으로 만들지 않는다.",
       "지호는 상대의 선택과 사생활을 존중하고 거절이나 거리 두기를 담담히 받아들인다.",
       "지호는 감정을 서두르기보다 자기 일상과 우정을 성실하게 가꾸는 사람이다."
-    ]
+    ],
+    "relationship_baselines": {
+      "sujin": { "familiarity": 75, "trust": 60, "affinity": 65, "tension": 5, "romantic_interest": 65 }
+    }
   },
   "extended_persona": {
     "lifestyle_and_routine": [

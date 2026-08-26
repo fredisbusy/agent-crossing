@@ -17,6 +17,8 @@ from db.models import (
     SessionMemoryRecord,
     SessionPlanItemRecord,
     SessionPositionHistoryRecord,
+    SessionRelationshipEventRecord,
+    SessionRelationshipStateRecord,
 )
 from db.session import SessionLocal
 from persistence.contracts import RuntimeSaveState
@@ -67,8 +69,7 @@ class GameSessionRepository:
     def latest_session(self) -> tuple[SessionSummary, RuntimeSaveState] | None:
         with SessionLocal.begin() as db:
             records = db.scalars(
-                select(GameSessionRecord)
-                .order_by(
+                select(GameSessionRecord).order_by(
                     (GameSessionRecord.status == GameSessionStatus.ACTIVE).desc(),
                     GameSessionRecord.saved_at.desc(),
                 )
@@ -82,7 +83,9 @@ class GameSessionRepository:
                 return _summary(record), state
         return None
 
-    def get(self, session_id: uuid.UUID) -> tuple[SessionSummary, RuntimeSaveState] | None:
+    def get(
+        self, session_id: uuid.UUID
+    ) -> tuple[SessionSummary, RuntimeSaveState] | None:
         with SessionLocal() as db:
             record = db.get(GameSessionRecord, session_id)
             if record is None:
@@ -258,6 +261,16 @@ def _mark_all_saved(db: Session) -> None:
 
 
 def _delete_projection(db: Session, *, session_id: uuid.UUID) -> None:
+    db.execute(
+        delete(SessionRelationshipEventRecord).where(
+            SessionRelationshipEventRecord.session_id == session_id
+        )
+    )
+    db.execute(
+        delete(SessionRelationshipStateRecord).where(
+            SessionRelationshipStateRecord.session_id == session_id
+        )
+    )
     db.execute(
         delete(SessionPositionHistoryRecord).where(
             SessionPositionHistoryRecord.session_id == session_id
@@ -435,6 +448,50 @@ def _write_projection(
                 action_summary=event.action_summary,
                 decision_process=event.decision_process,
                 governance_trace=event.governance_trace,
+            )
+        )
+    relationship_namespace = uuid.UUID("605a2c89-32a2-5f0d-a37f-43127cefed12")
+    for relationship in state.relationship_states:
+        db.add(
+            SessionRelationshipStateRecord(
+                id=uuid.uuid5(
+                    relationship_namespace,
+                    f"{session_id}:{relationship.subject_agent_id}:{relationship.target_agent_id}",
+                ),
+                session_id=session_id,
+                subject_character_id=character_ids[relationship.subject_agent_id],
+                target_character_id=character_ids[relationship.target_agent_id],
+                familiarity=relationship.metrics.familiarity,
+                trust=relationship.metrics.trust,
+                affinity=relationship.metrics.affinity,
+                tension=relationship.metrics.tension,
+                romantic_interest=relationship.metrics.romantic_interest,
+                revision=relationship.revision,
+                last_interaction_at=relationship.last_interaction_at,
+                updated_at=relationship.updated_at,
+            )
+        )
+    for relationship_event in state.relationship_events:
+        db.add(
+            SessionRelationshipEventRecord(
+                id=uuid.UUID(relationship_event.id),
+                session_id=session_id,
+                subject_character_id=character_ids[relationship_event.subject_agent_id],
+                target_character_id=character_ids[relationship_event.target_agent_id],
+                source_event_id=relationship_event.source_event_id,
+                event_type=relationship_event.event_type,
+                familiarity_delta=relationship_event.applied_delta.familiarity,
+                trust_delta=relationship_event.applied_delta.trust,
+                affinity_delta=relationship_event.applied_delta.affinity,
+                tension_delta=relationship_event.applied_delta.tension,
+                romantic_interest_delta=(
+                    relationship_event.applied_delta.romantic_interest
+                ),
+                before_metrics=relationship_event.before.model_dump(),
+                after_metrics=relationship_event.after.model_dump(),
+                occurred_at=relationship_event.occurred_at,
+                rule_version=relationship_event.rule_version,
+                source_kind=relationship_event.source_kind,
             )
         )
 

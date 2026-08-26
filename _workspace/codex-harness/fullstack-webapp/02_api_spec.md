@@ -19,3 +19,12 @@ No API endpoint or WebSocket schema was added. The UI derives truthful presentat
 - Each entry includes target identity, qualitative summary, supporting persona/memory
   evidence, `affinity_score: null`, and `measurement: "not_modeled"`.
 - `/ws/world` remains unchanged.
+
+## 2026-08-26 coordinated contract replacement
+
+- `measurement` is `modeled_v1`.
+- Every directional item carries five bounded metrics, revision/timestamps, up to five
+  recent events with applied deltas, plus the existing safe qualitative evidence.
+- `affinity` is interpersonal liking; `romantic_interest` is independently modeled
+  romantic intent. Ordinary friendly interaction does not raise romantic interest.
+- Dashboard agents expose authoritative `current_location_path` separately from destination.

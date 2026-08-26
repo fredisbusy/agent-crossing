@@ -18,7 +18,10 @@ from .memory.memory_stream import MemoryStream
 
 def _profile_from_persona(persona: AgentPersona) -> AgentProfile:
     return AgentProfile(
-        fixed=FixedPersona(identity_stable_set=list(persona.identity_stable_set)),
+        fixed=FixedPersona(
+            identity_stable_set=list(persona.identity_stable_set),
+            relationship_baselines=dict(persona.relationship_baselines),
+        ),
         extended=ExtendedPersona(
             lifestyle_and_routine=list(persona.lifestyle_and_routine),
             current_plan_context=list(persona.current_plan_context),

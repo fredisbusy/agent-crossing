@@ -1,6 +1,6 @@
 # 대시보드 관계 탭 개선 기획
 
-> 상태: 구현 승인 전 기획안
+> 상태: 구현 완료 · 2026-08-26 관계 수치 모델 승인 반영
 
 ## 1. 제품 질문
 
@@ -66,9 +66,11 @@
 - 상태 배지: `정성 관계 기록` 또는 `관계 기록 없음`
 - 마지막 관계 근거 시각: `최근 기록 12:40`
 
-`호감도`라는 단어와 하트 점수·게이지는 사용하지 않는다. 현재 계약은 숫자형
-호감도를 정의하지 않았기 때문이다(`SPEC.md:415-417`). 하트 아이콘을 유지한다면
-긍정 감정 점수가 아니라 “관계 탭”을 나타내는 탐색 아이콘으로만 사용한다.
+헤더는 방향(`하은 → 지호`), 결정론적 상태 라벨, revision을 표시한다. 아래에는
+친숙도·신뢰·인간적 호감·긴장·이성적 관심의 숫자와 meter를 함께 두고 색만으로
+의미를 전달하지 않는다. 인간적 호감은 친구·이웃·동료로서 함께 있고 싶은 정도이고,
+이성적 관심은 연애 관계를 바라는 정도다. 두 값은 독립적으로 변할 수 있다.
+하트 아이콘은 “관계 탭” 탐색 아이콘으로만 사용한다.
 
 ### 3.2 관계 요약
 
@@ -149,19 +151,29 @@ memory로 다시 구성한다. 브라우저 뒤로가기로 이전 관점에 돌
 
 ## 6. 제안 데이터 계약
 
-현재 `DashboardRelationship`의 방향성과 `not_modeled` 값은 유지하고 표시 정확성에
-필요한 메타데이터만 확장한다.
+`DashboardRelationship`은 방향성과 정성 근거를 유지하면서 수치 상태와 최근 event를
+동시에 전달한다.
 
 ```ts
 interface DashboardRelationship {
   target_agent_id: AgentId;
   target_name: string;
-  affinity_score: null;
-  measurement: "not_modeled";
+  measurement: "modeled_v1";
+  metrics: {
+    familiarity: number;
+    trust: number;
+    affinity: number;
+    tension: number;
+    romantic_interest: number;
+  };
+  revision: number;
+  updated_at: string | null;
+  last_interaction_at: string | null;
   summary: string | null;
   summary_status: "available" | "no_explicit_evidence";
   evidence_total: number;
   has_more_evidence: boolean;
+  recent_events: DashboardRelationshipEvent[];
   evidence: DashboardRelationshipEvidence[];
 }
 
@@ -174,7 +186,7 @@ interface DashboardAgent {
 - `summary`는 필터를 통과한 관계 문장만 허용한다.
 - 필터 상세 사유나 원문은 public contract에 추가하지 않는다.
 - `current_location_path`는 backend world map이 authoritative tile에서 계산한다.
-- `importance`가 계약에 남더라도 관계 점수로 렌더링하지 않는다.
+- `importance`와 retrieval score는 관계 점수로 렌더링하지 않는다.
 - 새 필드를 도입하면 Pydantic schema, shared type, runtime parser, fixtures와
   회귀 테스트를 함께 갱신한다.
 - 관계 근거 후보 조회는 일반 기억 탭의 `memory_limit`과 분리한다. 관계 전용 조회

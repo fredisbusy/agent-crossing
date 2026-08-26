@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from .agent import AgentIdentity
+from .agent import AgentIdentity, RelationshipBaseline
 from .agent_brain import AgentBrain
 
 
@@ -25,6 +25,7 @@ class AgentPersona:
     lifestyle_and_routine: list[str]
     current_plan_context: list[str]
     seed_memories: list[PersonaMemory]
+    relationship_baselines: dict[str, RelationshipBaseline]
 
 
 class PersonaLoader:
@@ -109,7 +110,40 @@ def _parse_persona_json(path: Path) -> AgentPersona:
             extended_persona, "current_plan_context"
         ),
         seed_memories=seed_memories,
+        relationship_baselines=_parse_relationship_baselines(fixed_persona),
     )
+
+
+def _parse_relationship_baselines(
+    fixed_persona: dict[str, object],
+) -> dict[str, RelationshipBaseline]:
+    raw = fixed_persona.get("relationship_baselines", {})
+    if not isinstance(raw, dict):
+        raise PersonaLoadError(
+            "Persona JSON field 'relationship_baselines' must be an object"
+        )
+    result: dict[str, RelationshipBaseline] = {}
+    for target, value in _as_object(cast(object, raw)).items():
+        baseline = _as_object(value)
+        metrics = RelationshipBaseline(
+            familiarity=_expect_int(baseline, "familiarity"),
+            trust=_expect_int(baseline, "trust"),
+            affinity=_expect_int(baseline, "affinity"),
+            tension=_expect_int(baseline, "tension"),
+            romantic_interest=_expect_int(baseline, "romantic_interest"),
+        )
+        if not 0 <= metrics.familiarity <= 100 or not 0 <= metrics.tension <= 100:
+            raise PersonaLoadError(
+                "relationship baseline familiarity/tension out of range"
+            )
+        if not -100 <= metrics.trust <= 100 or not -100 <= metrics.affinity <= 100:
+            raise PersonaLoadError("relationship baseline trust/affinity out of range")
+        if not 0 <= metrics.romantic_interest <= 100:
+            raise PersonaLoadError(
+                "relationship baseline romantic_interest out of range"
+            )
+        result[target] = metrics
+    return result
 
 
 def _as_object(data: object) -> dict[str, object]:

@@ -31,3 +31,9 @@
   identity stable set and memory stream.
 - The dashboard joins that directional evidence with the target's existing live status;
   no relationship state is added to the Brain result object.
+
+## Modeled relationship architecture — 2026-08-26
+
+- `WorldRuntime.relationships` owns directional state and the idempotent event ledger.
+- `RuntimeSaveState` v4 is the restore source of truth; SQLAlchemy rows are projections.
+- Brain results and `/ws/world` remain unchanged. Only committed domain signals may update scores.

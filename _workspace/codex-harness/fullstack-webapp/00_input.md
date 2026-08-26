@@ -48,3 +48,9 @@
 - When an agent is selected, summarize how that agent currently perceives every other agent.
 - Keep private and asymmetric knowledge directional; never infer the reverse perspective.
 - Show evidence-backed qualitative affinity because the runtime has no canonical numeric relationship score.
+
+## 2026-08-26 modeled relationship approval
+
+- Replace the former `not_modeled` contract with session-scoped directional scores.
+- Actions and conversations change familiarity, trust, affinity, tension, and romantic interest through fixed rules.
+- Persist the relationship state with each game session and redesign the Relationship tab around it.

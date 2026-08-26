@@ -3,6 +3,7 @@ import type {
   DashboardEvent,
   DashboardMemory,
   DashboardRelationship,
+  DashboardRelationshipEvent,
   DashboardRelationshipEvidence,
   DashboardState,
   PlanItemState,
@@ -90,16 +91,31 @@ function parseRelationshipEvidence(
 
 function parseRelationship(value: unknown): DashboardRelationship | null {
   if (!isRecord(value)) return null;
+  const metrics = value.metrics;
   const evidence = Array.isArray(value.evidence)
     ? value.evidence.map(parseRelationshipEvidence)
+    : null;
+  const recentEvents = Array.isArray(value.recent_events)
+    ? value.recent_events.map(parseRelationshipEvent)
     : null;
   if (
     typeof value.target_agent_id !== "string" ||
     typeof value.target_name !== "string" ||
-    (value.affinity_score !== null &&
-      typeof value.affinity_score !== "number") ||
-    value.measurement !== "not_modeled" ||
+    value.measurement !== "modeled_v1" ||
+    !isRelationshipMetrics(metrics) ||
+    !relationshipStatusLabels.has(String(value.status_label)) ||
+    !isNonNegativeInteger(value.revision) ||
+    (value.updated_at !== null && !isDateTimeString(value.updated_at)) ||
+    (value.last_interaction_at !== null &&
+      !isDateTimeString(value.last_interaction_at)) ||
     (value.summary !== null && typeof value.summary !== "string") ||
+    !["available", "no_explicit_evidence"].includes(
+      String(value.summary_status),
+    ) ||
+    !isNonNegativeInteger(value.evidence_total) ||
+    typeof value.has_more_evidence !== "boolean" ||
+    recentEvents === null ||
+    recentEvents.some((item) => item === null) ||
     evidence === null ||
     evidence.some((item) => item === null)
   ) {
@@ -108,13 +124,109 @@ function parseRelationship(value: unknown): DashboardRelationship | null {
   return {
     target_agent_id: value.target_agent_id,
     target_name: value.target_name,
-    affinity_score: value.affinity_score as number | null,
-    measurement: "not_modeled",
+    measurement: "modeled_v1",
+    metrics,
+    status_label: value.status_label as DashboardRelationship["status_label"],
+    revision: value.revision as number,
+    updated_at: value.updated_at as string | null,
+    last_interaction_at: value.last_interaction_at as string | null,
     summary: value.summary as string | null,
+    summary_status:
+      value.summary_status as DashboardRelationship["summary_status"],
+    evidence_total: value.evidence_total as number,
+    has_more_evidence: value.has_more_evidence,
+    recent_events: recentEvents.filter(
+      (item): item is DashboardRelationshipEvent => item !== null,
+    ),
     evidence: evidence.filter(
       (item): item is DashboardRelationshipEvidence => item !== null,
     ),
   };
+}
+
+const relationshipStatusLabels = new Set([
+  "긴장된 관계",
+  "불신하는 관계",
+  "거리감 있는 관계",
+  "아직 낯선 사이",
+  "가깝고 신뢰하는 관계",
+  "인간적으로 호감 있는 관계",
+  "신뢰하는 관계",
+  "알아가는 관계",
+]);
+
+function inRange(value: unknown, low: number, high: number): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= low &&
+    value <= high
+  );
+}
+
+function inIntegerRange(
+  value: unknown,
+  low: number,
+  high: number,
+): value is number {
+  return Number.isInteger(value) && inRange(value, low, high);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function isDateTimeString(value: unknown): value is string {
+  return typeof value === "string" && Number.isFinite(Date.parse(value));
+}
+
+function isRelationshipMetrics(
+  value: unknown,
+): value is DashboardRelationship["metrics"] {
+  return (
+    isRecord(value) &&
+    inIntegerRange(value.familiarity, 0, 100) &&
+    inIntegerRange(value.trust, -100, 100) &&
+    inIntegerRange(value.affinity, -100, 100) &&
+    inIntegerRange(value.tension, 0, 100) &&
+    inIntegerRange(value.romantic_interest, 0, 100)
+  );
+}
+
+const relationshipEventTypes = new Set([
+  "DIALOGUE_COMPLETED",
+  "HELP_GIVEN",
+  "HELP_RECEIVED",
+  "PERSONAL_DISCLOSURE_RECEIVED",
+  "COMPLIMENT_RECEIVED",
+  "PROMISE_MADE",
+  "PROMISE_KEPT",
+  "PROMISE_BROKEN",
+  "CONFLICT",
+  "INSULT_RECEIVED",
+  "APOLOGY_ACCEPTED",
+  "ROMANTIC_INTEREST_RECOGNIZED",
+  "ROMANTIC_GESTURE_WELCOMED",
+  "ROMANTIC_BOUNDARY_SET",
+]);
+
+function parseRelationshipEvent(
+  value: unknown,
+): DashboardRelationshipEvent | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    !relationshipEventTypes.has(String(value.event_type)) ||
+    !isDateTimeString(value.occurred_at) ||
+    !inIntegerRange(value.familiarity_delta, -100, 100) ||
+    !inIntegerRange(value.trust_delta, -100, 100) ||
+    !inIntegerRange(value.affinity_delta, -100, 100) ||
+    !inIntegerRange(value.tension_delta, -100, 100) ||
+    !inIntegerRange(value.romantic_interest_delta, -100, 100) ||
+    value.rule_version !== "relationship-v1"
+  )
+    return null;
+  return value as unknown as DashboardRelationshipEvent;
 }
 
 function parseAgent(value: unknown): DashboardAgent | null {
@@ -140,6 +252,8 @@ function parseAgent(value: unknown): DashboardAgent | null {
     typeof value.name !== "string" ||
     typeof value.current_action !== "string" ||
     (value.destination !== null && typeof value.destination !== "string") ||
+    (value.current_location_path !== null &&
+      typeof value.current_location_path !== "string") ||
     typeof value.tile_position.x !== "number" ||
     typeof value.tile_position.y !== "number" ||
     typeof value.route_remaining !== "number" ||
@@ -166,6 +280,7 @@ function parseAgent(value: unknown): DashboardAgent | null {
     name: value.name,
     current_action: value.current_action,
     destination: value.destination as string | null,
+    current_location_path: value.current_location_path as string | null,
     tile_position: { x: value.tile_position.x, y: value.tile_position.y },
     route_remaining: value.route_remaining,
     bubble_kind: value.bubble_kind as DashboardAgent["bubble_kind"],

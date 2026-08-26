@@ -6,12 +6,12 @@
   snapshot을 사용한다. mock metric을 제안하지 않았다.
 - **비대칭 관점 유지**: 선택 주체의 private evidence만 사용하고 역방향 기억을
   합치지 않는다(`SPEC.md:412-414`).
-- **호감도 미모델링 유지**: `affinity_score=null`, `measurement=not_modeled`를
-  유지하며 memory importance를 점수로 바꾸지 않는다(`SPEC.md:415-417`).
+- **관계 모델 승인 반영**: `measurement=modeled_v1`의 다섯 축과 최근 event delta를
+  표시하되 memory importance를 점수로 바꾸지 않는다.
 - **진단 경계 유지**: prompt, raw response, 내부 필터 원문을 공개 관계 payload에
   추가하지 않는다(`SPEC.md:407-411`).
-- **소유 계층 유지**: 관계 파생은 dashboard diagnostics/read-model에서 수행하고
-  Brain 결과와 `/ws/world` 계약을 확장하지 않는다.
+- **소유 계층 유지**: 수치 state는 WorldRuntime 관계 서비스, 정성 근거는 dashboard
+  read-model이 소유하며 Brain 결과와 `/ws/world` 계약을 확장하지 않는다.
 - **기존 아키텍처 유지**: React/Vite/FastAPI 경계 안에서만 변경하도록 기획했다.
 
 ## 현재 구현과의 차이
@@ -44,3 +44,11 @@
 확인된 의미 오염과 정보 구조 문제를 해결할 수 있다. 구현에 들어갈 때는
 `summary_status`, 근거 전체 수, `current_location_path`를 실제 계약 변경으로 확정한 뒤
 `SPEC.md`와 `TODO.md`를 같은 변경에서 갱신해야 한다.
+
+## 구현 검증 결과
+
+- 관계·저장·API 타깃 테스트: 48 passed, 1 skipped
+- 프런트 테스트: 20 passed, 빌드 통과
+- Alembic: `0005 (head)`, autogenerate drift 없음
+- 라이브 브라우저: 대상 5명, 지표 5개, 관점 전환 정상, 390px 가로 넘침 및 콘솔 오류 없음
+- 전체 백엔드: 222 passed, 11 skipped, 관계 범위 밖의 기존 planning/settings 실패 5건

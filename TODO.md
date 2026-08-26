@@ -473,20 +473,18 @@ end-to-end 시나리오다.
     - [x] `P1` 비대화 tick에도 주변 사건을 perceive/store하고 필요할 때
           retrieve/reflect/react한다 (§4 Perceive→Store 루프를 대화가 없는
           tick에도 적용 — 이전에는 대화가 발생하는 tick에서만 관찰이
-          기억화됐다). Depends on: §3-B tick 충돌 판정기
-          - [x] react 절반: `WorldRuntime._dispatch_tick_plan_disruption_check`
-                (2026-08-25)가 비대화 tick마다 상대 agent의 공간 상태 변화를
-                감지해 §3-B `PlanDisruptionGate`를 호출한다.
-          - [x] store 절반 (2026-08-25): `_run_plan_disruption_check`가 판정
-                직전에 `memory_service.create_observation_from_text`로 관찰을
-                MemoryObject(OBSERVATION)로 저장한다 — god-mode 주입 경로
-                (`api/main.py::post_god_mode_perception`)와 동일한
-                store-then-evaluate 순서. 저장된 메모리는 기존
-                `memory_stream`/retrieval 경로를 그대로 타므로 이후 retrieve에
-                자동 반영된다. 단, reflection 누적 중요도 트리거(§2-A, `>=150`)를
-                이 저장 지점에서 직접 호출하지는 않는다 — god-mode 경로도
-                동일한 한계를 가지며, reflection trigger는 별도 루프에서
-                누적값을 관리하는 기존 설계를 그대로 따른다.
+          기억화됐다). Depends on: §3-B tick 충돌 판정기 - [x] react 절반: `WorldRuntime._dispatch_tick_plan_disruption_check`
+          (2026-08-25)가 비대화 tick마다 상대 agent의 공간 상태 변화를
+          감지해 §3-B `PlanDisruptionGate`를 호출한다. - [x] store 절반 (2026-08-25): `_run_plan_disruption_check`가 판정
+          직전에 `memory_service.create_observation_from_text`로 관찰을
+          MemoryObject(OBSERVATION)로 저장한다 — god-mode 주입 경로
+          (`api/main.py::post_god_mode_perception`)와 동일한
+          store-then-evaluate 순서. 저장된 메모리는 기존
+          `memory_stream`/retrieval 경로를 그대로 타므로 이후 retrieve에
+          자동 반영된다. 단, reflection 누적 중요도 트리거(§2-A, `>=150`)를
+          이 저장 지점에서 직접 호출하지는 않는다 — god-mode 경로도
+          동일한 한계를 가지며, reflection trigger는 별도 루프에서
+          누적값을 관리하는 기존 설계를 그대로 따른다.
 
 - [x] `P1` Prisma 기반 RPG 세션 저장/불러오기를 구현한다
   - Depends on: world clock + tick scheduler 연동
@@ -604,17 +602,22 @@ end-to-end 시나리오다.
     - [x] 선택 agent의 관점에서 다른 agent와의 비대칭 관계 요약과 근거를 표시한다
     - [x] 정식 호감도 모델이 없는 동안 memory importance를 거짓 호감 점수로 변환하지 않는다
 
-- [ ] `P2` 관계 탭의 근거 적합성과 정보 구조를 개선한다
+- [x] `P2` 세션별 방향성 관계 수치 모델과 관계 탭을 구현한다
   - Depends on: agent inspector 구현
   - Design: `docs/dashboard-relationship-redesign/00_input.md` ~ `05_review.md`
   - DoD:
-    - [ ] 이름만 포함된 PLAN, 이동 상태, prompt형 진단 문자열을 관계 요약과 근거에서 제외한다
-    - [ ] 관계 근거 조회를 일반 기억 탭의 `memory_limit`과 분리하고 전체 근거 수와 표시 수를 구분한다
-    - [ ] `affinity_score=null`, `measurement=not_modeled`와 비대칭 private perspective를 유지한다
-    - [ ] 관계 정보와 상대의 현재 행동·위치·목적지를 시각적·의미적으로 분리한다
-    - [ ] 개요 탭의 전체 관계 패널 중복을 제거하고 관계 탭을 대상 목록 + 상세 구조로 정리한다
-    - [ ] 한국어 문구, 빈 상태, 키보드, 44px 터치 영역, 모바일 반응형을 검증한다
-    - [ ] 실제 `/dashboard/state`와 공개 `/dashboard`에서 내부 문자열 미노출과 위치 정확성을 확인한다
+    - [x] 이름만 포함된 PLAN, 이동 상태, prompt형 진단 문자열을 관계 요약과 근거에서 제외한다
+    - [x] 관계 근거 조회를 일반 기억 탭의 `memory_limit`과 분리하고 전체 근거 수와 표시 수를 구분한다
+    - [x] 친숙도·신뢰·인간적 호감·긴장·이성적 관심 범위, 고정 event delta, 일일 cap과 중복 방지를 SPEC에 정의한다
+    - [x] 인간적 호감과 이성적 관심을 별도 축으로 정의하고 일반 대화의 연애 축 자동 상승을 금지한다
+    - [x] `WorldRuntime` 방향성 상태·원장, snapshot v4, SQLAlchemy/Alembic projection을 추가한다
+    - [x] `measurement=modeled_v1`과 비대칭 private perspective를 shared/API에 적용한다
+    - [x] 관계 정보와 상대의 현재 행동·위치·목적지를 시각적·의미적으로 분리한다
+    - [x] 개요 탭의 전체 관계 패널 중복을 제거하고 관계 탭을 대상 목록 + 상세 구조로 정리한다
+    - [x] 한국어 문구, 빈 상태, 키보드, 44px 터치 영역, 모바일 반응형을 검증한다
+    - [x] 실제 `/dashboard/state`와 공개 `/dashboard`에서 내부 문자열 미노출과 위치 정확성을 확인한다
+  - Follow-up: 도움·약속·갈등은 canonical committed action signal 구현 후 연결하며
+    관계 수치를 planning prompt에 되먹임하지 않는다.
 
 - [x] `P2` God mode 입력으로 perception event를 주입한다 (§3.2 User Controls,
       §8.1 "Isabella's apartment: kitchen: stove is burning" 예시)
@@ -817,7 +820,7 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
   30초)를 넘겨 `planning_error`로 스케줄러 전체가 멈추는 문제가 있었다.
   - 서버 병렬도 확인: `ps aux`로 실제 `llama-server` 프로세스의 `-np` 플래그를
     확인한 결과 이 환경(로컬 Mac, `Ollama.app` GUI가 `launchctl setenv
-    OLLAMA_NUM_PARALLEL=3`로 기동)은 `OLLAMA_NUM_PARALLEL=3`였다(위
+OLLAMA_NUM_PARALLEL=3`로 기동)은 `OLLAMA_NUM_PARALLEL=3`였다(위
     2026-08-25 모델 사이징 노트에서 같은 날 설정한 값). 이번 작업에서
     `launchctl setenv OLLAMA_NUM_PARALLEL 4`로 올리고 `Ollama.app`을 완전히
     재기동해(GUI 앱 프로세스 자체를 kill 후 재실행 — `ollama serve`만
@@ -838,8 +841,7 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
 - [x] M1: Infra & PoC 완료
 - [x] M2: Single-agent believable daily life (§4 전체 인지 루프가 개별
       agent 단위로 닫혀 있는 상태)
-  - 조건: 1) Memory/Retrieval P0 완료 + 2) Reflection P1 완료 +
-    3) Planning §3-A 완료 + 4) §3-B tick react/부분 재계획 완료
+  - 조건: 1) Memory/Retrieval P0 완료 + 2) Reflection P1 완료 + 3) Planning §3-A 완료 + 4) §3-B tick react/부분 재계획 완료
   - 상태 (2026-08-25): 1~4 모두 완료 — §3-B `PlanDisruptionGate`가
     비대화 tick에도 배선되어(`_dispatch_tick_plan_disruption_check`)
     §4.3.1의 "관찰이 계획을 방해하면 반응" 루프가 닫혔다.

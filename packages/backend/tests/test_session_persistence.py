@@ -14,6 +14,8 @@ from persistence.contracts import (
     CharacterSave,
     MemorySave,
     PointSave,
+    RelationshipMetricsSave,
+    RelationshipStateSave,
     RuntimeSaveState,
     sanitized_diagnostics,
 )
@@ -72,6 +74,23 @@ def _state(*, turn: int = 7) -> RuntimeSaveState:
         conversations=[],
         characters=characters,
         dashboard_events=[],
+        relationship_states=[
+            RelationshipStateSave(
+                subject_agent_id=subject,
+                target_agent_id=target,
+                metrics=RelationshipMetricsSave(
+                    familiarity=0,
+                    trust=0,
+                    affinity=0,
+                    tension=0,
+                    romantic_interest=0,
+                ),
+                last_interaction_at=None,
+                updated_at=None,
+                revision=0,
+            )
+            for subject, target in (("Jiho", "Sujin"), ("Sujin", "Jiho"))
+        ],
     )
 
 
@@ -155,6 +174,8 @@ def test_repository_round_trip_and_optimistic_save() -> None:
             )
     finally:
         with SessionLocal.begin() as db:
-            db.execute(delete(GameSessionRecord).where(GameSessionRecord.id == summary.id))
+            db.execute(
+                delete(GameSessionRecord).where(GameSessionRecord.id == summary.id)
+            )
         if prior_active_id is not None:
             _ = repository.activate(session_id=prior_active_id)

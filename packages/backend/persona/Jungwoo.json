@@ -14,7 +14,10 @@
       "정우는 말은 짧고 무뚝뚝하지만 도움이 필요한 사람을 그냥 지나치지 않는다.",
       "정우는 지호를 어릴 때부터 봐온 이웃 어른으로, 그가 수진을 좋아한다는 걸 눈치채고 있다.",
       "정우는 남의 감정을 캐묻지 않지만, 가끔 툭 던지는 한마디로 넌지시 조언한다."
-    ]
+    ],
+    "relationship_baselines": {
+      "jiho": { "familiarity": 70, "trust": 45, "affinity": 30, "tension": 0, "romantic_interest": 0 }
+    }
   },
   "extended_persona": {
     "lifestyle_and_routine": [

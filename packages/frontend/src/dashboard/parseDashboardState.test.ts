@@ -19,6 +19,7 @@ const fixture = {
       name: "Jiho Park",
       current_action: "at:허니컵 카페",
       destination: "브라이어 코브 > 허니컵 카페",
+      current_location_path: "브라이어 코브 > 허니컵 카페",
       tile_position: { x: 3, y: 5 },
       route_remaining: 0,
       bubble_kind: "thought",
@@ -33,9 +34,35 @@ const fixture = {
         {
           target_agent_id: "Sujin",
           target_name: "Sujin Lee",
-          affinity_score: null,
-          measurement: "not_modeled",
+          measurement: "modeled_v1",
+          metrics: {
+            familiarity: 42,
+            trust: 18,
+            affinity: 27,
+            tension: 4,
+            romantic_interest: 12,
+          },
+          status_label: "알아가는 관계",
+          revision: 3,
+          updated_at: "2026-08-24T08:56:00",
+          last_interaction_at: "2026-08-24T08:56:00",
           summary: "Jiho는 Sujin을 친구 이상으로 좋아한다.",
+          summary_status: "available",
+          evidence_total: 1,
+          has_more_evidence: false,
+          recent_events: [
+            {
+              id: "a62f46ee-d15d-5d91-bbc7-933d3782a09e",
+              event_type: "DIALOGUE_COMPLETED",
+              occurred_at: "2026-08-24T08:56:00",
+              familiarity_delta: 2,
+              trust_delta: 0,
+              affinity_delta: 2,
+              tension_delta: 0,
+              romantic_interest_delta: 0,
+              rule_version: "relationship-v1",
+            },
+          ],
           evidence: [
             {
               source: "persona",
@@ -86,6 +113,19 @@ describe("parseDashboardState", () => {
   it("rejects malformed relationship evidence", () => {
     const malformed = structuredClone(fixture);
     malformed.agents[0].relationships[0].evidence[0].memory_id = "one" as never;
+    expect(parseDashboardState(malformed)).toBeNull();
+  });
+
+  it("rejects relationship metrics outside their canonical range", () => {
+    const malformed = structuredClone(fixture);
+    malformed.agents[0].relationships[0].metrics.romantic_interest = 101;
+    expect(parseDashboardState(malformed)).toBeNull();
+  });
+
+  it("rejects negative relationship counters and invalid timestamps", () => {
+    const malformed = structuredClone(fixture);
+    malformed.agents[0].relationships[0].revision = -1;
+    malformed.agents[0].relationships[0].updated_at = "not-a-date";
     expect(parseDashboardState(malformed)).toBeNull();
   });
 });

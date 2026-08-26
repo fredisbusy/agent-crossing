@@ -74,3 +74,25 @@ The cognitive runtime logged an Ollama TLS embedding connection error during sta
 - Verification: 132 backend tests passed, 10 skipped; 16 frontend tests passed;
   recursive workspace build passed. The public state endpoint returned directional
   Jiho-to-Sujin and Sujin-to-Jiho summaries with `affinity_score: null`.
+
+## 2026-08-26 review pending
+
+The earlier `not_modeled` decision was superseded by explicit user approval. Review now
+covers the v1 domain rules, snapshot/projection consistency, coordinated API/parser
+break, master-detail screen, and live session save/load evidence.
+
+## 2026-08-26 relationship-v1 result
+
+- Targeted backend verification: 48 passed, 1 skipped; Ruff passed.
+- Frontend verification: 20 tests passed; recursive workspace build passed.
+- Alembic is at `0005 (head)` and autogenerate check is clean. A live save stored snapshot schema v4 with 30
+  directional states and 6 events, matching 30 state and 6 event projection rows.
+- Live API showed completed dialogue updates in both directions with stable UUID5 event
+  IDs. Reload retained previous IDs while the resumed scheduler could append new events.
+- Browser QA at desktop and 390px found 5 target controls, 5 score meters, no horizontal
+  overflow, no console errors, and no exposed `planning_route`/`moving_to:` strings.
+- Full backend suite had 222 passing tests, 11 skipped, and 5 unrelated failures in
+  pre-existing dirty planning/settings changes; relationship-targeted tests pass.
+- `affinity` and `romantic_interest` are independent. Friendly dialogue leaves romantic
+  interest unchanged; only explicit romantic recognition, welcome, or boundary events
+  modify it.
