@@ -51,7 +51,7 @@
         {"id": 31, "name": "library-building", "type": "solid", "x": 816, "y": 112, "width": 256, "height": 144},
         {"id": 32, "name": "market-building", "type": "solid", "x": 144, "y": 624, "width": 256, "height": 144},
         {"id": 33, "name": "rose-cottage", "type": "solid", "x": 80, "y": 368, "width": 192, "height": 112},
-        {"id": 34, "name": "sage-cottage", "type": "solid", "x": 1008, "y": 352, "width": 192, "height": 112},
+        {"id": 34, "name": "sage-cottage", "type": "solid", "x": 1008, "y": 352, "width": 192, "height": 128},
         {"id": 35, "name": "park-pond", "type": "water", "x": 992, "y": 640, "width": 144, "height": 112},
         {"id": 76, "name": "community-board", "type": "solid", "x": 507, "y": 359, "width": 42, "height": 51},
         {"id": 77, "name": "town-fountain", "type": "solid", "x": 601, "y": 446, "width": 78, "height": 44},

@@ -194,10 +194,7 @@ class WorldMap:
 
     def movement_cost(self, tile: MapPoint) -> int:
         """Prefer authored paths and open public areas over traversable grass."""
-        center = MapPoint(
-            x=(tile.x * self.tile_width) + (self.tile_width // 2),
-            y=(tile.y * self.tile_height) + (self.tile_height // 2),
-        )
+        center = self.tile_center(tile)
         on_authored_path = any(
             _distance_to_polyline(center, path.points) <= self.tile_width
             for path in self.paths
@@ -207,6 +204,24 @@ class WorldMap:
             for location in self.locations
         )
         return 1 if on_authored_path or in_public_area else 4
+
+    def tile_center(self, tile: MapPoint) -> MapPoint:
+        return MapPoint(
+            x=(tile.x * self.tile_width) + (self.tile_width // 2),
+            y=(tile.y * self.tile_height) + (self.tile_height // 2),
+        )
+
+    def is_connected_to_authored_path(self, tile: MapPoint) -> bool:
+        """Return whether a path reaches the tile edge-to-center.
+
+        Tiled paths are authored on tile boundaries while navigation uses tile
+        centers, so half a tile is the exact expected door-connection offset.
+        """
+        center = self.tile_center(tile)
+        return any(
+            _distance_to_polyline(center, path.points) <= self.tile_width / 2
+            for path in self.paths
+        )
 
     def find_path(
         self,
@@ -340,7 +355,7 @@ def load_world_map(path: Path | None = None) -> WorldMap:
         for item in _objects(layers, "spawns")
     )
 
-    return WorldMap(
+    world_map = WorldMap(
         id=str(map_properties.get("id", source_path.stem)),
         name=str(map_properties.get("name", source_path.stem)),
         width=_integer(raw, "width"),
@@ -353,6 +368,41 @@ def load_world_map(path: Path | None = None) -> WorldMap:
         interactables=interactables,
         spawns=spawns,
     )
+    _validate_home_access(world_map)
+    return world_map
+
+
+def _validate_home_access(world_map: WorldMap) -> None:
+    """Require every home to use one authored, path-connected doorway.
+
+    Home interiors are semantic dollhouse views rather than walkable outdoor
+    tiles. The agent reaches the door tile, then the frontend projects it into
+    an indoor activity slot. The solid tile immediately behind the door keeps
+    outdoor A* from ever walking through a wall or across the house body.
+    """
+    for home in (
+        location for location in world_map.locations if location.kind == "home"
+    ):
+        entrance = home.entrance
+        if entrance is None:
+            raise ValueError(f"home '{home.name}' must define an entrance tile")
+        direction = home.entrance_direction
+        if abs(direction.x) + abs(direction.y) != 1:
+            raise ValueError(f"home '{home.name}' entrance direction must be cardinal")
+        if not world_map.is_walkable_tile(entrance):
+            raise ValueError(f"home '{home.name}' entrance must be walkable")
+        if not world_map.is_connected_to_authored_path(entrance):
+            raise ValueError(
+                f"home '{home.name}' entrance must connect to an authored path"
+            )
+        wall_behind_door = MapPoint(
+            x=entrance.x - direction.x,
+            y=entrance.y - direction.y,
+        )
+        if world_map.is_walkable_tile(wall_behind_door):
+            raise ValueError(
+                f"home '{home.name}' wall behind entrance must remain solid"
+            )
 
 
 def _objects(

@@ -331,6 +331,13 @@ react 정책:
 - live planning이 있으면 active minute plan의 canonical location을 우선하고, 초기 상태에서는 persona의 `current_plan_context`에서 canonical location 또는 alias를 찾는다.
 - 건물 목적지는 Tiled에 선언한 `entrance_tile_x/y` 문으로만 진입한다. 문이 다른
   agent에게 점유된 경우 `entrance_dx/dy` 방향의 walkable 대기 tile을 선택한다.
+- 모든 `home`은 하나의 `entrance_tile_x/y`와 4방향 `entrance_dx/dy`를 반드시
+  가진다. 문 타일은 walkable이어야 하고 authored path가 타일 중심 반 칸 이내까지
+  연결되어야 하며, 문 바로 뒤의 house-body 타일은 solid collision이어야 한다.
+  `load_world_map()`은 이 조건 중 하나라도 어기면 부팅을 거부한다. 실외 A*는 문
+  타일까지 이동한 뒤 semantic dollhouse interior로 투영되며 집 벽이나 본체를
+  통과해 실내 좌표로 이동하지 않는다. 프런트엔드는 동일한 문 좌표에 벽 개구부,
+  문짝, 문턱을 표시한다.
 - 건물·물·간판·분수·벤치·나무·가로등 collision은 통과할 수 없고, agent tile도
   tick 동안 동적 collision으로 취급해 같은 tile 점유와 자리 맞바꾸기를 금지한다.
 - backend 4방향 A\*는 authored path/광장/공원의 이동 비용을 `1`, 그 밖의
@@ -475,6 +482,9 @@ Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하�
 - dashboard agent read model은 persona 원본의 `age`, 명시적 `gender`, `traits`와
   현재 runtime의 `identity_stable_set` 전체를 `persona`로 반환한다. frontend는
   이름으로 성별을 추측하거나 별도 페르소나 문구를 만들지 않는다.
+- dashboard 주민 목록과 개요 프로필은 `agent_id`에 대응하는 프로젝트 내 정적
+  초상화를 사용한다. 등록되지 않은 주민은 이름 첫 글자 fallback을 유지하며,
+  초상화는 관측 API나 runtime 상태에 포함하지 않는다.
 - `/dashboard`에는 로그인이나 접근 제한을 두지 않는다. memory, reflection,
   방향성 관계 summary/evidence 원문은 공개 화면에서 그대로 제공한다.
 - 공개 diagnostics event는 sequence/turn/time/agent/reply/silent/parse-failure/

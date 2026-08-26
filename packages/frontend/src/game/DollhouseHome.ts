@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { getProperty, type TiledObject } from "../map/tiled";
+import { getProperty, townMap, type TiledObject } from "../map/tiled";
 import { HOME_ROOMS, type HomeRoom } from "./homeInterior";
 
 type HomeStyle = "standard" | "tinkerer" | "shuttle" | "host" | "archive";
@@ -102,11 +102,15 @@ export function drawDollhouseHome(
     height,
     accentColor,
   );
-
-  graphics.lineStyle(5, 0xf0dca7, 1);
-  graphics.strokeRect(x - 3, y - 3, width + 6, height + 6);
-  graphics.lineStyle(3, accentColor, 1);
-  graphics.strokeRect(x - 6, y - 6, width + 12, height + 12);
+  drawHomeFrameWithDoor(
+    graphics,
+    x,
+    y,
+    width,
+    height,
+    accentColor,
+    homeDoorCenterX(location, x, width),
+  );
 
   return {
     name: location.name,
@@ -122,6 +126,67 @@ export function drawDollhouseHome(
       bathroom: roomPosition(x, y, width, height, "bathroom"),
     },
   };
+}
+
+function homeDoorCenterX(
+  location: TiledObject,
+  fallbackX: number,
+  width: number,
+): number {
+  const tileX = Number(getProperty(location, "entrance_tile_x"));
+  if (!Number.isFinite(tileX)) return fallbackX + width / 2;
+  return Phaser.Math.Clamp(
+    tileX * townMap.tilewidth + townMap.tilewidth / 2,
+    fallbackX + 20,
+    fallbackX + width - 20,
+  );
+}
+
+function drawHomeFrameWithDoor(
+  graphics: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  accentColor: number,
+  doorCenterX: number,
+): void {
+  const outerLeft = x - 6;
+  const outerRight = x + width + 6;
+  const outerTop = y - 6;
+  const outerBottom = y + height + 6;
+  const innerLeft = x - 3;
+  const innerRight = x + width + 3;
+  const innerTop = y - 3;
+  const innerBottom = y + height + 3;
+  const doorWidth = 32;
+  const doorLeft = doorCenterX - doorWidth / 2;
+  const doorRight = doorCenterX + doorWidth / 2;
+
+  graphics.lineStyle(5, 0xf0dca7, 1);
+  graphics.lineBetween(innerLeft, innerTop, innerRight, innerTop);
+  graphics.lineBetween(innerLeft, innerTop, innerLeft, innerBottom);
+  graphics.lineBetween(innerRight, innerTop, innerRight, innerBottom);
+  graphics.lineBetween(innerLeft, innerBottom, doorLeft, innerBottom);
+  graphics.lineBetween(doorRight, innerBottom, innerRight, innerBottom);
+
+  graphics.lineStyle(3, accentColor, 1);
+  graphics.lineBetween(outerLeft, outerTop, outerRight, outerTop);
+  graphics.lineBetween(outerLeft, outerTop, outerLeft, outerBottom);
+  graphics.lineBetween(outerRight, outerTop, outerRight, outerBottom);
+  graphics.lineBetween(outerLeft, outerBottom, doorLeft - 3, outerBottom);
+  graphics.lineBetween(doorRight + 3, outerBottom, outerRight, outerBottom);
+
+  const doorTop = y + height - 27;
+  graphics.fillStyle(0x4b3428, 1);
+  graphics.fillRect(doorLeft, doorTop, doorWidth, 33);
+  graphics.lineStyle(3, 0xe7c77f, 1);
+  graphics.strokeRect(doorLeft, doorTop, doorWidth, 33);
+  graphics.fillStyle(0xf2d06f, 1);
+  graphics.fillCircle(doorRight - 7, doorTop + 17, 2);
+
+  graphics.fillStyle(0xe1c58f, 1);
+  graphics.fillRect(doorLeft + 4, outerBottom + 1, doorWidth - 8, 7);
 }
 
 function homeStyle(value: string): HomeStyle {

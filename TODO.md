@@ -397,6 +397,8 @@ end-to-end 시나리오다.
     - [x] 우식의 실험 작업대, 용준의 배드민턴 장비·기록판, 병용의 큰 테이블·
       음료장, 원준의 사진·영상 작업대를 dollhouse 내부에 구분해 렌더링한다
     - [x] persona 로딩, 나이·성별, 지도 위치·스폰·집 입구·경로를 회귀 테스트로 고정한다
+    - [x] 모든 집에 눈에 보이는 문과 벽 개구부를 만들고, authored path가 문에
+      연결되며 문 뒤 house-body는 solid라 실외 A*가 벽을 통과하지 못하도록 검증한다
 
 - [x] `P1` WorldRuntime을 정확히 2명 고정에서 N-agent + pairwise 대화로 확장한다
       (§3.4 조우 모델 — "마을 전체가 한 방에서 듣는" 공용 채팅방이 아니라
@@ -671,6 +673,8 @@ end-to-end 시나리오다.
     - [x] 탭 URL/필터 독립성/계획 검증/원문·내부 trace 경계/cursor 회귀 테스트를 추가한다
     - [x] 개요 탭에서 persona 원본의 나이·성별·traits와 runtime 고정 페르소나
       문장 전체를 표시하고 shared/API/runtime validation 계약으로 고정한다
+    - [x] 6명 페르소나 기반 픽셀 초상화를 생성해 주민 목록과 개요 프로필에
+      표시하고 미등록 주민에는 이니셜 fallback을 유지한다
 
 - [x] `P2` God mode 입력으로 perception event를 주입한다 (§3.2 User Controls,
       §8.1 "Isabella's apartment: kitchen: stove is burning" 예시)
