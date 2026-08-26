@@ -1,0 +1,29 @@
+# Persona diversity requirements
+
+## Functional requirements
+
+- [x] Preserve each resident's established occupation and important relationship
+  premise.
+- [x] Give every resident at least one non-work hobby that can produce an
+  observable action in the existing map.
+- [x] Give every resident a recognizable communication style, including how
+  they ask, disagree, joke, pause, or end a conversation.
+- [x] Give every resident a preference, aversion, or boundary so that they do
+  not agree with every social request.
+- [x] Give every resident a personal goal and an unresolved tension that can
+  generate future plans and reflections.
+- [x] Seed both social and solitary memories rather than defining identity only
+  through occupation.
+- [x] Keep Jiho's private affection and Sujin's autonomous perspective
+  asymmetric.
+
+## Non-functional requirements
+
+- [x] Keep all user-facing natural language in Korean.
+- [x] Preserve the existing persona JSON schema and loader API.
+- [x] Do not introduce locations outside the existing map into daily action
+  contexts.
+- [x] Add a regression test for each resident's distinctive signature.
+- [x] Avoid copyrighted dialogue, character names, or copied prose from the
+  reference games.
+

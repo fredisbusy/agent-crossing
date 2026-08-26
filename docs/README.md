@@ -48,4 +48,5 @@ docs/<topic-slug>/
 | `dashboard-relationship-redesign/` | 관계 탭의 정보 구조·문구·데이터 계약 개선 기획                  |
 | `dashboard-tabs-product-planning/` | 대시보드 6개 탭의 제품 기획, 구현 변경 기록과 공개 runtime 검증 |
 | `langgraph-migration/`             | LangGraph 마이그레이션 스파이크 (완료, 기록용)                  |
+| `persona-diversity/`               | 논문·생활 시뮬레이션 참고 기반 6명 페르소나 다양화              |
 | `smallville-interiors/`            | Smallville 논문 Figure 2 기준 실내 렌더링 참조                  |

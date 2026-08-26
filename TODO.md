@@ -362,6 +362,19 @@ end-to-end 시나리오다.
     - [x] persona 성격/습관/현재 계획/seed memory를 한국어로 제공한다
     - [x] 프런트엔드 계획 fallback과 주민 상태를 한국어로 표시한다
 
+- [x] `P1` 6명 persona를 직업 중심 설정에서 다축 생활 캐릭터로 확장한다
+  - Research/Design: `docs/persona-diversity/00_input.md`,
+    `01_requirements.md`, `02_design.md`
+  - Implemented 2026-08-26:
+    - [x] 논문 §3.1/§4.3과 Animal Crossing의 personality+hobby,
+      Stardew Valley의 schedule+relationship event 패턴을 대조한다
+    - [x] 모든 주민에게 비업무 취미, 고유 말투, 선호/경계, 결점, 개인 목표,
+      관계별 태도를 부여한다
+    - [x] 기존 map에서 행동 가능한 공원·광장·도서관·시장·카페 활동으로
+      routine/current plan을 다양화한다
+    - [x] 지호의 사적 호감과 수진의 자율적인 친구 관점을 유지한다
+    - [x] 주민별 행동 시그니처와 사회적 경계가 로딩되는 회귀 테스트를 추가한다
+
 - [x] `P1` WorldRuntime을 정확히 2명 고정에서 N-agent + pairwise 대화로 확장한다
       (§3.4 조우 모델 — "마을 전체가 한 방에서 듣는" 공용 채팅방이 아니라
       가까이 있는 두 명끼리만 사적으로 대화)
