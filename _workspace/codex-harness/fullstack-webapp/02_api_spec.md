@@ -28,3 +28,13 @@ No API endpoint or WebSocket schema was added. The UI derives truthful presentat
 - `affinity` is interpersonal liking; `romantic_interest` is independently modeled
   romantic intent. Ordinary friendly interaction does not raise romantic interest.
 - Dashboard agents expose authoritative `current_location_path` separately from destination.
+
+## 2026-08-26 public dashboard projection
+
+- `GET /dashboard/state` adds `snapshot_generated_at`, `oldest_sequence`, location
+  source, reflection totals/timestamps, memory totals/has-more, and last replan reason.
+- Public memories contain metadata and `content_redacted=true`; relationship qualitative
+  evidence is redacted. Public events use an explicit safe-field allowlist.
+- `GET /dashboard/agents/{agent_id}/memories` supports stable `before_id`, `limit`,
+  `node_type`, and `min_importance` cursor queries under the same redaction policy.
+- `/dashboard/events?after=` is consumed independently from state polling.

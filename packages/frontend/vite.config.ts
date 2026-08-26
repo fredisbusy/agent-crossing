@@ -14,6 +14,7 @@ export default defineConfig({
     proxy: {
       '/dashboard/state': dashboardProxyTarget,
       '/dashboard/events': dashboardProxyTarget,
+      '/dashboard/agents': dashboardProxyTarget,
       '/sessions': dashboardProxyTarget,
     },
   },

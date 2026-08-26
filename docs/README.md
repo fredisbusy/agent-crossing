@@ -42,10 +42,10 @@ docs/<topic-slug>/
 
 ## 기존 주제 폴더
 
-| 폴더 | 내용 |
-| --- | --- |
-| `architecture-analysis/` | `.claude/` 하네스 도메인 분할 기준 코드베이스 검증 분석 |
-| `dashboard-relationship-redesign/` | 관계 탭의 정보 구조·문구·데이터 계약 개선 기획 |
-| `dashboard-tabs-product-planning/` | 대시보드 6개 탭의 제품 목적·정보 구조·개선 우선순위 기획 |
-| `langgraph-migration/` | LangGraph 마이그레이션 스파이크 (완료, 기록용) |
-| `smallville-interiors/` | Smallville 논문 Figure 2 기준 실내 렌더링 참조 |
+| 폴더                               | 내용                                                            |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `architecture-analysis/`           | `.claude/` 하네스 도메인 분할 기준 코드베이스 검증 분석         |
+| `dashboard-relationship-redesign/` | 관계 탭의 정보 구조·문구·데이터 계약 개선 기획                  |
+| `dashboard-tabs-product-planning/` | 대시보드 6개 탭의 제품 기획, 구현 변경 기록과 공개 runtime 검증 |
+| `langgraph-migration/`             | LangGraph 마이그레이션 스파이크 (완료, 기록용)                  |
+| `smallville-interiors/`            | Smallville 논문 Figure 2 기준 실내 렌더링 참조                  |

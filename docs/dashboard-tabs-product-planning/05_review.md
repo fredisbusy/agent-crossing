@@ -4,6 +4,9 @@
 
 현재 dashboard는 실제 runtime을 한 화면에서 관측한다는 핵심 목적과 6개 탭의 기본 데이터는 갖췄다. 관계 탭은 방향성·정량/정성 근거·관점 전환까지 가장 완성도가 높다. 다음 단계는 새 탭 추가보다 **정확성, 공개 범위, 데이터 전달 구조, 탐색성**을 먼저 개선하는 것이 타당하다.
 
+> 2026-08-26 후속 승인으로 아래 P0/P1 항목을 구현했다. 공개 정책은 인증 없는
+> redacted observer view로 확정했으며 private operator view는 별도 후속 범위다.
+
 ## 우선순위
 
 ### P0 — 정확성·보안·가용성
@@ -62,10 +65,10 @@
 - 관계 상세: `docs/dashboard-relationship-redesign/`
 - 후속 구현 backlog: `TODO.md`의 "dashboard 탭 관측성·탐색성 개선" 항목
 
-## 미확정 결정
+## 구현 후 남은 결정
 
-- dashboard 접근 주체와 인증 방식
-- detail endpoint의 정확한 분리 단위
-- summary/event polling 주기 또는 SSE 전환 여부
+- 인증된 operator dashboard를 별도로 만들지 여부와 인증 방식
+- 관계 evidence 전용 cursor/detail endpoint가 필요한지 여부
+- event cursor polling을 SSE로 전환할지 여부
 - source of truth를 유지하면서 atomic snapshot을 만드는 방식
 - 장기 보존 diagnostics와 bounded live buffer의 역할 분리 여부

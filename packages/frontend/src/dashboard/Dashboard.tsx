@@ -21,17 +21,25 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { useDashboardState } from "../hooks/useDashboardState";
+import {
+  dashboardSearchParams,
+  parseDashboardUrlState,
+  type DashboardTabId as DashboardTab,
+} from "./dashboardUrlState";
+import {
+  planScheduleIssues,
+  railEvents as selectRailEvents,
+  selectedAgentEvents as selectSelectedAgentEvents,
+} from "./dashboardViewModel";
 import "./dashboard.css";
-
-type DashboardTab =
-  | "overview"
-  | "relationship"
-  | "memory"
-  | "plans"
-  | "reflection"
-  | "logs";
 
 const tabs: { id: DashboardTab; label: string }[] = [
   { id: "overview", label: "개요" },
@@ -65,7 +73,18 @@ function actionLabel(action: string): string {
   if (action.startsWith("arrived_at:")) return `${action.slice(11)}에 도착`;
   if (action.startsWith("at:")) return `${action.slice(3)}에 머무는 중`;
   if (action === "planning_route") return "이동 경로 계산 중";
-  return action ? "상태 확인 중" : "상태 없음";
+  return action ? `알 수 없는 상태 (${action})` : "상태 없음";
+}
+
+function planPhase(
+  item: PlanItemState,
+  currentTime: string | null,
+): "완료" | "진행 중" | "예정" | "시간 미확인" {
+  if (!currentTime) return "시간 미확인";
+  const now = Date.parse(currentTime);
+  if (now >= Date.parse(item.end_time)) return "완료";
+  if (now >= Date.parse(item.start_time)) return "진행 중";
+  return "예정";
 }
 
 function relationshipDeltaLabel(event: DashboardRelationshipEvent): string {
@@ -86,9 +105,11 @@ function relationshipDeltaLabel(event: DashboardRelationshipEvent): string {
 function PlanCard({
   label,
   item,
+  currentTime = null,
 }: {
   label: string;
   item: PlanItemState | null;
+  currentTime?: string | null;
 }) {
   return (
     <article className="dashboard-plan-card">
@@ -101,6 +122,7 @@ function PlanCard({
             {displayShortTime(item.start_time)} —{" "}
             {displayShortTime(item.end_time)}
           </small>
+          <em>{planPhase(item, currentTime)}</em>
         </>
       ) : (
         <p className="dashboard-empty-copy">설정된 계획 없음</p>
@@ -120,6 +142,7 @@ function MemoryRow({ memory }: { memory: DashboardMemory }) {
         <time>{displayShortTime(memory.created_at)}</time>
       </div>
       <p>{memory.content}</p>
+      <small>최근 접근 {displayTime(memory.last_accessed_at)}</small>
       {memory.citations?.length ? (
         <small>근거 기억 #{memory.citations.join(", #")}</small>
       ) : null}
@@ -130,7 +153,6 @@ function MemoryRow({ memory }: { memory: DashboardMemory }) {
 function EventRow({ event }: { event: DashboardEvent }) {
   const primary =
     event.reply ||
-    event.thought ||
     event.decision_reason ||
     event.action_summary ||
     event.silent_reason;
@@ -150,8 +172,6 @@ function EventRow({ event }: { event: DashboardEvent }) {
         <p>{primary || "발화 없이 현재 계획을 유지했습니다."}</p>
         <div className="dashboard-event-tags">
           {event.reply ? <span className="speech">대화</span> : null}
-          {event.thought ? <span>생각</span> : null}
-          {event.self_critique ? <span>자기비평</span> : null}
           {event.parse_failure ? (
             <span className="error">파싱 실패</span>
           ) : null}
@@ -160,27 +180,13 @@ function EventRow({ event }: { event: DashboardEvent }) {
           ) : null}
         </div>
         <details>
-          <summary>전체 판단 로그 보기</summary>
+          <summary>공개 판단 요약 보기</summary>
           <dl>
-            <dt>모델 생각</dt>
-            <dd>{event.model_thought || "기록 없음"}</dd>
-            <dt>자기 비평</dt>
-            <dd>{event.self_critique || "기록 없음"}</dd>
             <dt>결정 이유</dt>
             <dd>{event.decision_reason || "기록 없음"}</dd>
             <dt>행동 요약</dt>
             <dd>{event.action_summary || "기록 없음"}</dd>
           </dl>
-          <div className="dashboard-json-grid">
-            <div>
-              <span>DECISION PROCESS</span>
-              <pre>{JSON.stringify(event.decision_process, null, 2)}</pre>
-            </div>
-            <div>
-              <span>GOVERNANCE TRACE</span>
-              <pre>{JSON.stringify(event.governance_trace, null, 2)}</pre>
-            </div>
-          </div>
         </details>
       </div>
     </article>
@@ -231,11 +237,13 @@ function RelationshipPanel({
   agent,
   agents,
   onSelect,
+  onTargetSelect,
   initialTargetId,
 }: {
   agent: DashboardAgent;
   agents: DashboardAgent[];
   onSelect: (agentId: string, targetId: string) => void;
+  onTargetSelect: (targetId: string) => void;
   initialTargetId: string;
 }) {
   const relationshipTargetIds = agent.relationships
@@ -283,9 +291,9 @@ function RelationshipPanel({
         <strong>방향성 관계 · 규칙 v1</strong>
       </div>
       <p className="dashboard-relationship-note">
-        대화와 확정된 상호작용이 친숙도·신뢰·인간적 호감·긴장을 바꿉니다. 이성적
-        관심은 명시적인 애정 사건에서만 변합니다. 수치는 {agent.name}의
-        관점에서만 적용됩니다.
+        현재 완료된 대화와 확정된 관계 사건이 수치를 바꿉니다. 이성적 관심은
+        명시적인 애정 사건에서만 변하며, 수치는 {agent.name}의 관점에만
+        적용됩니다.
       </p>
       <div className="dashboard-relationship-explorer">
         <div
@@ -299,7 +307,10 @@ function RelationshipPanel({
               aria-pressed={
                 item.target_agent_id === relationship?.target_agent_id
               }
-              onClick={() => setTargetId(item.target_agent_id)}
+              onClick={() => {
+                setTargetId(item.target_agent_id);
+                onTargetSelect(item.target_agent_id);
+              }}
             >
               <strong>{item.target_name}</strong>
               <span>{item.status_label}</span>
@@ -359,11 +370,19 @@ function RelationshipPanel({
             <section>
               <h3>관계 요약</h3>
               <p className="dashboard-relationship-summary">
-                {relationship.summary ?? "아직 기록된 관계 근거가 없습니다."}
+                {relationship.summary_status === "redacted"
+                  ? "공개 화면에서는 비공개 관계 근거를 표시하지 않습니다."
+                  : (relationship.summary ??
+                    "아직 기록된 관계 근거가 없습니다.")}
+              </p>
+              <p className="dashboard-relationship-freshness">
+                마지막 상호작용 {displayTime(relationship.last_interaction_at)}{" "}
+                · 갱신 {displayTime(relationship.updated_at)}
               </p>
               <details>
                 <summary>
-                  관계를 뒷받침하는 기록 · 총 {relationship.evidence_total}개
+                  관계를 뒷받침하는 기록 · 표시 {relationship.evidence.length} /
+                  총 {relationship.evidence_total}개
                 </summary>
                 <div className="dashboard-relationship-evidence">
                   {relationship.evidence.map((evidence, index) => (
@@ -386,7 +405,7 @@ function RelationshipPanel({
                 </div>
                 {relationship.has_more_evidence ? (
                   <small>
-                    최근 {relationship.evidence.length}개만 표시합니다.
+                    비공개 또는 추가 근거는 공개 화면에서 표시하지 않습니다.
                   </small>
                 ) : null}
               </details>
@@ -447,7 +466,12 @@ function AgentOverview({ agent }: { agent: DashboardAgent }) {
         <dl className="dashboard-facts">
           <div>
             <dt>현재 위치</dt>
-            <dd>{agent.current_location_path ?? "확인할 수 없음"}</dd>
+            <dd>
+              {agent.current_location_path ?? "확인할 수 없음"}
+              {agent.current_location_source === "arrival"
+                ? " (도착 상태 기준)"
+                : ""}
+            </dd>
           </div>
           <div>
             <dt>목적지</dt>
@@ -468,7 +492,7 @@ function AgentOverview({ agent }: { agent: DashboardAgent }) {
       <section className="dashboard-panel dashboard-thought-panel">
         <div className="dashboard-panel-title">
           <span>
-            <BrainCircuit size={14} /> 최근 생각
+            <BrainCircuit size={14} /> 현재 표시 중인 생각
           </span>
         </div>
         <blockquote>
@@ -482,13 +506,14 @@ function AgentOverview({ agent }: { agent: DashboardAgent }) {
           </span>
         </div>
         <h3>
-          {agent.active_minute?.action_content ??
-            agent.current_plan_context[0] ??
-            "계획 없음"}
+          {agent.active_minute?.action_content ?? "활성 분 단위 계획 없음"}
         </h3>
         <p>
           {agent.active_minute?.location ?? agent.destination ?? "장소 미정"}
         </p>
+        {agent.current_plan_context.length ? (
+          <small>배경 계획 문맥 · {agent.current_plan_context[0]}</small>
+        ) : null}
       </section>
       <section className="dashboard-panel dashboard-reflection-summary">
         <div className="dashboard-panel-title">
@@ -500,25 +525,59 @@ function AgentOverview({ agent }: { agent: DashboardAgent }) {
             {agent.reflection_status.threshold}
           </strong>
         </div>
-        <div className="dashboard-progress">
-          <span
-            style={{
-              width: `${Math.min(100, (agent.reflection_status.accumulated_importance / Math.max(1, agent.reflection_status.threshold)) * 100)}%`,
-            }}
-          />
-        </div>
-        <p>임계치에 도달하면 최근 기억을 바탕으로 고차원 성찰을 생성합니다.</p>
+        <progress
+          className="dashboard-progress"
+          max={Math.max(1, agent.reflection_status.threshold)}
+          value={agent.reflection_status.accumulated_importance}
+        />
+        <p>
+          다음 성찰까지{" "}
+          {Math.max(
+            0,
+            agent.reflection_status.threshold -
+              agent.reflection_status.accumulated_importance,
+          )}
+          점 남았습니다.
+        </p>
       </section>
     </div>
   );
 }
 
 export function Dashboard() {
-  const { data, connection, error } = useDashboardState();
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
-  const [tab, setTab] = useState<DashboardTab>("overview");
-  const [eventAgentFilter, setEventAgentFilter] = useState<string>("all");
-  const [relationshipTargetId, setRelationshipTargetId] = useState<string>("");
+  const {
+    data,
+    connection,
+    error,
+    lastUpdatedAt,
+    isStale,
+    refresh,
+    loadMemories,
+  } = useDashboardState();
+  const initialUrlState = useMemo(
+    () => parseDashboardUrlState(window.location.search),
+    [],
+  );
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(
+    initialUrlState.agentId,
+  );
+  const [tab, setTab] = useState<DashboardTab>(initialUrlState.tab);
+  const [eventAgentFilter, setEventAgentFilter] = useState<string>(
+    initialUrlState.railAgentFilter,
+  );
+  const [relationshipTargetId, setRelationshipTargetId] = useState<string>(
+    initialUrlState.relationshipTargetId,
+  );
+  const [memoryQuery, setMemoryQuery] = useState("");
+  const [memoryType, setMemoryType] = useState("all");
+  const [olderMemories, setOlderMemories] = useState<DashboardMemory[]>([]);
+  const [memoryCursor, setMemoryCursor] = useState<number | null>(null);
+  const [memoryHasMore, setMemoryHasMore] = useState(true);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [logQuery, setLogQuery] = useState("");
+  const [logFailuresOnly, setLogFailuresOnly] = useState(false);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     document.body.classList.add("dashboard-route");
@@ -531,20 +590,136 @@ export function Dashboard() {
     }
   }, [data, selectedAgentId]);
 
+  useEffect(() => {
+    const search = dashboardSearchParams({
+      agentId: selectedAgentId,
+      tab,
+      relationshipTargetId,
+      railAgentFilter: eventAgentFilter,
+    });
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${search}`,
+    );
+  }, [eventAgentFilter, relationshipTargetId, selectedAgentId, tab]);
+
+  useEffect(() => {
+    function restoreUrlState(): void {
+      const restored = parseDashboardUrlState(window.location.search);
+      setSelectedAgentId(restored.agentId);
+      setTab(restored.tab);
+      setRelationshipTargetId(restored.relationshipTargetId);
+      setEventAgentFilter(restored.railAgentFilter);
+    }
+    window.addEventListener("popstate", restoreUrlState);
+    return () => window.removeEventListener("popstate", restoreUrlState);
+  }, []);
+
   const selectedAgent =
     data?.agents.find((agent) => agent.agent_id === selectedAgentId) ??
     data?.agents[0] ??
     null;
-  const filteredEvents = useMemo(() => {
-    const events = data?.events ?? [];
-    return events
-      .filter(
-        (event) =>
-          eventAgentFilter === "all" || event.agent_id === eventAgentFilter,
-      )
-      .slice()
-      .reverse();
+  useEffect(() => {
+    setOlderMemories([]);
+    setMemoryCursor(null);
+    setMemoryHasMore(true);
+    setMemoryError(null);
+  }, [memoryType, selectedAgent?.agent_id]);
+  const railEvents = useMemo(() => {
+    return selectRailEvents(data?.events ?? [], eventAgentFilter);
   }, [data?.events, eventAgentFilter]);
+  const selectedAgentEvents = useMemo(() => {
+    if (!selectedAgent) return [];
+    const normalizedQuery = logQuery.trim().toLocaleLowerCase("ko-KR");
+    return selectSelectedAgentEvents(data?.events ?? [], selectedAgent.agent_id)
+      .filter((event) => !logFailuresOnly || event.parse_failure)
+      .filter((event) => {
+        if (!normalizedQuery) return true;
+        return [
+          event.reply,
+          event.silent_reason,
+          event.decision_reason,
+          event.action_summary,
+        ].some((value) =>
+          value.toLocaleLowerCase("ko-KR").includes(normalizedQuery),
+        );
+      });
+  }, [data?.events, logFailuresOnly, logQuery, selectedAgent]);
+  const visibleMemories = useMemo(() => {
+    const normalizedQuery = memoryQuery.trim().toLocaleLowerCase("ko-KR");
+    const merged = new Map(
+      [...(selectedAgent?.memories ?? []), ...olderMemories].map((memory) => [
+        memory.id,
+        memory,
+      ]),
+    );
+    return [...merged.values()]
+      .sort((left, right) => right.id - left.id)
+      .filter(
+        (memory) =>
+          (memoryType === "all" || memory.node_type === memoryType) &&
+          (!normalizedQuery ||
+            [
+              memory.content,
+              memory.node_type,
+              `중요도 ${memory.importance}`,
+            ].some((value) =>
+              value.toLocaleLowerCase("ko-KR").includes(normalizedQuery),
+            )),
+      );
+  }, [memoryQuery, memoryType, olderMemories, selectedAgent?.memories]);
+  const planIssues = useMemo(
+    () => planScheduleIssues(selectedAgent?.day_plan ?? []),
+    [selectedAgent?.day_plan],
+  );
+
+  function handleTabKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ): void {
+    let nextIndex = index;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+    else if (event.key === "ArrowLeft")
+      nextIndex = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    const nextTab = tabs[nextIndex];
+    if (!nextTab) return;
+    setTab(nextTab.id);
+    tabRefs.current[nextIndex]?.focus();
+  }
+
+  async function handleLoadOlderMemories(): Promise<void> {
+    if (!selectedAgent || memoryLoading) return;
+    setMemoryLoading(true);
+    setMemoryError(null);
+    try {
+      const initialCursor = Math.min(
+        ...selectedAgent.memories
+          .filter(
+            (memory) => memoryType === "all" || memory.node_type === memoryType,
+          )
+          .map((memory) => memory.id),
+      );
+      const page = await loadMemories(
+        selectedAgent.agent_id,
+        memoryCursor ?? (Number.isFinite(initialCursor) ? initialCursor : null),
+        memoryType,
+      );
+      setOlderMemories((current) => [...current, ...page.items]);
+      setMemoryCursor(page.next_cursor);
+      setMemoryHasMore(page.has_more);
+    } catch (loadError) {
+      setMemoryError(
+        loadError instanceof Error ? loadError.message : "기억 불러오기 실패",
+      );
+    } finally {
+      setMemoryLoading(false);
+    }
+  }
 
   return (
     <main className="dashboard-shell">
@@ -563,29 +738,46 @@ export function Dashboard() {
           <span>REV {data?.world.revision ?? "--"}</span>
         </div>
         <div
-          className={`dashboard-connection ${data?.world.planning_error ? "offline" : connection}`}
+          className={`dashboard-connection ${connection}`}
+          role="status"
+          aria-live="polite"
         >
           <Radio size={14} />
-          {data?.world.planning_error
-            ? "PLANNING ERROR"
-            : connection === "live"
-              ? "LIVE"
-              : connection === "connecting"
-                ? "CONNECTING"
-                : "OFFLINE"}
+          {connection === "live"
+            ? isStale
+              ? "STALE"
+              : "LIVE"
+            : connection === "connecting"
+              ? "CONNECTING"
+              : "OFFLINE"}
         </div>
+        <button type="button" className="dashboard-refresh" onClick={refresh}>
+          <RefreshCw size={14} /> 새로고침
+        </button>
       </header>
 
       {error ? (
-        <div className="dashboard-error">
+        <div className="dashboard-error" role="alert">
           {error} · 실제 runtime 연결을 다시 시도하고 있습니다.
         </div>
       ) : null}
       {data?.world.planning_error ? (
-        <div className="dashboard-error">
+        <div className="dashboard-error" role="alert">
           일정 생성 오류 · {data.world.planning_error}
         </div>
       ) : null}
+      {data?.world.cognitive_runtime_error ? (
+        <div className="dashboard-error" role="alert">
+          인지 runtime 오류 · {data.world.cognitive_runtime_error}
+        </div>
+      ) : null}
+      <div className="dashboard-freshness" role="status">
+        마지막 정상 갱신{" "}
+        {lastUpdatedAt ? displayTime(lastUpdatedAt.toISOString()) : "--:--"}
+        {data
+          ? ` · 응답 생성 ${displayTime(data.world.snapshot_generated_at)}`
+          : ""}
+      </div>
 
       <div className="dashboard-layout">
         <aside className="dashboard-agent-rail">
@@ -602,6 +794,7 @@ export function Dashboard() {
                 className={
                   agent.agent_id === selectedAgent?.agent_id ? "selected" : ""
                 }
+                aria-pressed={agent.agent_id === selectedAgent?.agent_id}
                 onClick={() => {
                   setSelectedAgentId(agent.agent_id);
                   setRelationshipTargetId("");
@@ -638,27 +831,61 @@ export function Dashboard() {
         </aside>
 
         <section className="dashboard-main">
-          <nav className="dashboard-tabs" aria-label="에이전트 상세 정보">
-            {tabs.map((item) => (
+          <div
+            className="dashboard-tabs"
+            role="tablist"
+            aria-label="에이전트 상세 정보"
+          >
+            {tabs.map((item, index) => (
               <button
                 type="button"
                 key={item.id}
+                ref={(element) => {
+                  tabRefs.current[index] = element;
+                }}
+                id={`dashboard-tab-${item.id}`}
+                role="tab"
+                aria-selected={tab === item.id}
+                aria-controls={`dashboard-panel-${item.id}`}
+                tabIndex={tab === item.id ? 0 : -1}
                 className={tab === item.id ? "active" : ""}
                 onClick={() => setTab(item.id)}
+                onKeyDown={(event) => handleTabKeyDown(event, index)}
               >
                 {item.label}
               </button>
             ))}
-          </nav>
+          </div>
 
           {!selectedAgent ? (
             <section className="dashboard-empty">
               <RefreshCw size={24} />
-              <h2>에이전트 runtime을 기다리는 중</h2>
-              <p>실제 인지 runtime이 준비되면 이 화면에 표시됩니다.</p>
+              <h2>
+                {connection === "connecting"
+                  ? "대시보드에 연결하는 중"
+                  : connection === "offline"
+                    ? "대시보드에 연결할 수 없음"
+                    : "에이전트 runtime을 기다리는 중"}
+              </h2>
+              <p>
+                {connection === "offline"
+                  ? "네트워크와 backend 상태를 확인한 뒤 다시 시도하세요."
+                  : "실제 인지 runtime이 준비되면 이 화면에 표시됩니다."}
+              </p>
+              {connection === "offline" ? (
+                <button type="button" onClick={refresh}>
+                  다시 시도
+                </button>
+              ) : null}
             </section>
           ) : (
-            <div className="dashboard-tab-content">
+            <div
+              className="dashboard-tab-content"
+              id={`dashboard-panel-${tab}`}
+              role="tabpanel"
+              aria-labelledby={`dashboard-tab-${tab}`}
+              tabIndex={0}
+            >
               <div className="dashboard-agent-heading">
                 <div>
                   <span>{selectedAgent.agent_id}</span>
@@ -678,6 +905,7 @@ export function Dashboard() {
                     setSelectedAgentId(agentId);
                     setRelationshipTargetId(targetId);
                   }}
+                  onTargetSelect={setRelationshipTargetId}
                 />
               ) : null}
               {tab === "memory" ? (
@@ -686,11 +914,36 @@ export function Dashboard() {
                     <span>
                       <Database size={14} /> Memory Stream
                     </span>
-                    <strong>{selectedAgent.memories.length}</strong>
+                    <strong>
+                      표시 {visibleMemories.length} / 총{" "}
+                      {selectedAgent.memory_total}
+                    </strong>
                   </div>
+                  <div className="dashboard-toolbar">
+                    <input
+                      value={memoryQuery}
+                      onChange={(event) => setMemoryQuery(event.target.value)}
+                      placeholder="표시된 기억 검색"
+                      aria-label="기억 검색"
+                    />
+                    <select
+                      value={memoryType}
+                      onChange={(event) => setMemoryType(event.target.value)}
+                      aria-label="기억 유형 필터"
+                    >
+                      <option value="all">모든 유형</option>
+                      <option value="OBSERVATION">관찰</option>
+                      <option value="PLAN">계획</option>
+                      <option value="REFLECTION">성찰</option>
+                    </select>
+                  </div>
+                  <p className="dashboard-privacy-note">
+                    공개 화면에서는 기억 원문을 숨기고 유형·중요도·시각만
+                    표시합니다.
+                  </p>
                   <div className="dashboard-memory-list">
-                    {selectedAgent.memories.length ? (
-                      selectedAgent.memories.map((memory) => (
+                    {visibleMemories.length ? (
+                      visibleMemories.map((memory) => (
                         <MemoryRow
                           key={`${memory.node_type}-${memory.id}`}
                           memory={memory}
@@ -698,35 +951,82 @@ export function Dashboard() {
                       ))
                     ) : (
                       <p className="dashboard-empty-copy">
-                        저장된 기억이 없습니다.
+                        {selectedAgent.memory_total === 0
+                          ? "저장된 기억이 없습니다."
+                          : "현재 필터에 맞는 기억이 없습니다."}
                       </p>
                     )}
                   </div>
+                  {memoryError ? (
+                    <p className="dashboard-inline-error" role="alert">
+                      {memoryError}
+                    </p>
+                  ) : null}
+                  {memoryHasMore &&
+                  (memoryType !== "all" || selectedAgent.memory_has_more) ? (
+                    <button
+                      type="button"
+                      className="dashboard-load-more"
+                      disabled={memoryLoading}
+                      onClick={() => void handleLoadOlderMemories()}
+                    >
+                      {memoryLoading ? "불러오는 중…" : "이전 기억 더 보기"}
+                    </button>
+                  ) : null}
                 </section>
               ) : null}
               {tab === "plans" ? (
                 <section className="dashboard-panel dashboard-list-panel">
                   <div className="dashboard-panel-title">
                     <span>
-                      <ListTree size={14} /> Plan hierarchy
+                      <ListTree size={14} /> 계획 계층
                     </span>
+                    <strong>
+                      재계획 이유 ·{" "}
+                      {selectedAgent.last_replan_reason ?? "기록 없음"}
+                    </strong>
                   </div>
                   <div className="dashboard-plan-stack">
-                    <PlanCard label="DAY" item={selectedAgent.active_day} />
-                    <PlanCard label="HOUR" item={selectedAgent.active_hourly} />
                     <PlanCard
-                      label="MINUTE"
+                      label="일일 계획"
+                      item={selectedAgent.active_day}
+                      currentTime={data?.world.current_time ?? null}
+                    />
+                    <PlanCard
+                      label="시간 단위 계획"
+                      item={selectedAgent.active_hourly}
+                      currentTime={data?.world.current_time ?? null}
+                    />
+                    <PlanCard
+                      label="분 단위 계획"
                       item={selectedAgent.active_minute}
+                      currentTime={data?.world.current_time ?? null}
                     />
                   </div>
+                  {planIssues.length ? (
+                    <div className="dashboard-error" role="alert">
+                      계획 시간 검증 · {planIssues.join(" · ")}
+                    </div>
+                  ) : (
+                    <p className="dashboard-privacy-note">
+                      일일 계획의 시간 공백·겹침이 없습니다.
+                    </p>
+                  )}
                   <div className="dashboard-day-plan">
-                    {selectedAgent.day_plan.map((item, index) => (
-                      <PlanCard
-                        key={`${item.start_time}-${index}`}
-                        label={`DAY ${String(index + 1).padStart(2, "0")}`}
-                        item={item}
-                      />
-                    ))}
+                    {selectedAgent.day_plan.length ? (
+                      selectedAgent.day_plan.map((item, index) => (
+                        <PlanCard
+                          key={`${item.start_time}-${index}`}
+                          label={`일정 ${String(index + 1).padStart(2, "0")}`}
+                          item={item}
+                          currentTime={data?.world.current_time ?? null}
+                        />
+                      ))
+                    ) : (
+                      <p className="dashboard-empty-copy">
+                        일일 계획이 아직 생성되지 않았습니다.
+                      </p>
+                    )}
                   </div>
                 </section>
               ) : null}
@@ -734,29 +1034,48 @@ export function Dashboard() {
                 <section className="dashboard-panel dashboard-list-panel">
                   <div className="dashboard-panel-title">
                     <span>
-                      <Sparkles size={14} /> Reflection
+                      <Sparkles size={14} /> 성찰
                     </span>
                     <strong>
                       {selectedAgent.reflection_status.accumulated_importance} /{" "}
                       {selectedAgent.reflection_status.threshold}
                     </strong>
                   </div>
-                  <div className="dashboard-progress large">
-                    <span
-                      style={{
-                        width: `${Math.min(100, (selectedAgent.reflection_status.accumulated_importance / Math.max(1, selectedAgent.reflection_status.threshold)) * 100)}%`,
-                      }}
-                    />
-                  </div>
+                  <progress
+                    className="dashboard-progress large"
+                    max={Math.max(1, selectedAgent.reflection_status.threshold)}
+                    value={
+                      selectedAgent.reflection_status.accumulated_importance
+                    }
+                  />
+                  <p>
+                    다음 성찰까지{" "}
+                    {Math.max(
+                      0,
+                      selectedAgent.reflection_status.threshold -
+                        selectedAgent.reflection_status.accumulated_importance,
+                    )}
+                    점 · 전체 {selectedAgent.reflection_status.reflection_total}
+                    개
+                  </p>
                   <div className="dashboard-memory-list">
-                    {selectedAgent.memories
-                      .filter((memory) => memory.node_type === "REFLECTION")
-                      .map((memory) => (
-                        <MemoryRow
-                          key={`reflection-${memory.id}`}
-                          memory={memory}
-                        />
-                      ))}
+                    {selectedAgent.memories.filter(
+                      (memory) => memory.node_type === "REFLECTION",
+                    ).length ? (
+                      selectedAgent.memories
+                        .filter((memory) => memory.node_type === "REFLECTION")
+                        .map((memory) => (
+                          <MemoryRow
+                            key={`reflection-${memory.id}`}
+                            memory={memory}
+                          />
+                        ))
+                    ) : (
+                      <p className="dashboard-empty-copy">
+                        아직 표시할 성찰이 없습니다. 임계치에 도달하면
+                        생성됩니다.
+                      </p>
+                    )}
                   </div>
                 </section>
               ) : null}
@@ -764,17 +1083,46 @@ export function Dashboard() {
                 <section className="dashboard-panel dashboard-list-panel">
                   <div className="dashboard-panel-title">
                     <span>
-                      <BrainCircuit size={14} /> Decision diagnostics
+                      <BrainCircuit size={14} /> 판단 진단
                     </span>
                   </div>
+                  <div className="dashboard-toolbar">
+                    <input
+                      value={logQuery}
+                      onChange={(event) => setLogQuery(event.target.value)}
+                      placeholder="판단 로그 검색"
+                      aria-label="판단 로그 검색"
+                    />
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={logFailuresOnly}
+                        onChange={(event) =>
+                          setLogFailuresOnly(event.target.checked)
+                        }
+                      />
+                      실패만
+                    </label>
+                  </div>
+                  {data &&
+                  data.oldest_sequence > 1 &&
+                  (data.events[0]?.sequence ?? data.latest_sequence) >
+                    data.oldest_sequence ? (
+                    <p className="dashboard-privacy-note">
+                      bounded buffer의 오래된 로그가 생략됐을 수 있습니다. 현재
+                      제공 범위 {data.oldest_sequence}–{data.latest_sequence}
+                    </p>
+                  ) : null}
                   <div className="dashboard-timeline">
-                    {filteredEvents
-                      .filter(
-                        (event) => event.agent_id === selectedAgent.agent_id,
-                      )
-                      .map((event) => (
+                    {selectedAgentEvents.length ? (
+                      selectedAgentEvents.map((event) => (
                         <EventRow key={event.sequence} event={event} />
-                      ))}
+                      ))
+                    ) : (
+                      <p className="dashboard-empty-copy">
+                        선택한 조건에 맞는 판단 로그가 없습니다.
+                      </p>
+                    )}
                   </div>
                 </section>
               ) : null}
@@ -806,8 +1154,8 @@ export function Dashboard() {
             </select>
           </div>
           <div className="dashboard-timeline">
-            {filteredEvents.length ? (
-              filteredEvents.map((event) => (
+            {railEvents.length ? (
+              railEvents.map((event) => (
                 <EventRow key={event.sequence} event={event} />
               ))
             ) : (

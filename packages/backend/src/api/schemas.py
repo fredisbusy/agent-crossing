@@ -205,11 +205,23 @@ class DashboardMemoryResponse(BaseModel):
     created_at: str
     last_accessed_at: str
     importance: int
+    content_redacted: bool
+
+
+class DashboardMemoryPageResponse(BaseModel):
+    items: list[DashboardMemoryResponse]
+    total: int = Field(ge=0)
+    filtered_total: int = Field(ge=0)
+    has_more: bool
+    next_cursor: int | None
+    snapshot_memory_max_id: int | None
 
 
 class DashboardReflectionStatusResponse(BaseModel):
     accumulated_importance: int
     threshold: int
+    reflection_total: int = Field(ge=0)
+    last_reflection_at: str | None
 
 
 class DashboardRelationshipEvidenceResponse(BaseModel):
@@ -260,7 +272,7 @@ class DashboardRelationshipResponse(BaseModel):
     updated_at: str | None
     last_interaction_at: str | None
     summary: str | None
-    summary_status: Literal["available", "no_explicit_evidence"]
+    summary_status: Literal["available", "no_explicit_evidence", "redacted"]
     evidence_total: int = Field(ge=0)
     has_more_evidence: bool
     recent_events: list[DashboardRelationshipEventResponse]
@@ -273,6 +285,7 @@ class DashboardAgentResponse(BaseModel):
     current_action: str
     destination: str | None
     current_location_path: str | None
+    current_location_source: Literal["map", "arrival", "unknown"]
     tile_position: WorldMapPointResponse
     route_remaining: int
     bubble_kind: Literal["speech", "thought", "action"]
@@ -282,6 +295,9 @@ class DashboardAgentResponse(BaseModel):
     active_hourly: PlanItemResponse | None
     active_minute: PlanItemResponse | None
     day_plan: list[PlanItemResponse]
+    last_replan_reason: str | None
+    memory_total: int = Field(ge=0)
+    memory_has_more: bool
     reflection_status: DashboardReflectionStatusResponse
     relationships: list[DashboardRelationshipResponse]
     memories: list[DashboardMemoryResponse]
@@ -296,13 +312,8 @@ class DashboardEventResponse(BaseModel):
     reply: str
     silent_reason: str
     parse_failure: bool
-    thought: str
-    model_thought: str
-    self_critique: str
     decision_reason: str
     action_summary: str
-    decision_process: dict[str, object]
-    governance_trace: dict[str, object]
 
 
 class DashboardWorldResponse(BaseModel):
@@ -315,10 +326,12 @@ class DashboardWorldResponse(BaseModel):
     effective_time_step_seconds: int
     cognitive_runtime_error: str | None
     planning_error: str | None
+    snapshot_generated_at: str
 
 
 class DashboardStateResponse(BaseModel):
     world: DashboardWorldResponse
     agents: list[DashboardAgentResponse]
     events: list[DashboardEventResponse]
+    oldest_sequence: int = Field(ge=0)
     latest_sequence: int

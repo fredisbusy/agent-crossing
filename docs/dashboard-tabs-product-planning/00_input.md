@@ -1,6 +1,6 @@
 # 대시보드 탭 제품 기획 입력
 
-> 상태: 기획·현황 분석 완료 (2026-08-26), 구현 전
+> 상태: 기획·구현·공개 runtime 검증 완료 (2026-08-26)
 
 ## 사용자 요청
 
@@ -16,7 +16,9 @@
 
 - 1차 사용자: 에이전트의 인지 상태와 장애 원인을 확인하는 개발자·운영자
 - 2차 독자: dashboard 기능을 구현·검증하는 frontend/backend/QA 담당자
-- 전제: private memory와 diagnostics를 다루므로 일반 관람객용 게임 UI가 아니다. 공개 범위와 인증 정책은 P0 결정 사항이다.
+- 결정: 현재 공개 route는 일반 관람객도 볼 수 있는 redacted observer view다.
+  private memory 본문과 내부 diagnostics는 향후 인증된 operator surface가 생기기
+  전까지 공개하지 않는다.
 
 ## 범위
 
@@ -28,7 +30,8 @@
 
 ## 비목표
 
-- 이번 작업에서 source code나 API를 구현하지 않는다.
+- 기획 단계에서는 source code나 API를 구현하지 않는다. 후속 승인에 따라 본
+  문서의 P0/P1 개선은 같은 주제 기록 아래 구현한다.
 - mock 데이터나 추정 지표를 새로 만들지 않는다.
 - React/Vite/FastAPI/Phaser 경계를 변경하지 않는다.
 - Brain 결과 객체에 dashboard 전용 diagnostics 필드를 추가하지 않는다.
@@ -54,3 +57,11 @@
 - 성찰: 6명 중 5명은 최근 memory 100개 안에 reflection이 0개
 
 표본은 특정 시점의 운영 상태이며 제품 계약 자체로 간주하지 않는다. 다만 위치 의미, pagination, payload 분리, empty state의 필요성을 확인하는 실증 자료로 사용한다.
+
+## 2026-08-26 구현 후 공개 runtime 표본
+
+- 응답 크기: 117,828 bytes (`memory_limit=50`, `event_limit=0`)
+- agent 6명 모두 physical map 또는 명시적인 arrival source로 위치 해석
+- memory 원문과 관계 evidence는 전부 redacted, public diagnostics private field 0개
+- scheduler running, planning/cognitive runtime error 없음
+- 탭 URL·키보드 이동과 기억/계획/로그 화면을 공개 브라우저에서 확인

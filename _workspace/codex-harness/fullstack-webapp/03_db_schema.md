@@ -23,3 +23,9 @@ memory data; numeric relationship state is intentionally not persisted or fabric
 - Both tables cascade with the session and are rebuilt from snapshot v4 on save.
 - `0005` adds `romantic_interest` and its event delta independently from interpersonal
   `affinity`, preserving existing snapshots and rows at a neutral zero baseline.
+
+## 2026-08-26 dashboard tabs improvement
+
+No migration is required. Memory pagination reads existing stable IDs and diagnostics
+remain in the existing bounded runtime buffer. Public redaction is an API projection,
+not a destructive rewrite of persisted operator data.

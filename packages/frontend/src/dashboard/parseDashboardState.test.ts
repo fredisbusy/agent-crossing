@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseDashboardState } from "./parseDashboardState";
+import {
+  parseDashboardMemoryPage,
+  parseDashboardState,
+} from "./parseDashboardState";
 
 const fixture = {
   world: {
@@ -12,6 +15,7 @@ const fixture = {
     effective_time_step_seconds: 300,
     cognitive_runtime_error: null,
     planning_error: null,
+    snapshot_generated_at: "2026-08-24T00:00:01Z",
   },
   agents: [
     {
@@ -20,6 +24,7 @@ const fixture = {
       current_action: "at:허니컵 카페",
       destination: "브라이어 코브 > 허니컵 카페",
       current_location_path: "브라이어 코브 > 허니컵 카페",
+      current_location_source: "map",
       tile_position: { x: 3, y: 5 },
       route_remaining: 0,
       bubble_kind: "thought",
@@ -29,7 +34,15 @@ const fixture = {
       active_hourly: null,
       active_minute: null,
       day_plan: [],
-      reflection_status: { accumulated_importance: 42, threshold: 150 },
+      last_replan_reason: "active_hour_changed",
+      memory_total: 1,
+      memory_has_more: false,
+      reflection_status: {
+        accumulated_importance: 42,
+        threshold: 150,
+        reflection_total: 0,
+        last_reflection_at: null,
+      },
       relationships: [
         {
           target_agent_id: "Sujin",
@@ -84,11 +97,13 @@ const fixture = {
           created_at: "2026-08-24T08:55:00",
           last_accessed_at: "2026-08-24T08:55:00",
           importance: 5,
+          content_redacted: false,
         },
       ],
     },
   ],
   events: [],
+  oldest_sequence: 0,
   latest_sequence: 0,
 };
 
@@ -127,5 +142,36 @@ describe("parseDashboardState", () => {
     malformed.agents[0].relationships[0].revision = -1;
     malformed.agents[0].relationships[0].updated_at = "not-a-date";
     expect(parseDashboardState(malformed)).toBeNull();
+  });
+});
+
+describe("parseDashboardMemoryPage", () => {
+  it("accepts a redacted cursor page", () => {
+    const memory = structuredClone(fixture.agents[0].memories[0]);
+    memory.content = "공개 화면에서 숨긴 기억입니다.";
+    memory.content_redacted = true;
+    expect(
+      parseDashboardMemoryPage({
+        items: [memory],
+        total: 7,
+        filtered_total: 4,
+        has_more: true,
+        next_cursor: 3,
+        snapshot_memory_max_id: 7,
+      }),
+    ).toMatchObject({ total: 7, filtered_total: 4, next_cursor: 3 });
+  });
+
+  it("rejects an invalid cursor", () => {
+    expect(
+      parseDashboardMemoryPage({
+        items: [],
+        total: 0,
+        filtered_total: 0,
+        has_more: false,
+        next_cursor: -1,
+        snapshot_memory_max_id: null,
+      }),
+    ).toBeNull();
   });
 });

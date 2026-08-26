@@ -63,3 +63,11 @@
 - Test strict score/event parsing and malformed range rejection.
 - Verify master-detail selection, Korean labels, 44px controls, 390/720px layouts,
   authoritative current location, and public diagnostic-string filtering.
+
+## Dashboard tabs verification — 2026-08-26
+
+- Unit-test public event/memory projection, physical-vs-arrival location, and memory cursor.
+- Unit-test URL parsing/serialization, independent log selectors, plan gaps/overlaps, and strict parsing.
+- Run targeted backend tests, frontend tests, Ruff, shared/frontend/workspace builds, and diff check.
+- Verify the public API has no private event fields or unredacted memory and all agents
+  have a location source; exercise tab URL and keyboard behavior in the public browser.

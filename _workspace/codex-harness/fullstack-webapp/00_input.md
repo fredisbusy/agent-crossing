@@ -54,3 +54,11 @@
 - Replace the former `not_modeled` contract with session-scoped directional scores.
 - Actions and conversations change familiarity, trust, affinity, tension, and romantic interest through fixed rules.
 - Persist the relationship state with each game session and redesign the Relationship tab around it.
+
+## 2026-08-26 dashboard tabs improvement
+
+- Implement the approved six-tab product plan without changing the Brain contract.
+- Treat the unauthenticated public route as a redacted observer view: expose runtime
+  facts and metadata, never private memory text or internal model reasoning.
+- Correct current-location semantics, separate log filters, make polling recoverable,
+  and add URL, keyboard, filtering, status, timeline, and mobile affordances.

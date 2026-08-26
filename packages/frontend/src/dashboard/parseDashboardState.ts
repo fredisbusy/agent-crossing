@@ -2,6 +2,7 @@ import type {
   DashboardAgent,
   DashboardEvent,
   DashboardMemory,
+  DashboardMemoryPage,
   DashboardRelationship,
   DashboardRelationshipEvent,
   DashboardRelationshipEvidence,
@@ -47,7 +48,8 @@ function parseMemory(value: unknown): DashboardMemory | null {
     typeof value.content !== "string" ||
     typeof value.created_at !== "string" ||
     typeof value.last_accessed_at !== "string" ||
-    typeof value.importance !== "number"
+    typeof value.importance !== "number" ||
+    typeof value.content_redacted !== "boolean"
   ) {
     return null;
   }
@@ -59,6 +61,33 @@ function parseMemory(value: unknown): DashboardMemory | null {
     created_at: value.created_at,
     last_accessed_at: value.last_accessed_at,
     importance: value.importance,
+    content_redacted: value.content_redacted,
+  };
+}
+
+export function parseDashboardMemoryPage(
+  value: unknown,
+): DashboardMemoryPage | null {
+  if (!isRecord(value) || !Array.isArray(value.items)) return null;
+  const items = value.items.map(parseMemory);
+  if (
+    items.some((item) => item === null) ||
+    !isNonNegativeInteger(value.total) ||
+    !isNonNegativeInteger(value.filtered_total) ||
+    typeof value.has_more !== "boolean" ||
+    (value.next_cursor !== null && !isNonNegativeInteger(value.next_cursor)) ||
+    (value.snapshot_memory_max_id !== null &&
+      !isNonNegativeInteger(value.snapshot_memory_max_id))
+  ) {
+    return null;
+  }
+  return {
+    items: items.filter((item): item is DashboardMemory => item !== null),
+    total: value.total,
+    filtered_total: value.filtered_total,
+    has_more: value.has_more,
+    next_cursor: value.next_cursor as number | null,
+    snapshot_memory_max_id: value.snapshot_memory_max_id as number | null,
   };
 }
 
@@ -109,7 +138,7 @@ function parseRelationship(value: unknown): DashboardRelationship | null {
     (value.last_interaction_at !== null &&
       !isDateTimeString(value.last_interaction_at)) ||
     (value.summary !== null && typeof value.summary !== "string") ||
-    !["available", "no_explicit_evidence"].includes(
+    !["available", "no_explicit_evidence", "redacted"].includes(
       String(value.summary_status),
     ) ||
     !isNonNegativeInteger(value.evidence_total) ||
@@ -254,6 +283,9 @@ function parseAgent(value: unknown): DashboardAgent | null {
     (value.destination !== null && typeof value.destination !== "string") ||
     (value.current_location_path !== null &&
       typeof value.current_location_path !== "string") ||
+    !["map", "arrival", "unknown"].includes(
+      String(value.current_location_source),
+    ) ||
     typeof value.tile_position.x !== "number" ||
     typeof value.tile_position.y !== "number" ||
     typeof value.route_remaining !== "number" ||
@@ -265,11 +297,18 @@ function parseAgent(value: unknown): DashboardAgent | null {
     (value.active_minute !== null && activeMinute === null) ||
     dayPlan === null ||
     dayPlan.some((item) => item === null) ||
+    (value.last_replan_reason !== null &&
+      typeof value.last_replan_reason !== "string") ||
+    !isNonNegativeInteger(value.memory_total) ||
+    typeof value.memory_has_more !== "boolean" ||
     memories === null ||
     memories.some((item) => item === null) ||
     !isRecord(reflection) ||
     typeof reflection.accumulated_importance !== "number" ||
     typeof reflection.threshold !== "number" ||
+    !isNonNegativeInteger(reflection.reflection_total) ||
+    (reflection.last_reflection_at !== null &&
+      !isDateTimeString(reflection.last_reflection_at)) ||
     relationships === null ||
     relationships.some((relationship) => relationship === null)
   ) {
@@ -281,6 +320,8 @@ function parseAgent(value: unknown): DashboardAgent | null {
     current_action: value.current_action,
     destination: value.destination as string | null,
     current_location_path: value.current_location_path as string | null,
+    current_location_source:
+      value.current_location_source as DashboardAgent["current_location_source"],
     tile_position: { x: value.tile_position.x, y: value.tile_position.y },
     route_remaining: value.route_remaining,
     bubble_kind: value.bubble_kind as DashboardAgent["bubble_kind"],
@@ -290,9 +331,14 @@ function parseAgent(value: unknown): DashboardAgent | null {
     active_hourly: activeHourly,
     active_minute: activeMinute,
     day_plan: dayPlan.filter((item): item is PlanItemState => item !== null),
+    last_replan_reason: value.last_replan_reason as string | null,
+    memory_total: value.memory_total,
+    memory_has_more: value.memory_has_more,
     reflection_status: {
       accumulated_importance: reflection.accumulated_importance,
       threshold: reflection.threshold,
+      reflection_total: reflection.reflection_total,
+      last_reflection_at: reflection.last_reflection_at as string | null,
     },
     relationships: relationships.filter(
       (relationship): relationship is DashboardRelationship =>
@@ -310,9 +356,6 @@ function parseEvent(value: unknown): DashboardEvent | null {
     "agent_name",
     "reply",
     "silent_reason",
-    "thought",
-    "model_thought",
-    "self_critique",
     "decision_reason",
     "action_summary",
   ] as const;
@@ -320,13 +363,19 @@ function parseEvent(value: unknown): DashboardEvent | null {
     typeof value.sequence !== "number" ||
     typeof value.turn !== "number" ||
     typeof value.parse_failure !== "boolean" ||
-    stringFields.some((field) => typeof value[field] !== "string") ||
-    !isRecord(value.decision_process) ||
-    !isRecord(value.governance_trace)
+    stringFields.some((field) => typeof value[field] !== "string")
   ) {
     return null;
   }
   return value as unknown as DashboardEvent;
+}
+
+export function parseDashboardEvents(value: unknown): DashboardEvent[] | null {
+  if (!Array.isArray(value)) return null;
+  const events = value.map(parseEvent);
+  return events.some((event) => event === null)
+    ? null
+    : events.filter((event): event is DashboardEvent => event !== null);
 }
 
 export function parseDashboardState(value: unknown): DashboardState | null {
@@ -350,11 +399,13 @@ export function parseDashboardState(value: unknown): DashboardState | null {
       typeof world.cognitive_runtime_error !== "string") ||
     (world.planning_error !== null &&
       typeof world.planning_error !== "string") ||
+    !isDateTimeString(world.snapshot_generated_at) ||
     agents === null ||
     agents.some((agent) => agent === null) ||
     events === null ||
     events.some((event) => event === null) ||
-    typeof value.latest_sequence !== "number"
+    !isNonNegativeInteger(value.oldest_sequence) ||
+    !isNonNegativeInteger(value.latest_sequence)
   ) {
     return null;
   }
@@ -369,9 +420,11 @@ export function parseDashboardState(value: unknown): DashboardState | null {
       effective_time_step_seconds: world.effective_time_step_seconds,
       cognitive_runtime_error: world.cognitive_runtime_error as string | null,
       planning_error: world.planning_error as string | null,
+      snapshot_generated_at: world.snapshot_generated_at,
     },
     agents: agents.filter((agent): agent is DashboardAgent => agent !== null),
     events: events.filter((event): event is DashboardEvent => event !== null),
+    oldest_sequence: value.oldest_sequence,
     latest_sequence: value.latest_sequence,
   };
 }

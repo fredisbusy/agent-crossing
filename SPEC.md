@@ -441,18 +441,38 @@ Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하�
 ### 9.1 운영 관측 대시보드 계약
 
 - `/dashboard`는 게임 렌더러와 분리된 React 관측 화면이며 Phaser runtime을 부팅하지 않는다.
-- `GET /dashboard/state`는 실제 runtime의 현재 상태, 계층 계획, memory stream,
-  reflection 임계치 진행률, 최근 cognitive diagnostics event를 반환한다.
+- `GET /dashboard/state`는 실제 runtime의 현재 상태, 계층 계획, 공개용 memory
+  metadata, reflection 임계치 진행률을 반환한다. 응답에는
+  `snapshot_generated_at`, bounded event buffer의 `oldest_sequence`와
+  `latest_sequence`를 포함해 freshness와 cursor gap을 판정할 수 있게 한다.
+- 공개 `/dashboard`는 인증된 운영자 콘솔이 아니라 **redacted observer view**다.
+  memory는 id/type/importance/created/last-accessed metadata와 total만 공개하고
+  원문, reflection insight, 관계 evidence 본문은 공개하지 않는다.
+- 공개 diagnostics event는 sequence/turn/time/agent/reply/silent/parse-failure/
+  decision-reason/action-summary allowlist만 직렬화한다. `thought`,
+  `model_thought`, `self_critique`, `decision_process`, governance trace와 provider
+  원문은 runtime buffer나 저장 형식에 존재하더라도 공개 응답으로 전달하지 않는다.
+- `GET /dashboard/events?after=<sequence>`는 공개 event cursor polling에 사용한다.
+  `GET /dashboard/agents/{agent_id}/memories`는 `before_id`, `limit`, `node_type`,
+  `min_importance`를 받는 안정적인 역순 cursor를 제공하되 동일한 metadata-only
+  정책을 적용한다.
+- frontend polling은 이전 요청 완료 후 다음 요청을 예약한다. state summary는
+  visible 3초/hidden 15초를 기본으로 하며 실패 시 backoff하고 마지막 정상 상태를
+  보존한다. event cursor는 visible 1초/hidden 15초로 독립 갱신한다.
 - cognitive diagnostics event는 자동 scheduler와 수동 step 경로 모두에서 생성하고
   단조 증가 `sequence`와 world `turn`을 함께 보존한다.
 - diagnostics event는 별도 bounded buffer가 소유하며 Brain의 `ActionLoopResult`에
   대시보드 전용 필드를 추가하지 않는다.
-- 공개 응답에서는 embedding, provider `raw_response`, prompt, API key를 제외한다.
+- `current_location_path`는 destination이 아니라 authoritative physical pixel을
+  기준으로 계산한다. 문 출입 완료처럼 authored door가 location bounds 밖에 있는
+  경우에만 도착 상태를 별도 source로 표시하며 이동 중 destination으로 대체하지 않는다.
+- 공개 응답에서는 embedding, provider `raw_response`, prompt, API key와 private
+  memory/diagnostics 본문을 제외한다.
 - `/ws/world`는 계속 사용자 관찰용 최신 spatial snapshot만 전달하며 내부 판단
   trace를 포함하지 않는다.
-- 선택 agent의 관계 요약은 해당 agent 자신의 `identity_stable_set`과 private
-  memory stream에서 상대를 언급한 근거만 사용한다. 역방향 agent의 기억으로
-  관계 정보를 보완하거나 대칭 복사하지 않는다.
+- 관계 수치와 event는 subject 기준의 비대칭 상태를 유지한다. private memory에서
+  파생한 정성 요약·evidence가 필요한 경우 인증된 별도 operator surface에서만
+  제공하며 공개 observer view에서는 redacted 상태로 표시한다.
 - 관계 API는 `measurement=modeled_v1`, 다섯 축, revision, 최근 event와 적용 delta를
   반환한다. 정성 evidence도 함께 제공하되 memory importance/retrieval score를
   관계 점수로 변환하지 않는다.

@@ -96,3 +96,16 @@ break, master-detail screen, and live session save/load evidence.
 - `affinity` and `romantic_interest` are independent. Friendly dialogue leaves romantic
   interest unchanged; only explicit romantic recognition, welcome, or boundary events
   modify it.
+
+## 2026-08-26 dashboard tabs result
+
+- Public state dropped from the earlier 280,413-byte sample to 117,828 bytes with
+  `memory_limit=50&event_limit=0`; all six agents resolved a physical or arrival location.
+- Public projection exposed zero private event fields, unredacted memories, or relationship evidence.
+- Targeted backend tests: 12 passed. Frontend: 27 passed across 6 files. Ruff and
+  recursive workspace build passed.
+- Public browser verification passed for tab URL state, ArrowRight navigation, memory
+  redaction, plan status, and diagnostics filters. The in-app browser lacked viewport
+  resizing, so final physical-device mobile QA remains a deployment check.
+- Full backend suite: 228 passed, 11 skipped, 5 unrelated failures in existing dirty
+  planning/settings work; dashboard-targeted tests passed.

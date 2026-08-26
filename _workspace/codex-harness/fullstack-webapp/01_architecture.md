@@ -37,3 +37,13 @@
 - `WorldRuntime.relationships` owns directional state and the idempotent event ledger.
 - `RuntimeSaveState` v4 is the restore source of truth; SQLAlchemy rows are projections.
 - Brain results and `/ws/world` remain unchanged. Only committed domain signals may update scores.
+
+## Dashboard tabs architecture — 2026-08-26
+
+- FastAPI owns a public projection allowlist distinct from private runtime objects.
+- Physical pixel position is the location source; a completed authored-door arrival is
+  labeled separately and a moving destination never substitutes for current location.
+- React keeps summary state polling and sequence-cursor event polling independent.
+  Both are completion-based, visibility-aware, abort only on cleanup, and preserve the
+  last valid state while backing off.
+- URL state and pure view-model selectors keep selected-agent and right-rail filters independent.

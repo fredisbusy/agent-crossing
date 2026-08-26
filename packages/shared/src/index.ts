@@ -66,11 +66,23 @@ export interface DashboardMemory {
   created_at: string;
   last_accessed_at: string;
   importance: number;
+  content_redacted: boolean;
+}
+
+export interface DashboardMemoryPage {
+  items: DashboardMemory[];
+  total: number;
+  filtered_total: number;
+  has_more: boolean;
+  next_cursor: number | null;
+  snapshot_memory_max_id: number | null;
 }
 
 export interface DashboardReflectionStatus {
   accumulated_importance: number;
   threshold: number;
+  reflection_total: number;
+  last_reflection_at: string | null;
 }
 
 export interface DashboardRelationshipEvidence {
@@ -92,7 +104,7 @@ export interface DashboardRelationship {
   updated_at: string | null;
   last_interaction_at: string | null;
   summary: string | null;
-  summary_status: "available" | "no_explicit_evidence";
+  summary_status: "available" | "no_explicit_evidence" | "redacted";
   evidence_total: number;
   has_more_evidence: boolean;
   recent_events: DashboardRelationshipEvent[];
@@ -151,6 +163,7 @@ export interface DashboardAgent {
   current_action: string;
   destination: string | null;
   current_location_path: string | null;
+  current_location_source: "map" | "arrival" | "unknown";
   tile_position: AgentPosition;
   route_remaining: number;
   bubble_kind: "speech" | "thought" | "action";
@@ -160,6 +173,9 @@ export interface DashboardAgent {
   active_hourly: PlanItemState | null;
   active_minute: PlanItemState | null;
   day_plan: PlanItemState[];
+  last_replan_reason: string | null;
+  memory_total: number;
+  memory_has_more: boolean;
   reflection_status: DashboardReflectionStatus;
   relationships: DashboardRelationship[];
   memories: DashboardMemory[];
@@ -174,13 +190,8 @@ export interface DashboardEvent {
   reply: string;
   silent_reason: string;
   parse_failure: boolean;
-  thought: string;
-  model_thought: string;
-  self_critique: string;
   decision_reason: string;
   action_summary: string;
-  decision_process: Record<string, unknown>;
-  governance_trace: Record<string, unknown>;
 }
 
 export interface DashboardWorld {
@@ -193,11 +204,13 @@ export interface DashboardWorld {
   effective_time_step_seconds: number;
   cognitive_runtime_error: string | null;
   planning_error: string | null;
+  snapshot_generated_at: string;
 }
 
 export interface DashboardState {
   world: DashboardWorld;
   agents: DashboardAgent[];
   events: DashboardEvent[];
+  oldest_sequence: number;
   latest_sequence: number;
 }

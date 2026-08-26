@@ -1,22 +1,23 @@
 import logging
+import datetime
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 import asyncio
 import uuid
 
 from agents.persona_loader import PersonaLoader
 from agents.planning.lifecycle import PlanItemSnapshot
-from agents.relationship_diagnostics import build_relationship_snapshot
 from agents.relationships.rules import relationship_status_label
 from agents.memory.memory_manager import ObservationContext
+from agents.memory.memory_object import MemoryObject
 from api.schemas import (
     DashboardAgentResponse,
     DashboardEventResponse,
     DashboardMemoryResponse,
+    DashboardMemoryPageResponse,
     DashboardReflectionStatusResponse,
-    DashboardRelationshipEvidenceResponse,
     DashboardRelationshipEventResponse,
     DashboardRelationshipMetricsResponse,
     DashboardRelationshipResponse,
@@ -60,7 +61,12 @@ from settings import (
 )
 from world.runtime import WorldRuntime, WorldRuntimeConfig, build_world_runtime
 from world.observability import DashboardEvent
-from world.spatial import SpatialAgentSeed, SpatialWorldRuntime, SpatialWorldSnapshot
+from world.spatial import (
+    SpatialAgentSeed,
+    SpatialAgentSnapshot,
+    SpatialWorldRuntime,
+    SpatialWorldSnapshot,
+)
 from world.stream import SpatialWorldStream
 from world.world_map import MapBounds, MapPoint, WorldMap, load_world_map
 from persistence.repository import (
@@ -570,28 +576,22 @@ def _dashboard_plan_item(item: PlanItemSnapshot | None) -> PlanItemResponse | No
     )
 
 
-def _public_diagnostics(value: object) -> object:
-    """Remove provider payloads and secrets from public diagnostics responses."""
-    if isinstance(value, dict):
-        mapping = cast(dict[str, object], value)
-        return {
-            key: _public_diagnostics(child)
-            for key, child in mapping.items()
-            if key not in {"raw_response", "prompt", "api_key"}
-        }
-    if isinstance(value, list):
-        items = cast(list[object], value)
-        return [_public_diagnostics(child) for child in items]
-    return value
+def _dashboard_memory_response(memory: MemoryObject) -> DashboardMemoryResponse:
+    """Project private memory metadata without exposing its content publicly."""
+    return DashboardMemoryResponse(
+        id=memory.id,
+        node_type=memory.node_type.value,
+        citations=memory.citations,
+        content="공개 화면에서 숨긴 기억입니다.",
+        created_at=memory.created_at.isoformat(),
+        last_accessed_at=memory.last_accessed_at.isoformat(),
+        importance=memory.importance,
+        content_redacted=True,
+    )
 
 
 def _dashboard_event_response(event: DashboardEvent) -> DashboardEventResponse:
-    decision_process = _public_diagnostics(event.decision_process)
-    governance_trace = _public_diagnostics(event.governance_trace)
-    if not isinstance(decision_process, dict) or not isinstance(governance_trace, dict):
-        raise ValueError("dashboard diagnostics must remain dictionaries")
-    public_decision_process = cast(dict[str, object], decision_process)
-    public_governance_trace = cast(dict[str, object], governance_trace)
+    """Build the public diagnostics projection without private model traces."""
     return DashboardEventResponse(
         sequence=event.sequence,
         turn=event.turn,
@@ -601,20 +601,35 @@ def _dashboard_event_response(event: DashboardEvent) -> DashboardEventResponse:
         reply=event.reply,
         silent_reason=event.silent_reason,
         parse_failure=event.parse_failure,
-        thought=event.thought,
-        model_thought=event.model_thought,
-        self_critique=event.self_critique,
         decision_reason=event.decision_reason,
         action_summary=event.action_summary,
-        decision_process=public_decision_process,
-        governance_trace=public_governance_trace,
     )
+
+
+def _dashboard_location(
+    *, world_map: WorldMap, agent: SpatialAgentSnapshot
+) -> tuple[str | None, Literal["map", "arrival", "unknown"]]:
+    """Resolve a tile's physical map label, with an explicit arrival fallback."""
+    location = world_map.location_at(agent.pixel_position)
+    if location is not None:
+        return location.location_path, "map"
+    if (
+        agent.route_remaining == 0
+        and agent.current_action.startswith("at:")
+        and agent.destination is not None
+    ):
+        # Authored building doors can sit one walkable tile outside their bounds.
+        # The spatial runtime's completed route/destination is authoritative for
+        # semantic arrival, but keep the source visible to dashboard clients.
+        return agent.destination, "arrival"
+    return None, "unknown"
 
 
 def _dashboard_state_response(
     *, runtime: WorldRuntime, memory_limit: int, event_limit: int
 ) -> DashboardStateResponse:
     spatial = _require_spatial_runtime().snapshot()
+    world_map = _require_spatial_runtime().world_map
     runtime_by_id = {str(agent.identity.id): agent for agent in runtime.agents}
     agents: list[DashboardAgentResponse] = []
     for spatial_agent in spatial.agents:
@@ -624,19 +639,22 @@ def _dashboard_state_response(
         reflection = runtime_agent.brain.reflection_graph.reflection
         all_memories = list(runtime_agent.memory_service.memory_stream.snapshot())
         memories = runtime_agent.memory_service.get_recent_memories(limit=memory_limit)
+        reflection_memories = [
+            memory for memory in all_memories if memory.node_type.value == "REFLECTION"
+        ]
+        current_location_path, current_location_source = _dashboard_location(
+            world_map=world_map, agent=spatial_agent
+        )
+        planning_state = (
+            runtime.planning_coordinator.export_state(agent_id=spatial_agent.agent_id)
+            if runtime.planning_coordinator is not None
+            else None
+        )
         relationships: list[DashboardRelationshipResponse] = []
         for target_agent in runtime.agents:
             target_agent_id = str(target_agent.identity.id)
             if target_agent_id == spatial_agent.agent_id:
                 continue
-            relationship = build_relationship_snapshot(
-                identity_stable_set=list(
-                    runtime_agent.profile.fixed.identity_stable_set
-                ),
-                memories=all_memories,
-                target_agent_id=target_agent_id,
-                target_name=target_agent.name,
-            )
             relationship_state, relationship_events = (
                 runtime.relationships.pair_snapshot(
                     spatial_agent.agent_id, target_agent_id
@@ -644,8 +662,8 @@ def _dashboard_state_response(
             )
             relationships.append(
                 DashboardRelationshipResponse(
-                    target_agent_id=relationship.target_agent_id,
-                    target_name=relationship.target_name,
+                    target_agent_id=target_agent_id,
+                    target_name=target_agent.name,
                     measurement="modeled_v1",
                     metrics=DashboardRelationshipMetricsResponse(
                         **vars(relationship_state.metrics)
@@ -662,10 +680,10 @@ def _dashboard_state_response(
                         if relationship_state.last_interaction_at is not None
                         else None
                     ),
-                    summary=relationship.summary,
-                    summary_status=relationship.summary_status,
-                    evidence_total=relationship.evidence_total,
-                    has_more_evidence=relationship.has_more_evidence,
+                    summary=None,
+                    summary_status="redacted",
+                    evidence_total=0,
+                    has_more_evidence=False,
                     recent_events=[
                         DashboardRelationshipEventResponse(
                             id=event.id,
@@ -682,25 +700,7 @@ def _dashboard_state_response(
                         )
                         for event in relationship_events
                     ],
-                    evidence=[
-                        DashboardRelationshipEvidenceResponse(
-                            source=evidence.source,
-                            content=evidence.content,
-                            memory_id=evidence.memory_id,
-                            node_type=(
-                                evidence.node_type.value
-                                if evidence.node_type is not None
-                                else None
-                            ),
-                            importance=evidence.importance,
-                            created_at=(
-                                evidence.created_at.isoformat()
-                                if evidence.created_at is not None
-                                else None
-                            ),
-                        )
-                        for evidence in relationship.evidence
-                    ],
+                    evidence=[],
                 )
             )
         agents.append(
@@ -709,16 +709,8 @@ def _dashboard_state_response(
                 name=spatial_agent.name,
                 current_action=spatial_agent.current_action,
                 destination=spatial_agent.destination,
-                current_location_path=(
-                    location.location_path
-                    if (
-                        location := _require_spatial_runtime().world_map.location_at(
-                            spatial_agent.tile_position
-                        )
-                    )
-                    is not None
-                    else None
-                ),
+                current_location_path=current_location_path,
+                current_location_source=current_location_source,
                 tile_position=_map_point_response(spatial_agent.tile_position),
                 route_remaining=spatial_agent.route_remaining,
                 bubble_kind=spatial_agent.bubble_kind,
@@ -733,26 +725,32 @@ def _dashboard_state_response(
                     cast(PlanItemResponse, _dashboard_plan_item(item))
                     for item in spatial_agent.day_plan
                 ],
+                last_replan_reason=(
+                    planning_state.last_replan_reason
+                    if planning_state is not None
+                    else None
+                ),
+                memory_total=len(all_memories),
+                memory_has_more=len(all_memories) > len(memories),
                 reflection_status=DashboardReflectionStatusResponse(
                     accumulated_importance=reflection.accumulated_importance,
                     threshold=reflection.config.threshold,
+                    reflection_total=len(reflection_memories),
+                    last_reflection_at=(
+                        max(
+                            memory.created_at for memory in reflection_memories
+                        ).isoformat()
+                        if reflection_memories
+                        else None
+                    ),
                 ),
                 relationships=relationships,
-                memories=[
-                    DashboardMemoryResponse(
-                        id=memory.id,
-                        node_type=memory.node_type.value,
-                        citations=memory.citations,
-                        content=memory.content,
-                        created_at=memory.created_at.isoformat(),
-                        last_accessed_at=memory.last_accessed_at.isoformat(),
-                        importance=memory.importance,
-                    )
-                    for memory in memories
-                ],
+                memories=[_dashboard_memory_response(memory) for memory in memories],
             )
         )
     state = runtime.state()
+    event_snapshot = runtime.dashboard_events(limit=500)
+    response_events = event_snapshot[-event_limit:] if event_limit > 0 else ()
     return DashboardStateResponse(
         world=DashboardWorldResponse(
             available=True,
@@ -766,13 +764,12 @@ def _dashboard_state_response(
                 str | None, getattr(app.state, "cognitive_runtime_error", None)
             ),
             planning_error=cast(str | None, getattr(runtime, "planning_error", None)),
+            snapshot_generated_at=datetime.datetime.now(datetime.UTC).isoformat(),
         ),
         agents=agents,
-        events=[
-            _dashboard_event_response(event)
-            for event in runtime.dashboard_events(limit=event_limit)
-        ],
-        latest_sequence=runtime.latest_dashboard_sequence,
+        events=[_dashboard_event_response(event) for event in response_events],
+        oldest_sequence=event_snapshot[0].sequence if event_snapshot else 0,
+        latest_sequence=event_snapshot[-1].sequence if event_snapshot else 0,
     )
 
 
@@ -784,7 +781,52 @@ async def get_dashboard_state(
     return _dashboard_state_response(
         runtime=_require_runtime(),
         memory_limit=max(1, min(memory_limit, 500)),
-        event_limit=max(1, min(event_limit, 500)),
+        event_limit=max(0, min(event_limit, 500)),
+    )
+
+
+@app.get(
+    "/dashboard/agents/{agent_id}/memories",
+    response_model=DashboardMemoryPageResponse,
+)
+async def get_dashboard_agent_memories(
+    agent_id: str,
+    before_id: int | None = None,
+    limit: int = 50,
+    node_type: Literal["OBSERVATION", "REFLECTION", "PLAN"] | None = None,
+    min_importance: int = 0,
+) -> DashboardMemoryPageResponse:
+    runtime = _require_runtime()
+    runtime_agent = next(
+        (agent for agent in runtime.agents if str(agent.identity.id) == agent_id),
+        None,
+    )
+    if runtime_agent is None:
+        raise HTTPException(status_code=404, detail="agent not found")
+    snapshot = list(runtime_agent.memory_service.memory_stream.snapshot())
+    filtered = [
+        memory
+        for memory in snapshot
+        if (node_type is None or memory.node_type.value == node_type)
+        and memory.importance >= max(0, min(min_importance, 10))
+    ]
+    candidates = [
+        memory
+        for memory in filtered
+        if before_id is None or memory.id < max(0, before_id)
+    ]
+    candidates.sort(key=lambda memory: memory.id, reverse=True)
+    bounded_limit = max(1, min(limit, 100))
+    page_with_extra = candidates[: bounded_limit + 1]
+    page = page_with_extra[:bounded_limit]
+    has_more = len(page_with_extra) > bounded_limit
+    return DashboardMemoryPageResponse(
+        items=[_dashboard_memory_response(memory) for memory in page],
+        total=len(snapshot),
+        filtered_total=len(filtered),
+        has_more=has_more,
+        next_cursor=page[-1].id if has_more and page else None,
+        snapshot_memory_max_id=max((memory.id for memory in snapshot), default=None),
     )
 
 

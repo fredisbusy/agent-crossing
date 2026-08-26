@@ -35,3 +35,12 @@ and frontend bundle carry the additive relationship contract.
 Apply Alembic revision `0004` before the updated backend writes projections. Deploy the
 backend/shared/frontend as one coordinated contract change, then save/reload a session
 and compare relationship revisions and event IDs before and after restore.
+
+## 2026-08-26 dashboard tabs rollout
+
+- Deploy backend/shared/frontend as one additive contract change; no migration is needed.
+- The Vite dev proxy must route `/dashboard/agents` in addition to state/events.
+- Verify public state with `memory_limit=50&event_limit=0`, then verify the six tabs,
+  URL persistence, keyboard navigation, freshness status, and mobile layout.
+- Do not enable private memory or internal diagnostic text until a separate authenticated
+  operator surface and authorization policy exist.
