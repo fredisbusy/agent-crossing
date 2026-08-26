@@ -134,6 +134,52 @@ def _build_runtime_bundle() -> tuple[WorldRuntime, SpatialWorldRuntime]:
     return runtime, spatial_runtime
 
 
+def _restore_or_create_runtime_bundle(
+    repository: GameSessionRepository,
+) -> tuple[WorldRuntime, SpatialWorldRuntime, uuid.UUID, bool]:
+    """Restore the newest compatible save, or start a fresh active runtime.
+
+    Repository schema validation cannot detect runtime-dependent incompatibilities
+    such as a changed resident roster or map contract. Preserve those snapshots as
+    ERROR records and continue trying older saves before creating a new session.
+    """
+    while True:
+        runtime, spatial_runtime = _build_runtime_bundle()
+        latest = repository.latest_session()
+        if latest is None:
+            initial_state = runtime.export_save_state(scheduler_was_running=True)
+            summary = repository.create(
+                name="브라이어 코브 1",
+                state=initial_state,
+            )
+            return runtime, spatial_runtime, summary.id, True
+
+        summary, saved_state = latest
+        try:
+            runtime.restore_save_state(saved_state)
+        except Exception:
+            marked = repository.mark_error(session_id=summary.id)
+            if marked is None:
+                raise RuntimeError(
+                    "incompatible saved session disappeared during startup"
+                )
+            logger.exception(
+                "Saved session %s is incompatible with the current runtime; "
+                "preserving it as ERROR and trying the next candidate",
+                summary.id,
+            )
+            continue
+
+        activated = repository.activate(session_id=summary.id)
+        if activated is None:
+            raise RuntimeError("saved session disappeared during startup")
+        should_start_scheduler = (
+            saved_state.scheduler_was_running
+            or saved_state.planning_error is not None
+        )
+        return runtime, spatial_runtime, summary.id, should_start_scheduler
+
+
 async def on_startup() -> None:
     await _get_world_map()
     persona_dir = Path(__file__).resolve().parents[2] / "persona"
@@ -152,30 +198,16 @@ async def on_startup() -> None:
         if len(persona_names) >= 2:
             repository = GameSessionRepository()
             app.state.session_repository = repository
-            runtime, spatial_runtime = await asyncio.to_thread(_build_runtime_bundle)
-            latest = await asyncio.to_thread(repository.latest_session)
-            should_start_scheduler = True
-            if latest is not None:
-                summary, saved_state = latest
-                runtime.restore_save_state(saved_state)
-                activated = await asyncio.to_thread(
-                    repository.activate, session_id=summary.id
-                )
-                if activated is None:
-                    raise RuntimeError("saved session disappeared during startup")
-                app.state.current_session_id = summary.id
-                should_start_scheduler = (
-                    saved_state.scheduler_was_running
-                    or saved_state.planning_error is not None
-                )
-            else:
-                initial_state = runtime.export_save_state(scheduler_was_running=True)
-                summary = await asyncio.to_thread(
-                    repository.create,
-                    name="브라이어 코브 1",
-                    state=initial_state,
-                )
-                app.state.current_session_id = summary.id
+            (
+                runtime,
+                spatial_runtime,
+                current_session_id,
+                should_start_scheduler,
+            ) = await asyncio.to_thread(
+                _restore_or_create_runtime_bundle,
+                repository,
+            )
+            app.state.current_session_id = current_session_id
             app.state.world_runtime = runtime
             app.state.spatial_runtime = spatial_runtime
             app.state.spatial_stream = SpatialWorldStream(runtime=spatial_runtime)

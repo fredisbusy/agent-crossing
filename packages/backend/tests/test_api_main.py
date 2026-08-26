@@ -1,5 +1,8 @@
 import datetime
+import uuid
 from dataclasses import dataclass
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import HTTPException
@@ -9,6 +12,7 @@ from world.engine import SimulationStepObservability, SimulationStepResult
 import api.main as api_main
 from api.main import (
     _require_runtime,
+    _restore_or_create_runtime_bundle,
     app,
     get_world_spatial_state,
     get_world_state,
@@ -26,6 +30,7 @@ from api.schemas import (
 )
 from world.spatial import SpatialAgentSeed, SpatialWorldRuntime
 from world.world_map import load_world_map
+from persistence.repository import GameSessionRepository
 
 
 @dataclass(frozen=True)
@@ -86,6 +91,76 @@ class DummyRuntime:
             return False
         self.scheduler_running = False
         return True
+
+
+def test_startup_quarantines_incompatible_save_and_restores_older_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    incompatible_id = uuid.uuid4()
+    compatible_id = uuid.uuid4()
+    incompatible_state = SimpleNamespace(
+        scheduler_was_running=True,
+        planning_error=None,
+    )
+    compatible_state = SimpleNamespace(
+        scheduler_was_running=False,
+        planning_error="retry planning",
+    )
+
+    class StartupRuntime:
+        def __init__(self, *, restore_error: Exception | None = None) -> None:
+            self.restore_error = restore_error
+            self.restored_state: object | None = None
+
+        def restore_save_state(self, state: object) -> None:
+            if self.restore_error is not None:
+                raise self.restore_error
+            self.restored_state = state
+
+    class StartupRepository:
+        def __init__(self) -> None:
+            self.candidates = [
+                (SimpleNamespace(id=incompatible_id), incompatible_state),
+                (SimpleNamespace(id=compatible_id), compatible_state),
+            ]
+            self.marked_error_ids: list[uuid.UUID] = []
+            self.activated_ids: list[uuid.UUID] = []
+
+        def latest_session(self) -> object | None:
+            return self.candidates.pop(0) if self.candidates else None
+
+        def mark_error(self, *, session_id: uuid.UUID) -> object:
+            self.marked_error_ids.append(session_id)
+            return SimpleNamespace(id=session_id)
+
+        def activate(self, *, session_id: uuid.UUID) -> object:
+            self.activated_ids.append(session_id)
+            return SimpleNamespace(id=session_id)
+
+    failed_runtime = StartupRuntime(
+        restore_error=ValueError("saved character roster does not match runtime")
+    )
+    restored_runtime = StartupRuntime()
+    bundles = iter(
+        [
+            (failed_runtime, SimpleNamespace(name="failed spatial")),
+            (restored_runtime, SimpleNamespace(name="restored spatial")),
+        ]
+    )
+    monkeypatch.setattr("api.main._build_runtime_bundle", lambda: next(bundles))
+    repository = StartupRepository()
+
+    runtime, spatial, session_id, should_start = _restore_or_create_runtime_bundle(
+        cast(GameSessionRepository, repository)
+    )
+
+    assert repository.marked_error_ids == [incompatible_id]
+    assert repository.activated_ids == [compatible_id]
+    assert runtime is restored_runtime
+    assert spatial.name == "restored spatial"
+    assert session_id == compatible_id
+    assert should_start is True
+    assert restored_runtime.restored_state is compatible_state
 
 
 def test_require_runtime_raises_when_unavailable() -> None:

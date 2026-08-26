@@ -534,6 +534,8 @@ end-to-end 시나리오다.
     - [x] 새 세션, 현재 세션 저장, 저장된 세션 목록/불러오기 API를 제공한다
     - [x] HUD에서 현재 슬롯, 새 게임, 저장, 불러오기를 조작할 수 있다
     - [x] 낙관적 save version 충돌과 잘못된 snapshot 복원을 거부한다
+    - [x] 현재 주민 명단/맵 계약과 호환되지 않는 저장 snapshot은 삭제하지 않고
+          `ERROR`로 격리한 뒤 이전 호환 세션 또는 새 runtime으로 자동 복구한다
     - [x] OrbStack PostgreSQL에서 저장 후 backend 재시작과 세션 복원을 검증한다
 
 - [x] `P1` spatial WebSocket snapshot broadcast를 구현한다

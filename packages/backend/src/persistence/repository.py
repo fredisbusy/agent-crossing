@@ -69,7 +69,9 @@ class GameSessionRepository:
     def latest_session(self) -> tuple[SessionSummary, RuntimeSaveState] | None:
         with SessionLocal.begin() as db:
             records = db.scalars(
-                select(GameSessionRecord).order_by(
+                select(GameSessionRecord)
+                .where(GameSessionRecord.status != GameSessionStatus.ERROR)
+                .order_by(
                     (GameSessionRecord.status == GameSessionStatus.ACTIVE).desc(),
                     GameSessionRecord.saved_at.desc(),
                 )
@@ -82,6 +84,22 @@ class GameSessionRepository:
                     continue
                 return _summary(record), state
         return None
+
+    def mark_error(self, *, session_id: uuid.UUID) -> SessionSummary | None:
+        """Quarantine a snapshot that cannot be restored by the current runtime."""
+        now = datetime.datetime.now(datetime.UTC)
+        with SessionLocal.begin() as db:
+            record = db.scalar(
+                select(GameSessionRecord)
+                .where(GameSessionRecord.id == session_id)
+                .with_for_update()
+            )
+            if record is None:
+                return None
+            record.status = GameSessionStatus.ERROR
+            record.updated_at = now
+            db.flush()
+            return _summary(record)
 
     def get(
         self, session_id: uuid.UUID
