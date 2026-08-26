@@ -40,6 +40,7 @@ import {
   railEvents as selectRailEvents,
   selectedAgentEvents as selectSelectedAgentEvents,
 } from "./dashboardViewModel";
+import { residentPortraitUrl } from "./residentPortraits";
 import "./dashboard.css";
 
 const tabs: { id: DashboardTab; label: string }[] = [
@@ -458,6 +459,7 @@ function RelationshipPanel({
 function AgentOverview({ agent }: { agent: DashboardAgent }) {
   const recentThought =
     agent.bubble_kind === "thought" ? agent.bubble_text : null;
+  const portraitUrl = residentPortraitUrl(agent.agent_id);
   return (
     <div className="dashboard-overview-grid">
       <section className="dashboard-panel dashboard-profile-panel">
@@ -471,6 +473,18 @@ function AgentOverview({ agent }: { agent: DashboardAgent }) {
         </div>
         <div className="dashboard-profile-layout">
           <div className="dashboard-profile-summary">
+            {portraitUrl ? (
+              <div className="dashboard-profile-portrait">
+                <img src={portraitUrl} alt={`${agent.name}의 초상화`} />
+              </div>
+            ) : (
+              <div
+                className="dashboard-profile-portrait dashboard-portrait-fallback"
+                aria-label={`${agent.name}의 초상화 없음`}
+              >
+                {agent.name.slice(0, 1)}
+              </div>
+            )}
             <dl>
               <div>
                 <dt>나이</dt>
@@ -899,29 +913,36 @@ export function Dashboard() {
             <b>{data?.agents.length ?? 0}</b>
           </div>
           <div className="dashboard-agent-list">
-            {(data?.agents ?? []).map((agent, index) => (
-              <button
-                type="button"
-                key={agent.agent_id}
-                className={
-                  agent.agent_id === selectedAgent?.agent_id ? "selected" : ""
-                }
-                aria-pressed={agent.agent_id === selectedAgent?.agent_id}
-                onClick={() => {
-                  setSelectedAgentId(agent.agent_id);
-                  setRelationshipTargetId("");
-                }}
-              >
-                <span className={`dashboard-avatar avatar-${index % 2}`}>
-                  {agent.name.slice(0, 1)}
-                </span>
-                <div>
-                  <strong>{agent.name}</strong>
-                  <small>{actionLabel(agent.current_action)}</small>
-                </div>
-                <ChevronRight size={15} />
-              </button>
-            ))}
+            {(data?.agents ?? []).map((agent) => {
+              const portraitUrl = residentPortraitUrl(agent.agent_id);
+              return (
+                <button
+                  type="button"
+                  key={agent.agent_id}
+                  className={
+                    agent.agent_id === selectedAgent?.agent_id ? "selected" : ""
+                  }
+                  aria-pressed={agent.agent_id === selectedAgent?.agent_id}
+                  onClick={() => {
+                    setSelectedAgentId(agent.agent_id);
+                    setRelationshipTargetId("");
+                  }}
+                >
+                  <span className="dashboard-avatar">
+                    {portraitUrl ? (
+                      <img src={portraitUrl} alt="" />
+                    ) : (
+                      agent.name.slice(0, 1)
+                    )}
+                  </span>
+                  <div>
+                    <strong>{agent.name}</strong>
+                    <small>{actionLabel(agent.current_action)}</small>
+                  </div>
+                  <ChevronRight size={15} />
+                </button>
+              );
+            })}
           </div>
           <section className="dashboard-runtime-card">
             <span>RUNTIME</span>

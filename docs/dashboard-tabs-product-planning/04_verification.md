@@ -47,3 +47,15 @@ planning/settings 작업(`test_litellm_day_plan_retry`, planning graph 2건, set
 - 데스크톱과 390px viewport에서 프로필 카드가 각각 2열과 1열로 표시되며 가로
   overflow가 없었다.
 - 공개 브라우저 console warning/error는 없었다.
+
+## 2026-08-26 주민 초상화 후속 검증
+
+- 6개 project asset이 모두 512×512 RGBA PNG이며 실제 alpha channel을 갖는지
+  확인했다.
+- Frontend Vitest: 35 passed, 7 files
+- `pnpm -r build`: passed
+- 공개 `/portraits/{agent_id}.png`에서 6개 파일이 모두 512×512 이미지로
+  응답하는 것을 브라우저에서 확인했다.
+- 현재 공개 dashboard state/events API가 503으로 runtime agent 목록을 제공하지 않아,
+  데이터가 결합된 목록·개요 화면의 공개 브라우저 최종 확인은 수행하지 못했다.
+  정적 asset 응답, mapping/fallback 테스트와 production build까지 검증했다.

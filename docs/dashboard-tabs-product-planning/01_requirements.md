@@ -27,6 +27,7 @@
 | FR-O02 | 의미가 다른 신호를 구분한다 | speech/thought/action과 plan context를 각각 올바른 레이블로 표시한다                      |
 | FR-O03 | 이상 상태를 우선한다        | runtime/planning/location 불일치를 정상 카드보다 먼저 발견할 수 있다                      |
 | FR-O04 | 캐릭터 설정을 확인한다      | persona 원본의 나이·성별·traits와 실제 runtime의 고정 페르소나 문장 전체를 표시한다       |
+| FR-O05 | 주민을 얼굴로 구분한다      | 동일한 게임 화풍의 주민별 초상화를 목록과 개요에 표시하고 미등록 주민은 안전하게 대체한다 |
 
 ### 관계
 

@@ -20,6 +20,15 @@
 - provider prompt, model thought, governance trace는 persona 표시 범위에 포함하지
   않는다.
 
+### 주민 초상화
+
+- 6명의 고정 persona를 바탕으로 동일한 픽셀 밀도, 정사각형 구도, 제한 색상과
+  투명 배경을 사용하는 원본 초상화를 프로젝트 정적 asset으로 관리한다.
+- `agent_id`를 `/portraits/<agent_id>.png`에 대응시키며 dashboard API와 저장
+  snapshot에는 이미지 binary나 URL을 추가하지 않는다.
+- 목록은 작은 정사각형 crop, 개요는 얼굴 전체가 보이는 큰 `contain` 렌더링을
+  사용한다. 미등록 주민은 깨진 이미지 대신 이름 첫 글자를 표시한다.
+
 1. **전역 상태**: 세계 시각, scheduler/cognition, 오류, 신선도
 2. **선택 agent 상태**: 개요와 5개 상세 탭
 3. **전역 event feed**: 우측 rail의 짧은 최신 사건
