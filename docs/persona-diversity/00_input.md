@@ -24,6 +24,8 @@ Second follow-up request on 2026-08-26:
 > 하은이를 활동적이고 남미새(남자를 몹시 좋아해서 자주 껄떡댐)에
 > 야구좋아하고 새로운 취미 좋아하고 잘 삐지는 사람으로 변경하자
 
+> 하은이는 술도 좋아해
+
 ## Background
 
 - The live dashboard showed that Minji's reflections repeatedly collapsed her

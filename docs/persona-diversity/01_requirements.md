@@ -30,6 +30,9 @@
 - [x] Redesign Haeun as an active baseball fan who eagerly tries new hobbies,
   frequently flirts with men, and becomes visibly sulky when interest is not
   reciprocated while still respecting an explicit rejection.
+- [x] Make Haeun enjoy beer and social drinking as part of her baseball and
+  outgoing lifestyle while preserving her own limit and others' choice not to
+  drink.
 
 ## Non-functional requirements
 

@@ -6,7 +6,7 @@ from agents.persona_loader import PersonaLoader
 PERSONA_DIR = Path(__file__).resolve().parents[1] / "persona"
 
 EXPECTED_SIGNATURES: dict[str, tuple[str, ...]] = {
-    "Haeun": ("야구", "새 취미", "플러팅", "삐"),
+    "Haeun": ("야구", "맥주", "새 취미", "플러팅", "삐"),
     "Jiho": ("수선", "건조한 농담", "독서 모임"),
     "Jungwoo": ("나무", "짧은 문장", "수프"),
     "Minji": ("즉석카메라", "말이 빠", "개인 에세이"),
@@ -107,7 +107,19 @@ def test_haeun_is_active_flirtatious_and_quick_to_sulk() -> None:
 
     assert all(
         marker in persona_text
-        for marker in ("ESTP", "활동적", "야구", "새 취미", "남자", "플러팅", "삐")
+        for marker in (
+            "ESTP",
+            "활동적",
+            "야구",
+            "맥주",
+            "술자리",
+            "새 취미",
+            "남자",
+            "플러팅",
+            "삐",
+        )
     )
     assert "명확한 거절 뒤에는 더 조르지 않는다" in persona_text
+    assert "자기 한도를 두 잔" in persona_text
+    assert "상대에게 음주를 권하지 않는다" in persona_text
     assert haeun.relationship_baselines["jiho"].romantic_interest == 30

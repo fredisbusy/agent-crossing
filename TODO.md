@@ -384,8 +384,8 @@ end-to-end 시나리오다.
     - [x] MBTI 궁합·평범한 친절·한 번의 대화가 `romantic_interest`를 자동으로
       올리지 않도록 조우/반응 프롬프트와 회귀 테스트를 고정한다
     - [x] 하은을 ESTP형 활동가로 재설계해 야구·새 취미·남성 대상 적극적
-      플러팅·쉽게 삐지는 반응을 routine/current plan/seed memory까지 일관되게
-      반영하되 명확한 거절은 존중하게 한다
+      플러팅·쉽게 삐지는 반응·맥주와 술자리 선호를 routine/current plan/seed
+      memory까지 일관되게 반영하되 명확한 거절과 상대의 음주 선택은 존중하게 한다
 
 - [x] `P1` WorldRuntime을 정확히 2명 고정에서 N-agent + pairwise 대화로 확장한다
       (§3.4 조우 모델 — "마을 전체가 한 방에서 듣는" 공용 채팅방이 아니라
