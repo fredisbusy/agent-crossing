@@ -238,7 +238,11 @@ def _compact_day_plan_items(
             location_penalty = 0 if first.location == second.location else 1
             candidates.append((location_penalty, combined_duration, index))
         if not candidates:
-            raise DayPlanParseError("too_many_non_contiguous_day_plan_items")
+            return _rebucket_continuous_day_plan_items(
+                compacted,
+                item_count=max_items,
+                max_duration=max_duration,
+            )
         _, _, merge_index = min(candidates)
         first = compacted[merge_index]
         second = compacted[merge_index + 1]
@@ -254,6 +258,53 @@ def _compact_day_plan_items(
             )
         ]
     return compacted
+
+
+def _rebucket_continuous_day_plan_items(
+    items: list[DayPlanItem],
+    *,
+    item_count: int,
+    max_duration: int,
+) -> list[DayPlanItem]:
+    """Project an oversized continuous draft into bounded representative slots."""
+    if not items or any(
+        first.end_time != second.start_time
+        for first, second in zip(items, items[1:])
+    ):
+        raise DayPlanParseError("too_many_non_contiguous_day_plan_items")
+
+    total_minutes = int(
+        (items[-1].end_time - items[0].start_time).total_seconds() // 60
+    )
+    if not item_count * 5 <= total_minutes <= item_count * max_duration:
+        raise DayPlanParseError("too_many_non_contiguous_day_plan_items")
+
+    base_duration, remainder = divmod(total_minutes, item_count)
+    durations = [
+        base_duration + (1 if index < remainder else 0)
+        for index in range(item_count)
+    ]
+    rebucketed: list[DayPlanItem] = []
+    cursor = items[0].start_time
+    for duration in durations:
+        bucket_end = cursor + datetime.timedelta(minutes=duration)
+        representative = max(
+            items,
+            key=lambda item: max(
+                datetime.timedelta(),
+                min(item.end_time, bucket_end) - max(item.start_time, cursor),
+            ),
+        )
+        rebucketed.append(
+            DayPlanItem(
+                start_time=cursor,
+                end_time=bucket_end,
+                location=representative.location,
+                action_content=representative.action_content,
+            )
+        )
+        cursor = bucket_end
+    return rebucketed
 
 
 def try_parse_hour_plan(

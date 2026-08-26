@@ -418,6 +418,52 @@ def test_day_plan_repairs_gap_and_overlap_when_item_count_is_feasible() -> None:
     )
 
 
+def test_day_plan_rebuckets_oversized_schema_ignoring_response() -> None:
+    client = StubPlanningClient()
+    start = datetime.datetime(2026, 8, 25, 6)
+    client.responses_by_label["day"] = [
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "start_time": (
+                            start + datetime.timedelta(minutes=index * 120)
+                        ).isoformat(),
+                        "end_time": (
+                            start + datetime.timedelta(minutes=(index + 1) * 120)
+                        ).isoformat(),
+                        "location": "브라이어 코브 > 마을 광장",
+                        "action_content": f"일과 {index + 1}을 수행한다.",
+                    }
+                    for index in range(9)
+                ]
+            },
+            ensure_ascii=False,
+        )
+    ]
+    request = DayPlanBroadStrokesRequest(
+        agent_name="Jiho Park",
+        age=31,
+        innate_traits=["차분함"],
+        persona_background="브라이어 코브 주민",
+        yesterday_date=datetime.datetime(2026, 8, 24, 6),
+        yesterday_summary="평소 일과를 보냈다.",
+        today_date=start,
+        planning_window_end=datetime.datetime(2026, 8, 26),
+    )
+
+    items = PlanningGraphRunner(planning_client=client).generate_day_plan(request)
+
+    assert len(items) == 8
+    assert items[0].start_time == request.today_date
+    assert items[-1].end_time == request.planning_window_end
+    assert all(item.duration_minutes == 135 for item in items)
+    assert all(
+        first.end_time == second.start_time
+        for first, second in zip(items, items[1:])
+    )
+
+
 def test_hourly_plan_retries_when_it_misses_the_current_world_time() -> None:
     client = StubPlanningClient()
     client.responses_by_label["hour"] = [

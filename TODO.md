@@ -509,6 +509,8 @@ end-to-end 시나리오다.
     - [x] planning fallback을 제거하고 생성·검증 실패를 UI와 dashboard에 명시적으로 노출한다
     - [x] 구조적으로 유효한 day-plan의 gap/overlap은 항목 순서·내용·장소를
           보존한 채 duration을 5~180분 범위로 분배해 고정 시간창에 후보정한다
+    - [x] provider가 `maxItems`를 무시한 연속 day-plan은 원본 대표 내용·장소로
+          8개 이하의 bounded time bucket에 재분할한다
     - [x] 한 주민의 planning 실패를 격리하고 다른 주민의 schedule·이동과
           scheduler를 유지하며 실패 주민은 마지막 authoritative 위치에서 재시도한다
     - [x] 로컬 planner의 생성 timeout을 제거하고 structured JSON 요청에서 Qwen thinking을 끈다
