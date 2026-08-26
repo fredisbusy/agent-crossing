@@ -19,13 +19,17 @@
 - [x] Give every resident an MBTI label and translate its dimensions into
   observable social energy, information preference, decision style, and
   planning behavior.
-- [x] Give every resident a gender-neutral romantic preference covering
-  attractive behavior, aversion or boundary, and relationship pace.
+- [x] Give every resident a romantic preference covering attractive behavior,
+  aversion or boundary, and relationship pace. Keep it gender-neutral unless
+  the character definition explicitly establishes a gender preference.
 - [x] Let repeated unwanted approaches at low familiarity inform colder
   reactions and pass-by decisions without treating introversion itself as a
   penalty.
 - [x] Do not infer romantic attraction from MBTI compatibility, ordinary
   kindness, or a single pleasant conversation.
+- [x] Redesign Haeun as an active baseball fan who eagerly tries new hobbies,
+  frequently flirts with men, and becomes visibly sulky when interest is not
+  reciprocated while still respecting an explicit rejection.
 
 ## Non-functional requirements
 

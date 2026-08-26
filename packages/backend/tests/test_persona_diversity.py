@@ -6,7 +6,7 @@ from agents.persona_loader import PersonaLoader
 PERSONA_DIR = Path(__file__).resolve().parents[1] / "persona"
 
 EXPECTED_SIGNATURES: dict[str, tuple[str, ...]] = {
-    "Haeun": ("수채화", "침묵", "전시"),
+    "Haeun": ("야구", "새 취미", "플러팅", "삐"),
     "Jiho": ("수선", "건조한 농담", "독서 모임"),
     "Jungwoo": ("나무", "짧은 문장", "수프"),
     "Minji": ("즉석카메라", "말이 빠", "개인 에세이"),
@@ -15,7 +15,7 @@ EXPECTED_SIGNATURES: dict[str, tuple[str, ...]] = {
 }
 
 EXPECTED_MBTI: dict[str, str] = {
-    "Haeun": "ISFP",
+    "Haeun": "ESTP",
     "Jiho": "INFJ",
     "Jungwoo": "ISTP",
     "Minji": "ENFP",
@@ -77,17 +77,37 @@ def test_roster_personas_translate_mbti_and_romantic_preferences_into_behavior()
         )
         assert any(
             marker in prompt_visible_identity
-            for marker in ("호감이 낮", "마음이 멀", "거리를 둔다")
+            for marker in ("호감이 낮", "마음이 멀", "거리를 둔다", "삐")
         )
 
 
 def test_introverted_personas_encode_repeated_unwanted_contact_as_a_boundary() -> None:
     loader = PersonaLoader(PERSONA_DIR)
 
-    for persona_name in ("Haeun", "Jiho", "Jungwoo"):
+    for persona_name in ("Jiho", "Jungwoo"):
         identity_text = " ".join(loader.load(persona_name).identity_stable_set[:3])
         assert any(
             marker in identity_text
             for marker in ("계속 말을", "거듭 침범", "재촉")
         )
         assert "호감이 낮" in identity_text
+
+
+def test_haeun_is_active_flirtatious_and_quick_to_sulk() -> None:
+    haeun = PersonaLoader(PERSONA_DIR).load("Haeun")
+    persona_text = " ".join(
+        [
+            *haeun.agent.traits,
+            *haeun.identity_stable_set,
+            *haeun.lifestyle_and_routine,
+            *haeun.current_plan_context,
+            *(memory.content for memory in haeun.seed_memories),
+        ]
+    )
+
+    assert all(
+        marker in persona_text
+        for marker in ("ESTP", "활동적", "야구", "새 취미", "남자", "플러팅", "삐")
+    )
+    assert "명확한 거절 뒤에는 더 조르지 않는다" in persona_text
+    assert haeun.relationship_baselines["jiho"].romantic_interest == 30

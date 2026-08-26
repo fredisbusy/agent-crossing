@@ -17,7 +17,7 @@ UV_CACHE_DIR=/tmp/agent-crossing-uv-cache uv run pytest \
   tests/test_llm_gateway_unit.py
 ```
 
-Result after the MBTI/romantic-preference extension: 47 passed. All six JSON
+Result after the Haeun redesign: 48 passed. All six JSON
 files parsed successfully, every MBTI label and romantic preference is visible
 to the prompt, and the encounter/reaction boundary guardrails are present. The
 known Pydantic compatibility warning under Python 3.14 remains.
@@ -26,7 +26,7 @@ known Pydantic compatibility warning under Python 3.14 remains.
 
 Command: `UV_CACHE_DIR=/tmp/agent-crossing-uv-cache pnpm test:backend`
 
-Result: 232 passed, 11 skipped, 5 failed. The failures are outside this change:
+Result: 233 passed, 11 skipped, 5 failed. The failures are outside this change:
 
 - one day-plan schema retry expectation,
 - two day-plan canonicalization/retry expectations,

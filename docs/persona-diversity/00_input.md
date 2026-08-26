@@ -19,6 +19,11 @@ Follow-up request on 2026-08-26:
 > 누군가가 내향적인 사람한테 안친한데 자꾸 말걸거나 하면 내적 호감이
 > 떨어질수도 있겠지
 
+Second follow-up request on 2026-08-26:
+
+> 하은이를 활동적이고 남미새(남자를 몹시 좋아해서 자주 껄떡댐)에
+> 야구좋아하고 새로운 취미 좋아하고 잘 삐지는 사람으로 변경하자
+
 ## Background
 
 - The live dashboard showed that Minji's reflections repeatedly collapsed her

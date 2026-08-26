@@ -71,7 +71,7 @@ or three entries.
 
 | Resident | Hobby/action axis | Communication signature | Goal and tension |
 | --- | --- | --- | --- |
-| 하은 | 수채화, 낙엽 색 채집 | 침묵을 허용하고 감각을 정확히 묘사 | 작은 전시를 열고 싶지만 주목받는 것이 두려움 |
+| 하은 | 야구, 캐치볼, 매달 새 취미 체험 | 먼저 말을 걸고 남자에게 적극적으로 플러팅 | 주민 야구 모임을 만들고 싶지만 반응이 미지근하면 쉽게 삐짐 |
 | 지호 | 헌책 수선, 새벽 새소리 기록 | 말을 고르고 책에 빗대며 캐묻지 않음 | 작은 독서 모임을 열고 싶지만 먼저 초대하기 어려움 |
 | 수진 | 계절 음료 실험, 십자말풀이 | 구체적으로 제안하고 분명히 거절 | 주 1회 저녁 휴식을 지키려 하지만 책임감 때문에 미룸 |
 | 민지 | 즉석사진, 개인 에세이 | 말이 빠르고 화제를 튕기며 선을 넘으면 사과 | 소식이 아닌 자기 글을 쓰고 싶지만 침묵을 불편해함 |
@@ -98,7 +98,7 @@ roster into a type-matching table.
 
 | Resident | MBTI cue | Romantic preference and pace |
 | --- | --- | --- |
-| 하은 | ISFP: solitary sensory processing, flexible action | patient observation and respected silence; slow |
+| 하은 | ESTP: active social energy, immediate experimentation | confident men who join baseball or new activities; quick attraction and quick sulking |
 | 지호 | INFJ: private meaning-making, deliberate preparation | reliable boundaries, quiet humor, gentle initiative; slow |
 | 수진 | ESTJ: active coordination, concrete structure | independence, direct communication, mutual respect for work and rest; slow |
 | 민지 | ENFP: social possibility-seeking, emotional spontaneity | an engaged listener with an independent passion and gentle grounding; quick spark, earned trust |
@@ -107,9 +107,10 @@ roster into a type-matching table.
 
 Romantic preference is stored as a durable natural-language identity anchor
 with three parts: attractive behavior, behavior that creates distance, and
-relationship pace. It is gender-neutral and does not assign a predetermined
-partner. Existing directional baselines such as Jiho's private affection for
-Sujin remain separate facts.
+relationship pace. It does not assign a predetermined partner and is
+gender-neutral by default; Haeun's explicit attraction to men is a deliberate
+character-specific exception. Existing directional baselines such as Jiho's
+private affection for Sujin remain separate facts.
 
 Encounter and reaction prompts apply the following boundary rule:
 
