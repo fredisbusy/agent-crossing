@@ -144,6 +144,7 @@ class WorldRuntime:
             )
 
         self.agents: list[SimAgent] = agents
+        self._enabled_agent_ids: set[str] = {str(agent.identity.id) for agent in agents}
         # `_idle_session` exists purely so `step()` has a session object to
         # hand `engine.step()` when no dialogue is active (see
         # `_primary_session()`) — it's never itself entered into
@@ -214,6 +215,60 @@ class WorldRuntime:
                 )
         self.planning_error: str | None = None
 
+    @property
+    def active_agents(self) -> list[SimAgent]:
+        return [
+            agent
+            for agent in self.agents
+            if str(agent.identity.id) in self._enabled_agent_ids
+        ]
+
+    @property
+    def enabled_agent_ids(self) -> frozenset[str]:
+        return frozenset(self._enabled_agent_ids)
+
+    def set_enabled_agent_ids(self, agent_ids: set[str]) -> None:
+        """Apply the global roster without discarding session-owned agent state."""
+        known_ids = {str(agent.identity.id) for agent in self.agents}
+        unknown = agent_ids.difference(known_ids)
+        if unknown:
+            raise ValueError(f"unknown runtime agents: {sorted(unknown)}")
+        if len(agent_ids) < 2:
+            raise ValueError("at least two agents must remain enabled")
+        if self.scheduler_running or self.cognitive_active:
+            raise RuntimeError("runtime must be quiescent before changing agent roster")
+
+        self._enabled_agent_ids = set(agent_ids)
+        self.sessions = {
+            pair_key: session
+            for pair_key, session in self.sessions.items()
+            if all(
+                str(agent.identity.id) in self._enabled_agent_ids
+                for agent in session.agents
+            )
+        }
+        active_agents = self.active_agents
+        if any(
+            str(agent.identity.id) not in self._enabled_agent_ids
+            for agent in self._idle_session.agents
+        ):
+            self._idle_session = WorldConversationSession(
+                agents=active_agents[:2],
+                dialogue_turn_window=self._dialogue_turn_window,
+                dialogue_target_turns=self._dialogue_target_turns,
+            )
+            self._idle_session.finish_dialogue()
+        self._co_present_pair_keys = {
+            pair_key
+            for pair_key in self._co_present_pair_keys
+            if all(
+                agent_id in self._enabled_agent_ids for agent_id in pair_key.split("|")
+            )
+        }
+        self._pending_encounter_pair_keys.clear()
+        if self.spatial_runtime is not None:
+            self.spatial_runtime.set_enabled_agent_ids(self._enabled_agent_ids)
+
     def step(self) -> SimulationStepResult:
         with self._step_lock:
             self.turn += 1
@@ -222,7 +277,7 @@ class WorldRuntime:
                 planning_time = self.current_time + datetime.timedelta(
                     seconds=self.engine.config.turn_time_step_seconds
                 )
-                for agent in self.agents:
+                for agent in self.active_agents:
                     schedule = self.planning_coordinator.ensure_current(
                         agent=_as_life_agent(agent),
                         now=planning_time,
@@ -544,7 +599,7 @@ class WorldRuntime:
             for snapshot in self.spatial_runtime.snapshot().agents
         }
         qualifying: list[tuple[SimAgent, SimAgent]] = []
-        for agent_a, agent_b in itertools.combinations(self.agents, 2):
+        for agent_a, agent_b in itertools.combinations(self.active_agents, 2):
             first = snapshots.get(str(agent_a.identity.id))
             second = snapshots.get(str(agent_b.identity.id))
             if first is None or second is None:
@@ -596,7 +651,7 @@ class WorldRuntime:
             snapshot.agent_id: snapshot
             for snapshot in self.spatial_runtime.snapshot().agents
         }
-        for agent, other in itertools.permutations(self.agents, 2):
+        for agent, other in itertools.permutations(self.active_agents, 2):
             other_snapshot = snapshots.get(str(other.identity.id))
             if other_snapshot is None:
                 continue
@@ -798,7 +853,7 @@ class WorldRuntime:
             try:
                 schedules: list[AgentPlanSnapshot] = []
                 needs_generation = False
-                for agent in self.agents:
+                for agent in self.active_agents:
                     try:
                         schedules.append(
                             self.planning_coordinator.ensure_current(
@@ -917,7 +972,7 @@ class WorldRuntime:
         engaged_agent_ids = self._engaged_agent_ids()
         schedules: list[AgentPlanSnapshot] = []
         needs_generation = False
-        for agent in self.agents:
+        for agent in self.active_agents:
             if str(agent.identity.id) in engaged_agent_ids:
                 continue
             try:
@@ -995,10 +1050,11 @@ class WorldRuntime:
             except Exception as error:  # noqa: BLE001 - isolated per agent below
                 return None, error
 
+        active_agents = self.active_agents
         with ThreadPoolExecutor(
-            max_workers=min(PLAN_GENERATION_MAX_CONCURRENCY, len(self.agents))
+            max_workers=min(PLAN_GENERATION_MAX_CONCURRENCY, len(active_agents))
         ) as executor:
-            results = list(executor.map(_generate_one, self.agents))
+            results = list(executor.map(_generate_one, active_agents))
 
         schedules = [schedule for schedule, _ in results if schedule is not None]
         errors = [error for _, error in results if error is not None]
@@ -1011,7 +1067,7 @@ class WorldRuntime:
 
         with self._step_lock:
             self._set_planning_error(
-                f"{len(errors)}/{len(self.agents)} agent(s) failed to (re)plan "
+                f"{len(errors)}/{len(active_agents)} agent(s) failed to (re)plan "
                 f"this cycle, retrying next tick: {errors[0]}"
                 if errors
                 else None
@@ -1153,8 +1209,9 @@ class WorldRuntime:
         # calls at `PLAN_GENERATION_MAX_CONCURRENCY` so this doesn't fan out
         # one request per agent and overrun the Ollama server's parallel
         # request slots (which would queue past `LLM_TIMEOUT_SECONDS`).
+        active_agents = self.active_agents
         semaphore = asyncio.Semaphore(
-            min(PLAN_GENERATION_MAX_CONCURRENCY, len(self.agents))
+            min(PLAN_GENERATION_MAX_CONCURRENCY, len(active_agents))
         )
 
         async def _refresh_one(
@@ -1174,7 +1231,7 @@ class WorldRuntime:
                     return None, error
 
         results = await asyncio.gather(
-            *[_refresh_one(agent) for agent in self.agents]
+            *[_refresh_one(agent) for agent in active_agents]
         )
         schedules = [schedule for schedule, _ in results if schedule is not None]
         errors = [error for _, error in results if error is not None]
@@ -1186,7 +1243,7 @@ class WorldRuntime:
             )
         with self._step_lock:
             self._set_planning_error(
-                f"{len(errors)}/{len(self.agents)} agent(s) failed to plan; "
+                f"{len(errors)}/{len(active_agents)} agent(s) failed to plan; "
                 f"successful plans are active and failures will retry: {errors[0]}"
                 if errors
                 else None

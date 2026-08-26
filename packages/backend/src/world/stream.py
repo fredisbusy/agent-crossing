@@ -66,6 +66,10 @@ class SpatialWorldStream:
         if was_running:
             await self.start()
 
+    def publish_current(self) -> None:
+        """Push an authoritative snapshot immediately after a control change."""
+        self._publish(self.runtime.snapshot())
+
     async def _run(self) -> None:
         while True:
             snapshot = self.runtime.tick()

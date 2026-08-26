@@ -210,8 +210,15 @@ export interface DashboardWorld {
   snapshot_generated_at: string;
 }
 
+export interface AgentActivation {
+  agent_id: AgentId;
+  name: string;
+  enabled: boolean;
+}
+
 export interface DashboardState {
   world: DashboardWorld;
+  agent_activations: AgentActivation[];
   agents: DashboardAgent[];
   events: DashboardEvent[];
   oldest_sequence: number;

@@ -25,6 +25,7 @@ interface GameState {
   revision: number;
   mapId: string | null;
   agents: Record<string, SpatialAgentState>;
+  hasWorldSnapshot: boolean;
   connectionStatus: ConnectionStatus;
   currentTime: string | null;
   turn: number;
@@ -53,6 +54,7 @@ export const useGameStore = create<GameState>((set) => ({
   revision: 0,
   mapId: null,
   agents: {},
+  hasWorldSnapshot: false,
   connectionStatus: "connecting",
   currentTime: null,
   turn: 0,
@@ -64,17 +66,25 @@ export const useGameStore = create<GameState>((set) => ({
   interactionNotice: null,
   gameTextOverlay: { owner: null, labels: [] },
   setSnapshot: (snapshot) =>
-    set({
-      sessionId: snapshot.session_id,
-      revision: snapshot.revision,
-      mapId: snapshot.map_id,
-      currentTime: snapshot.current_time,
-      turn: snapshot.turn,
-      schedulerRunning: snapshot.scheduler_running,
-      planningError: snapshot.planning_error,
-      agents: Object.fromEntries(
+    set((state) => {
+      const agents = Object.fromEntries(
         snapshot.agents.map((agent) => [agent.agent_id, agent]),
-      ),
+      );
+      const selectedAgentId = agents[state.selectedAgentId]
+        ? state.selectedAgentId
+        : (snapshot.agents[0]?.agent_id ?? "");
+      return {
+        sessionId: snapshot.session_id,
+        revision: snapshot.revision,
+        mapId: snapshot.map_id,
+        currentTime: snapshot.current_time,
+        turn: snapshot.turn,
+        schedulerRunning: snapshot.scheduler_running,
+        planningError: snapshot.planning_error,
+        agents,
+        hasWorldSnapshot: true,
+        selectedAgentId,
+      };
     }),
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   selectAgent: (selectedAgentId) =>

@@ -17,6 +17,10 @@ const fixture = {
     planning_error: null,
     snapshot_generated_at: "2026-08-24T00:00:01Z",
   },
+  agent_activations: [
+    { agent_id: "Jiho", name: "Jiho Park", enabled: true },
+    { agent_id: "Sujin", name: "Sujin Lee", enabled: false },
+  ],
   agents: [
     {
       agent_id: "Jiho",
@@ -117,6 +121,11 @@ describe("parseDashboardState", () => {
       "수진을 카페에서 보았다.",
     );
     expect(parsed?.world.revision).toBe(12);
+    expect(parsed?.agent_activations[1]).toEqual({
+      agent_id: "Sujin",
+      name: "Sujin Lee",
+      enabled: false,
+    });
     expect(parsed?.agents[0]?.relationships[0]?.summary).toBe(
       "Jiho는 Sujin을 친구 이상으로 좋아한다.",
     );
@@ -126,6 +135,16 @@ describe("parseDashboardState", () => {
       traits: ["INFJ", "차분함"],
     });
     expect(parsed?.agents[0]?.persona[0]).toContain("사서");
+  });
+
+  it("rejects malformed or duplicate activation roster entries", () => {
+    const malformed = structuredClone(fixture);
+    malformed.agent_activations[0].enabled = "yes" as never;
+    expect(parseDashboardState(malformed)).toBeNull();
+
+    const duplicate = structuredClone(fixture);
+    duplicate.agent_activations[1].agent_id = "Jiho";
+    expect(parseDashboardState(duplicate)).toBeNull();
   });
 
   it("accepts an explicit home interior location source", () => {

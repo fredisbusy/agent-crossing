@@ -57,6 +57,25 @@ def test_spatial_runtime_advances_only_through_walkable_tiles() -> None:
     }
 
 
+def test_disabled_agent_disappears_and_stops_moving_until_reenabled() -> None:
+    runtime = _runtime()
+    before = runtime.export_character_state(agent_id="sujin").tile_position
+
+    runtime.set_enabled_agent_ids({"jiho"})
+    hidden_snapshot = runtime.tick()
+    hidden = runtime.export_character_state(agent_id="sujin").tile_position
+
+    assert [agent.agent_id for agent in hidden_snapshot.agents] == ["jiho"]
+    assert hidden == before
+
+    runtime.set_enabled_agent_ids({"jiho", "sujin"})
+    visible_snapshot = runtime.snapshot()
+    assert {agent.agent_id for agent in visible_snapshot.agents} == {
+        "jiho",
+        "sujin",
+    }
+
+
 def test_spatial_runtime_never_moves_diagonally() -> None:
     runtime = _runtime()
     previous_positions = {

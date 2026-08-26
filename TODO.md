@@ -673,6 +673,16 @@ end-to-end 시나리오다.
     - [x] 선택 agent의 관점에서 다른 agent와의 비대칭 관계 요약과 근거를 표시한다
     - [x] 정식 호감도 모델이 없는 동안 memory importance를 거짓 호감 점수로 변환하지 않는다
 
+- [x] `P1` 주민 전역 활성화/비활성화 제어를 구현한다
+  - Depends on: agent inspector, RPG 세션 저장/불러오기
+  - DoD:
+    - [x] 활성 상태를 세션 snapshot과 분리된 PostgreSQL 전역 roster에 저장한다
+    - [x] 새 세션·저장 세션 로드·서버 재시작에서 전역 설정을 우선 적용한다
+    - [x] 비활성 주민을 planning·이동·조우·게임 WebSocket에서 제외하되 세션 상태는 보존한다
+    - [x] 선택 주민의 dashboard switch에서 안전 경계 토글과 오류/pending 상태를 제공한다
+    - [x] 빠진 주민의 Phaser sprite·follow·게임 inspector fallback을 다음 snapshot에서 제거한다
+    - [x] 최소 활성 주민 2명 제약과 parser/store/spatial 회귀 테스트를 추가한다
+
 - [x] `P2` 세션별 방향성 관계 수치 모델과 관계 탭을 구현한다
   - Depends on: agent inspector 구현
   - Design: `docs/dashboard-relationship-redesign/00_input.md` ~ `05_review.md`

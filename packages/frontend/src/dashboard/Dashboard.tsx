@@ -618,6 +618,7 @@ export function Dashboard() {
     lastUpdatedAt,
     isStale,
     refresh,
+    setAgentEnabled,
     loadMemories,
   } = useDashboardState();
   const initialUrlState = useMemo(
@@ -650,6 +651,8 @@ export function Dashboard() {
   const [reflectionError, setReflectionError] = useState<string | null>(null);
   const [logQuery, setLogQuery] = useState("");
   const [logFailuresOnly, setLogFailuresOnly] = useState(false);
+  const [activationPending, setActivationPending] = useState(false);
+  const [activationError, setActivationError] = useState<string | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
@@ -658,8 +661,8 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!selectedAgentId && data?.agents[0]) {
-      setSelectedAgentId(data.agents[0].agent_id);
+    if (!selectedAgentId && data?.agent_activations[0]) {
+      setSelectedAgentId(data.agent_activations[0].agent_id);
     }
   }, [data, selectedAgentId]);
 
@@ -689,10 +692,16 @@ export function Dashboard() {
     return () => window.removeEventListener("popstate", restoreUrlState);
   }, []);
 
-  const selectedAgent =
-    data?.agents.find((agent) => agent.agent_id === selectedAgentId) ??
-    data?.agents[0] ??
+  const selectedActivation =
+    data?.agent_activations.find(
+      (activation) => activation.agent_id === selectedAgentId,
+    ) ??
+    data?.agent_activations[0] ??
     null;
+  const selectedAgent =
+    data?.agents.find(
+      (agent) => agent.agent_id === selectedActivation?.agent_id,
+    ) ?? null;
   const selectedAgentKey = selectedAgent?.agent_id ?? null;
   useEffect(() => {
     setOlderMemories([]);
@@ -795,6 +804,30 @@ export function Dashboard() {
     if (!nextTab) return;
     setTab(nextTab.id);
     tabRefs.current[nextIndex]?.focus();
+  }
+
+  async function handleActivationChange(): Promise<void> {
+    if (!selectedActivation || activationPending) return;
+    setActivationPending(true);
+    setActivationError(null);
+    try {
+      await setAgentEnabled(
+        selectedActivation.agent_id,
+        !selectedActivation.enabled,
+      );
+    } catch (changeError) {
+      const message =
+        changeError instanceof Error
+          ? changeError.message
+          : "활성 상태를 변경하지 못했습니다.";
+      setActivationError(
+        message.includes("at least two agents")
+          ? "시뮬레이션을 위해 최소 두 명의 주민은 활성 상태여야 합니다."
+          : message,
+      );
+    } finally {
+      setActivationPending(false);
+    }
   }
 
   async function handleLoadOlderMemories(): Promise<void> {
@@ -914,21 +947,30 @@ export function Dashboard() {
           <div className="dashboard-rail-title">
             <Eye size={14} />
             <span>에이전트</span>
-            <b>{data?.agents.length ?? 0}</b>
+            <b>
+              {data?.agents.length ?? 0}/{data?.agent_activations.length ?? 0}
+            </b>
           </div>
           <div className="dashboard-agent-list">
-            {(data?.agents ?? []).map((agent) => {
-              const portraitUrl = residentPortraitUrl(agent.agent_id);
+            {(data?.agent_activations ?? []).map((activation) => {
+              const agent = data?.agents.find(
+                (item) => item.agent_id === activation.agent_id,
+              );
+              const portraitUrl = residentPortraitUrl(activation.agent_id);
               return (
                 <button
                   type="button"
-                  key={agent.agent_id}
-                  className={
-                    agent.agent_id === selectedAgent?.agent_id ? "selected" : ""
+                  key={activation.agent_id}
+                  className={`${
+                    activation.agent_id === selectedActivation?.agent_id
+                      ? "selected"
+                      : ""
+                  } ${activation.enabled ? "" : "inactive"}`}
+                  aria-pressed={
+                    activation.agent_id === selectedActivation?.agent_id
                   }
-                  aria-pressed={agent.agent_id === selectedAgent?.agent_id}
                   onClick={() => {
-                    setSelectedAgentId(agent.agent_id);
+                    setSelectedAgentId(activation.agent_id);
                     setRelationshipTargetId("");
                   }}
                 >
@@ -936,12 +978,16 @@ export function Dashboard() {
                     {portraitUrl ? (
                       <img src={portraitUrl} alt="" />
                     ) : (
-                      agent.name.slice(0, 1)
+                      activation.name.slice(0, 1)
                     )}
                   </span>
                   <div>
-                    <strong>{agent.name}</strong>
-                    <small>{actionLabel(agent.current_action)}</small>
+                    <strong>{activation.name}</strong>
+                    <small>
+                      {activation.enabled && agent
+                        ? actionLabel(agent.current_action)
+                        : "비활성"}
+                    </small>
                   </div>
                   <ChevronRight size={15} />
                 </button>
@@ -994,7 +1040,28 @@ export function Dashboard() {
             ))}
           </div>
 
-          {!selectedAgent ? (
+          {!selectedAgent && selectedActivation ? (
+            <section className="dashboard-empty dashboard-inactive-panel">
+              <Eye size={24} />
+              <h2>{selectedActivation.name}은(는) 비활성 상태입니다</h2>
+              <p>게임과 새 세션에서 제외되어 있습니다.</p>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={false}
+                aria-busy={activationPending}
+                disabled={activationPending}
+                onClick={() => void handleActivationChange()}
+              >
+                {activationPending ? "활성화 중…" : "주민 활성화"}
+              </button>
+              {activationError ? (
+                <p className="dashboard-activation-error" role="alert">
+                  {activationError}
+                </p>
+              ) : null}
+            </section>
+          ) : !selectedAgent ? (
             <section className="dashboard-empty">
               <RefreshCw size={24} />
               <h2>
@@ -1028,7 +1095,25 @@ export function Dashboard() {
                   <span>{selectedAgent.agent_id}</span>
                   <h1>{selectedAgent.name}</h1>
                 </div>
-                <p>{selectedAgent.bubble_text || "현재 관찰 문장 없음"}</p>
+                <div className="dashboard-agent-controls">
+                  <p>{selectedAgent.bubble_text || "현재 관찰 문장 없음"}</p>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={selectedActivation?.enabled ?? true}
+                    aria-busy={activationPending}
+                    disabled={activationPending}
+                    onClick={() => void handleActivationChange()}
+                  >
+                    <span aria-hidden="true" />
+                    {activationPending ? "변경 중…" : "활성"}
+                  </button>
+                  {activationError ? (
+                    <small className="dashboard-activation-error" role="alert">
+                      {activationError}
+                    </small>
+                  ) : null}
+                </div>
               </div>
               {tab === "overview" ? (
                 <AgentOverview agent={selectedAgent} />

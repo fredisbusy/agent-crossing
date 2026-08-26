@@ -63,6 +63,7 @@ function App() {
   const [inspectorOpen, setInspectorOpen] = useState(() => !isMobileViewport());
   const connectionStatus = useGameStore((state) => state.connectionStatus);
   const liveAgents = useGameStore((state) => state.agents);
+  const hasWorldSnapshot = useGameStore((state) => state.hasWorldSnapshot);
   const revision = useGameStore((state) => state.revision);
   const currentTime = useGameStore((state) => state.currentTime);
   const schedulerRunning = useGameStore((state) => state.schedulerRunning);
@@ -107,7 +108,7 @@ function App() {
     };
   }, []);
 
-  const displayedAgents = mapSpawns.map((spawn) => {
+  const placeholderAgents = mapSpawns.map((spawn) => {
     const id = getProperty(spawn, "agent_id", spawn.name);
     return (
       liveAgents[id] ??
@@ -129,6 +130,9 @@ function App() {
       }
     );
   });
+  const displayedAgents = hasWorldSnapshot
+    ? Object.values(liveAgents)
+    : placeholderAgents;
   const selectedAgent =
     displayedAgents.find(
       (agent) =>
@@ -142,7 +146,14 @@ function App() {
         progressPercent: 0,
         progressLabel: "계획 생성이 중단되었습니다",
       }
-    : buildMainEventView(selectedAgent, currentTime);
+    : selectedAgent
+      ? buildMainEventView(selectedAgent, currentTime)
+      : {
+          title: "활성 주민 없음",
+          description: "대시보드에서 주민을 활성화하면 다시 나타납니다.",
+          progressPercent: 0,
+          progressLabel: "주민 활성화를 기다리는 중",
+        };
 
   function handleResidentSelect(agentId: string): void {
     selectAgent(agentId);

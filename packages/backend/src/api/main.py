@@ -14,6 +14,8 @@ from agents.relationships.rules import relationship_status_label
 from agents.memory.memory_manager import ObservationContext
 from agents.memory.memory_object import MemoryObject
 from api.schemas import (
+    AgentActivationRequest,
+    AgentActivationResponse,
     DashboardAgentResponse,
     DashboardEventResponse,
     DashboardMemoryResponse,
@@ -131,6 +133,11 @@ def _build_runtime_bundle() -> tuple[WorldRuntime, SpatialWorldRuntime]:
         config=_runtime_config(persona_dir=persona_dir, persona_names=persona_names),
         spatial_runtime=spatial_runtime,
     )
+    enabled_agent_ids = cast(
+        set[str] | None, getattr(app.state, "enabled_agent_ids", None)
+    )
+    if enabled_agent_ids is not None:
+        runtime.set_enabled_agent_ids(enabled_agent_ids)
     return runtime, spatial_runtime
 
 
@@ -157,6 +164,13 @@ def _restore_or_create_runtime_bundle(
         summary, saved_state = latest
         try:
             runtime.restore_save_state(saved_state)
+            if hasattr(runtime, "set_enabled_agent_ids"):
+                runtime.set_enabled_agent_ids(
+                    cast(
+                        set[str],
+                        getattr(app.state, "enabled_agent_ids", set()),
+                    )
+                )
         except Exception:
             marked = repository.mark_error(session_id=summary.id)
             if marked is None:
@@ -190,6 +204,7 @@ async def on_startup() -> None:
     app.state.persona_names = persona_names
     app.state.session_lock = asyncio.Lock()
     app.state.session_repository = None
+    app.state.enabled_agent_ids = set(persona_names)
     app.state.current_session_id = None
     app.state.world_runtime = None
     app.state.cognitive_runtime_error = None
@@ -198,6 +213,16 @@ async def on_startup() -> None:
         if len(persona_names) >= 2:
             repository = GameSessionRepository()
             app.state.session_repository = repository
+            roster = await asyncio.to_thread(
+                repository.sync_agent_roster,
+                agent_ids=persona_names,
+            )
+            enabled_agent_ids = {
+                setting.agent_id for setting in roster if setting.enabled
+            }
+            if len(enabled_agent_ids) < 2:
+                raise RuntimeError("at least two agents must remain enabled")
+            app.state.enabled_agent_ids = enabled_agent_ids
             (
                 runtime,
                 spatial_runtime,
@@ -417,6 +442,71 @@ async def post_session(request: SessionCreateRequest) -> SessionSummaryResponse:
             )
             raise
         return _session_summary_response(summary)
+
+
+@app.patch(
+    "/agents/{agent_id}/activation",
+    response_model=AgentActivationResponse,
+)
+async def patch_agent_activation(
+    agent_id: str, request: AgentActivationRequest
+) -> AgentActivationResponse:
+    """Persist a global roster choice and apply it at a runtime safe boundary."""
+    repository = _require_session_repository()
+    lock = cast(asyncio.Lock, app.state.session_lock)
+    async with lock:
+        runtime = _require_runtime()
+        runtime_agent = next(
+            (agent for agent in runtime.agents if str(agent.identity.id) == agent_id),
+            None,
+        )
+        if runtime_agent is None:
+            raise HTTPException(status_code=404, detail="agent not found")
+
+        previous_ids = set(runtime.enabled_agent_ids)
+        next_ids = set(previous_ids)
+        if request.enabled:
+            next_ids.add(agent_id)
+        else:
+            next_ids.discard(agent_id)
+        if len(next_ids) < 2:
+            raise HTTPException(
+                status_code=409,
+                detail="at least two agents must remain enabled",
+            )
+        if next_ids == previous_ids:
+            return AgentActivationResponse(
+                agent_id=agent_id,
+                name=runtime_agent.name,
+                enabled=request.enabled,
+            )
+
+        was_running = runtime.scheduler_running
+        await runtime.pause_scheduler()
+        try:
+            runtime.set_enabled_agent_ids(next_ids)
+            saved = await asyncio.to_thread(
+                repository.set_agent_enabled,
+                agent_id=agent_id,
+                enabled=request.enabled,
+            )
+            if saved is None:
+                raise HTTPException(status_code=404, detail="agent not found")
+            app.state.enabled_agent_ids = next_ids
+            _require_spatial_stream().publish_current()
+        except Exception:
+            runtime.set_enabled_agent_ids(previous_ids)
+            _require_spatial_stream().publish_current()
+            raise
+        finally:
+            if was_running:
+                await runtime.start_scheduler()
+
+        return AgentActivationResponse(
+            agent_id=agent_id,
+            name=runtime_agent.name,
+            enabled=request.enabled,
+        )
 
 
 async def _save_current_session_locked(
@@ -792,7 +882,7 @@ def _dashboard_state_response(
             else None
         )
         relationships: list[DashboardRelationshipResponse] = []
-        for target_agent in runtime.agents:
+        for target_agent in _runtime_active_agents(runtime):
             target_agent_id = str(target_agent.identity.id)
             if target_agent_id == spatial_agent.agent_id:
                 continue
@@ -937,6 +1027,14 @@ def _dashboard_state_response(
             planning_error=cast(str | None, getattr(runtime, "planning_error", None)),
             snapshot_generated_at=datetime.datetime.now(datetime.UTC).isoformat(),
         ),
+        agent_activations=[
+            AgentActivationResponse(
+                agent_id=str(agent.identity.id),
+                name=agent.name,
+                enabled=str(agent.identity.id) in runtime.enabled_agent_ids,
+            )
+            for agent in runtime.agents
+        ],
         agents=agents,
         events=[_dashboard_event_response(event) for event in response_events],
         oldest_sequence=event_snapshot[0].sequence if event_snapshot else 0,
@@ -969,7 +1067,11 @@ async def get_dashboard_agent_memories(
 ) -> DashboardMemoryPageResponse:
     runtime = _require_runtime()
     runtime_agent = next(
-        (agent for agent in runtime.agents if str(agent.identity.id) == agent_id),
+        (
+            agent
+            for agent in _runtime_active_agents(runtime)
+            if str(agent.identity.id) == agent_id
+        ),
         None,
     )
     if runtime_agent is None:
@@ -1127,7 +1229,7 @@ async def post_god_mode_perception(
     target_agent = next(
         (
             agent
-            for agent in runtime.agents
+            for agent in _runtime_active_agents(runtime)
             if str(agent.identity.id) == request.agent_id
         ),
         None,
@@ -1168,6 +1270,11 @@ def _require_runtime() -> WorldRuntime:
     return runtime
 
 
+def _runtime_active_agents(runtime: WorldRuntime) -> list[object]:
+    """Return active residents while keeping lightweight API test doubles valid."""
+    return list(getattr(runtime, "active_agents", runtime.agents))
+
+
 @app.get("/world/state", response_model=WorldStateResponse)
 async def get_world_state() -> WorldStateResponse:
     runtime = _require_runtime()
@@ -1177,7 +1284,7 @@ async def get_world_state() -> WorldStateResponse:
         turn=state.turn,
         current_time=state.current_time.isoformat(),
         history_size=state.history_size,
-        agent_names=[agent.name for agent in runtime.agents],
+        agent_names=[agent.name for agent in _runtime_active_agents(runtime)],
         scheduler_running=state.scheduler_running,
         tick_interval_seconds=state.tick_interval_seconds,
         cognitive_active=state.cognitive_active,

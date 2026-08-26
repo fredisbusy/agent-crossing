@@ -325,6 +325,9 @@ react 정책:
 - `POST /sessions/current/pause`: safe boundary에서 scheduler를 멈추고 저장 (저장 후 재개하지 않음, 일반 게임의 일시정지에 해당)
 - `POST /sessions/current/resume`: 멈춰 있던 scheduler를 재개
 - `POST /sessions/{session_id}/load`: 저장 snapshot 검증 후 해당 세션 활성화
+- `PATCH /agents/{agent_id}/activation`: `{enabled: boolean}` 절대 상태를 받아 전역 주민
+  roster를 갱신한다. 이 설정은 세션 snapshot보다 우선하며 새 세션·저장 세션 로드·서버
+  재시작에도 유지된다. 현재 대화 runtime 계약을 위해 활성 주민은 최소 2명을 유지한다.
 - `SESSION_AUTOSAVE_TICK_INTERVAL` (env, 기본 50): scheduler가 이 tick 수만큼 진행할 때마다 활성 세션을 자동 저장 (0이면 비활성화). save/pause와 동일하게 safe boundary에서 pause 후 저장하고 재개한다.
 - `GET /world/map`: 장소, 충돌, 상호작용 물체, 스폰의 canonical snapshot
 - `POST /world/observe`: 좌표와 반경을 입력받아 현재 위치와 주변 affordance 반환
@@ -342,6 +345,13 @@ react 정책:
   WebSocket 때문에 지연되지 않게 한다.
 
 공간 실행 규칙:
+
+- 주민 활성 상태는 PostgreSQL 전역 `agent_roster`가 소유하고 session snapshot은 모든
+  주민의 위치·기억·계획·관계 상태를 보존한다. 비활성 주민은 planning, 이동, 조우,
+  자동 perception, 게임 spatial snapshot에서 제외하며 재활성화 시 해당 세션 상태로 복귀한다.
+- roster 변경은 session lock과 scheduler safe boundary에서 적용하고 다음 WebSocket
+  snapshot을 즉시 발행한다. 과거 저장본의 전체 roster는 활성 설정 차이만으로 `ERROR`가
+  되지 않는다.
 
 - live planning이 있으면 active minute plan의 canonical location을 우선하고, 초기 상태에서는 persona의 `current_plan_context`에서 canonical location 또는 alias를 찾는다.
 - 건물 목적지는 Tiled에 선언한 `entrance_tile_x/y` 문으로만 진입한다. 문이 다른
@@ -519,6 +529,12 @@ Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하�
 - dashboard 주민 목록과 개요 프로필은 `agent_id`에 대응하는 프로젝트 내 정적
   초상화를 사용한다. 등록되지 않은 주민은 이름 첫 글자 fallback을 유지하며,
   초상화는 관측 API나 runtime 상태에 포함하지 않는다.
+- `GET /dashboard/state`는 실행 중인 `agents`와 별도로 전체
+  `agent_activations[{agent_id,name,enabled}]`를 반환한다. 비활성 주민도 좌측 목록과
+  재활성 switch에는 남지만 runtime 상세·게임에는 표시하지 않는다.
+- 대시보드에서 선택한 주민의 activation switch는 서버 확정 전 pending 상태를 표시하고,
+  실패 시 기존 상태를 유지한다. 현재 `/dashboard`의 무인증 운영 정책상 이 제어 API도
+  같은 신뢰 경계에 있으며 공개 배포에서 별도 관리자 인증이 필요해지면 제어 경계를 분리한다.
 - `/dashboard`에는 로그인이나 접근 제한을 두지 않는다. memory, reflection,
   방향성 관계 summary/evidence 원문은 공개 화면에서 그대로 제공한다.
 - 공개 diagnostics event는 sequence/turn/time/agent/reply/silent/parse-failure/

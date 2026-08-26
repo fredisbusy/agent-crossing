@@ -29,6 +29,7 @@ export function useDashboardState(): {
   lastUpdatedAt: Date | null;
   isStale: boolean;
   refresh: () => void;
+  setAgentEnabled: (agentId: string, enabled: boolean) => Promise<void>;
   loadMemories: (
     agentId: string,
     beforeId: number | null,
@@ -43,6 +44,30 @@ export function useDashboardState(): {
   const refreshRef = useRef<() => void>(() => undefined);
 
   const refresh = useCallback(() => refreshRef.current(), []);
+  const setAgentEnabled = useCallback(
+    async (agentId: string, enabled: boolean): Promise<void> => {
+      const response = await fetch(
+        dashboardApiUrl(`/agents/${encodeURIComponent(agentId)}/activation`),
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled }),
+        },
+      );
+      if (!response.ok) {
+        let detail = `활성 상태 변경 실패 (${response.status})`;
+        try {
+          const payload = (await response.json()) as { detail?: unknown };
+          if (typeof payload.detail === "string") detail = payload.detail;
+        } catch {
+          // Keep the status-based fallback when the server did not return JSON.
+        }
+        throw new Error(detail);
+      }
+      refreshRef.current();
+    },
+    [],
+  );
   const loadMemories = useCallback(
     async (
       agentId: string,
@@ -240,6 +265,7 @@ export function useDashboardState(): {
     lastUpdatedAt,
     isStale: data !== null && connection === "offline",
     refresh,
+    setAgentEnabled,
     loadMemories,
   };
 }

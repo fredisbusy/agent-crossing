@@ -42,6 +42,27 @@ class MemoryNodeType(str, enum.Enum):
     PLAN = "PLAN"
 
 
+class AgentRosterRecord(Base):
+    """Global resident activation setting shared by every game session."""
+
+    __tablename__ = "agent_roster"
+
+    agent_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+
 class GameSessionRecord(Base):
     __tablename__ = "game_sessions"
     __table_args__ = (

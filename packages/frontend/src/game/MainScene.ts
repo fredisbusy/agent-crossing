@@ -567,8 +567,14 @@ export class MainScene extends Phaser.Scene {
   }
 
   private applyAgentStates(states: Record<string, SpatialAgentState>): void {
+    for (const view of this.agentViews.values()) {
+      view.container.setVisible(false);
+    }
     for (const indoorView of this.indoorAgentViews.values()) {
       indoorView.container.setVisible(false);
+    }
+    if (this.followedAgentId && !states[this.followedAgentId]) {
+      this.stopFollowing();
     }
     const roomOccupancy = new Map<string, number>();
     const buildingOccupancy = new Map<string, number>();

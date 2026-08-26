@@ -125,6 +125,7 @@ class SpatialWorldRuntime:
         self.revision: int = 0
         self._lock: threading.RLock = threading.RLock()
         self._agents: dict[str, _MutableAgentMovement] = {}
+        self._enabled_agent_ids: set[str] = {seed.agent_id for seed in seeds}
         self._current_time: datetime.datetime | None = None
         self._turn: int = 0
         self._scheduler_running: bool = False
@@ -153,6 +154,19 @@ class SpatialWorldRuntime:
         self, checker: Callable[[str, str], bool]
     ) -> None:
         self._home_access_checker = checker
+
+    def set_enabled_agent_ids(self, agent_ids: set[str]) -> None:
+        """Select the residents that move and appear in public world snapshots."""
+        with self._lock:
+            unknown = agent_ids.difference(self._agents)
+            if unknown:
+                raise ValueError(f"unknown spatial agents: {sorted(unknown)}")
+            self._enabled_agent_ids = set(agent_ids)
+            for agent_id, agent in self._agents.items():
+                if agent_id not in self._enabled_agent_ids:
+                    agent.cognitive_kind = None
+                    agent.cognitive_text = ""
+            self.revision += 1
 
     def set_plan(self, *, agent_id: str, plan: str) -> None:
         with self._lock:
@@ -251,7 +265,9 @@ class SpatialWorldRuntime:
             occupied_tiles = {
                 agent.tile_position for agent in self._agents.values()
             }
-            for agent in self._agents.values():
+            for agent_id, agent in self._agents.items():
+                if agent_id not in self._enabled_agent_ids:
+                    continue
                 occupied_tiles.discard(agent.tile_position)
                 before_tile = agent.tile_position
                 before_destination = (
@@ -635,7 +651,8 @@ class SpatialWorldRuntime:
                         else agent.plan
                     ),
                 )
-                for agent in self._agents.values()
+                for agent_id, agent in self._agents.items()
+                if agent_id in self._enabled_agent_ids
             ),
         )
 

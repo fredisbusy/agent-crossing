@@ -43,6 +43,16 @@ class SessionListResponse(BaseModel):
     sessions: list[SessionSummaryResponse]
 
 
+class AgentActivationRequest(BaseModel):
+    enabled: bool
+
+
+class AgentActivationResponse(BaseModel):
+    agent_id: str
+    name: str
+    enabled: bool
+
+
 class WorldStateResponse(BaseModel):
     available: bool
     turn: int
@@ -334,6 +344,7 @@ class DashboardWorldResponse(BaseModel):
 
 class DashboardStateResponse(BaseModel):
     world: DashboardWorldResponse
+    agent_activations: list[AgentActivationResponse]
     agents: list[DashboardAgentResponse]
     events: list[DashboardEventResponse]
     oldest_sequence: int = Field(ge=0)

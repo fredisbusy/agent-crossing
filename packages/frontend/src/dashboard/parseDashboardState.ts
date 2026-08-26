@@ -388,6 +388,22 @@ export function parseDashboardEvents(value: unknown): DashboardEvent[] | null {
 export function parseDashboardState(value: unknown): DashboardState | null {
   if (!isRecord(value) || !isRecord(value.world)) return null;
   const world = value.world;
+  const activations = Array.isArray(value.agent_activations)
+    ? value.agent_activations.map((activation) => {
+        if (
+          !isRecord(activation) ||
+          typeof activation.agent_id !== "string" ||
+          typeof activation.name !== "string" ||
+          typeof activation.enabled !== "boolean"
+        )
+          return null;
+        return {
+          agent_id: activation.agent_id,
+          name: activation.name,
+          enabled: activation.enabled,
+        };
+      })
+    : null;
   const agents = Array.isArray(value.agents)
     ? value.agents.map(parseAgent)
     : null;
@@ -407,6 +423,10 @@ export function parseDashboardState(value: unknown): DashboardState | null {
     (world.planning_error !== null &&
       typeof world.planning_error !== "string") ||
     !isDateTimeString(world.snapshot_generated_at) ||
+    activations === null ||
+    activations.some((activation) => activation === null) ||
+    new Set(activations.map((activation) => activation?.agent_id)).size !==
+      activations.length ||
     agents === null ||
     agents.some((agent) => agent === null) ||
     events === null ||
@@ -429,6 +449,10 @@ export function parseDashboardState(value: unknown): DashboardState | null {
       planning_error: world.planning_error as string | null,
       snapshot_generated_at: world.snapshot_generated_at,
     },
+    agent_activations: activations.filter(
+      (activation): activation is NonNullable<typeof activation> =>
+        activation !== null,
+    ),
     agents: agents.filter((agent): agent is DashboardAgent => agent !== null),
     events: events.filter((event): event is DashboardEvent => event !== null),
     oldest_sequence: value.oldest_sequence,
