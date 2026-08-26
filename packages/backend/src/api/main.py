@@ -60,6 +60,7 @@ from settings import (
     LLM_TIMEOUT_SECONDS,
     WORLD_TICK_INTERVAL_SECONDS,
     WORLD_COGNITIVE_TIME_STEP_SECONDS,
+    SESSION_AUTOSAVE_TICK_INTERVAL,
 )
 from world.runtime import WorldRuntime, WorldRuntimeConfig, build_world_runtime
 from world.observability import DashboardEvent
@@ -181,6 +182,7 @@ async def on_startup() -> None:
             await app.state.spatial_stream.start()
             if should_start_scheduler:
                 await runtime.start_scheduler()
+            app.state.autosave_task = asyncio.create_task(_autosave_loop())
     except Exception as error:
         app.state.cognitive_runtime_error = str(error)
         logger.exception(
@@ -203,7 +205,47 @@ async def on_startup() -> None:
         await app.state.spatial_stream.start()
 
 
+async def _autosave_loop() -> None:
+    """Periodically persist the active session every `SESSION_AUTOSAVE_TICK_INTERVAL` ticks.
+
+    Mirrors a typical game's autosave: it never blocks on user action, and it
+    reuses the same pause-at-a-safe-boundary save path as a manual save, so an
+    autosave tick can never observe half-applied world state.
+    """
+    if SESSION_AUTOSAVE_TICK_INTERVAL <= 0:
+        return
+    lock = cast(asyncio.Lock, app.state.session_lock)
+    last_saved_turn = -1
+    while True:
+        await asyncio.sleep(1.0)
+        runtime = cast(WorldRuntime | None, getattr(app.state, "world_runtime", None))
+        if runtime is None or not runtime.scheduler_running:
+            continue
+        turn = runtime.turn
+        if turn <= 0 or turn == last_saved_turn:
+            continue
+        if turn % SESSION_AUTOSAVE_TICK_INTERVAL != 0:
+            continue
+        last_saved_turn = turn
+        try:
+            async with lock:
+                await _save_current_session_locked(resume_after=True)
+        except HTTPException:
+            continue
+        except Exception:
+            logger.exception("Periodic session autosave failed")
+
+
 async def on_shutdown() -> None:
+    autosave_task = cast(
+        asyncio.Task[None] | None, getattr(app.state, "autosave_task", None)
+    )
+    if autosave_task is not None:
+        autosave_task.cancel()
+        try:
+            await autosave_task
+        except asyncio.CancelledError:
+            pass
     spatial_stream = cast(
         SpatialWorldStream | None,
         getattr(app.state, "spatial_stream", None),
@@ -345,39 +387,89 @@ async def post_session(request: SessionCreateRequest) -> SessionSummaryResponse:
         return _session_summary_response(summary)
 
 
-@app.post("/sessions/current/save", response_model=SessionSummaryResponse)
-async def post_current_session_save(
-    request: SessionSaveRequest,
-) -> SessionSummaryResponse:
+async def _save_current_session_locked(
+    *, resume_after: bool, expected_save_version: int | None = None
+) -> SessionSummary:
+    """Pause at a safe boundary, persist the active session, then optionally resume.
+
+    Caller must already hold `app.state.session_lock`.
+    """
     repository = _require_session_repository()
     session_id = cast(uuid.UUID | None, getattr(app.state, "current_session_id", None))
     if session_id is None:
         raise HTTPException(status_code=409, detail="there is no active session")
-    lock = cast(asyncio.Lock, app.state.session_lock)
-    async with lock:
-        runtime = _require_runtime()
-        stream = cast(SpatialWorldStream, app.state.spatial_stream)
-        was_running = runtime.scheduler_running
-        await stream.stop()
-        await runtime.pause_scheduler()
-        try:
-            state = runtime.export_save_state(scheduler_was_running=was_running)
-            summary = await asyncio.to_thread(
-                repository.save,
-                session_id=session_id,
-                state=state,
-                expected_save_version=request.expected_save_version,
-            )
-            if summary is None:
-                raise HTTPException(status_code=404, detail="session not found")
-        except SaveVersionConflictError as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
-        finally:
+    runtime = _require_runtime()
+    stream = cast(SpatialWorldStream, app.state.spatial_stream)
+    was_running = runtime.scheduler_running
+    await stream.stop()
+    await runtime.pause_scheduler()
+    try:
+        state = runtime.export_save_state(
+            scheduler_was_running=(was_running if resume_after else False)
+        )
+        summary = await asyncio.to_thread(
+            repository.save,
+            session_id=session_id,
+            state=state,
+            expected_save_version=expected_save_version,
+        )
+        if summary is None:
+            raise HTTPException(status_code=404, detail="session not found")
+    except SaveVersionConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    finally:
+        if resume_after:
             await _resume_runtime(
                 runtime=runtime,
                 stream=stream,
                 should_run=was_running,
             )
+    return summary
+
+
+@app.post("/sessions/current/save", response_model=SessionSummaryResponse)
+async def post_current_session_save(
+    request: SessionSaveRequest,
+) -> SessionSummaryResponse:
+    lock = cast(asyncio.Lock, app.state.session_lock)
+    async with lock:
+        summary = await _save_current_session_locked(
+            resume_after=True,
+            expected_save_version=request.expected_save_version,
+        )
+        return _session_summary_response(summary)
+
+
+@app.post("/sessions/current/pause", response_model=SessionSummaryResponse)
+async def post_current_session_pause() -> SessionSummaryResponse:
+    """Stop the world scheduler at a safe boundary and persist the session.
+
+    Unlike `/sessions/current/save`, the scheduler is left paused afterwards
+    instead of resuming, mirroring a typical game's "pause" action.
+    """
+    lock = cast(asyncio.Lock, app.state.session_lock)
+    async with lock:
+        summary = await _save_current_session_locked(resume_after=False)
+        return _session_summary_response(summary)
+
+
+@app.post("/sessions/current/resume", response_model=SessionSummaryResponse)
+async def post_current_session_resume() -> SessionSummaryResponse:
+    repository = _require_session_repository()
+    lock = cast(asyncio.Lock, app.state.session_lock)
+    async with lock:
+        session_id = cast(
+            uuid.UUID | None, getattr(app.state, "current_session_id", None)
+        )
+        if session_id is None:
+            raise HTTPException(status_code=409, detail="there is no active session")
+        runtime = _require_runtime()
+        stream = cast(SpatialWorldStream, app.state.spatial_stream)
+        await _resume_runtime(runtime=runtime, stream=stream, should_run=True)
+        saved = await asyncio.to_thread(repository.get, session_id)
+        if saved is None:
+            raise HTTPException(status_code=404, detail="session not found")
+        summary, _ = saved
         return _session_summary_response(summary)
 
 

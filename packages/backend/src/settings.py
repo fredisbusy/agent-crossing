@@ -53,3 +53,7 @@ WORLD_TICK_INTERVAL_SECONDS: Final[float] = float(
 WORLD_COGNITIVE_TIME_STEP_SECONDS: Final[int] = int(
     os.getenv("WORLD_COGNITIVE_TIME_STEP_SECONDS", "60")
 )
+# Autosave the active session every N ticks (0 disables periodic autosave).
+SESSION_AUTOSAVE_TICK_INTERVAL: Final[int] = int(
+    os.getenv("SESSION_AUTOSAVE_TICK_INTERVAL", "50")
+)

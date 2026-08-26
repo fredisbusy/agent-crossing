@@ -301,8 +301,11 @@ react 정책:
 
 - `GET /sessions`: 현재 슬롯과 저장된 세션 목록 반환
 - `POST /sessions`: 06:00 초기 상태의 새 세션 생성 및 활성화
-- `POST /sessions/current/save`: 현재 runtime을 저장하며 선택적으로 save version 충돌 검사
+- `POST /sessions/current/save`: 현재 runtime을 저장하며 선택적으로 save version 충돌 검사 (저장 후 scheduler는 이전 상태로 재개)
+- `POST /sessions/current/pause`: safe boundary에서 scheduler를 멈추고 저장 (저장 후 재개하지 않음, 일반 게임의 일시정지에 해당)
+- `POST /sessions/current/resume`: 멈춰 있던 scheduler를 재개
 - `POST /sessions/{session_id}/load`: 저장 snapshot 검증 후 해당 세션 활성화
+- `SESSION_AUTOSAVE_TICK_INTERVAL` (env, 기본 50): scheduler가 이 tick 수만큼 진행할 때마다 활성 세션을 자동 저장 (0이면 비활성화). save/pause와 동일하게 safe boundary에서 pause 후 저장하고 재개한다.
 - `GET /world/map`: 장소, 충돌, 상호작용 물체, 스폰의 canonical snapshot
 - `POST /world/observe`: 좌표와 반경을 입력받아 현재 위치와 주변 affordance 반환
 - `POST /world/path`: tile 좌표 입력을 받아 충돌을 우회하는 4방향 A\* 경로 반환
@@ -406,9 +409,10 @@ react 정책:
   기록하되, `identity_stable_set`에서 에너지 회복·정보 해석·판단·계획 방식의
   관찰 가능한 행동으로 풀어 쓴다. 유형 문자는 행동을 결정하거나 궁합을 계산하는
   공식이 아니다.
-- 연애 선호는 성별을 전제하지 않는 자연어 identity anchor로 표현하며, 끌리는
-  행동·마음이 멀어지는 행동·관계 속도·경계를 포함한다. 선호는 가능성이지 특정
-  상대 배정이나 관계 의무가 아니다.
+- 연애 선호는 기본적으로 성별을 전제하지 않는 자연어 identity anchor로 표현하며,
+  끌리는 행동·마음이 멀어지는 행동·관계 속도·경계를 포함한다. 명시적으로 정의된
+  캐릭터만 성별 선호를 가질 수 있다. 선호는 가능성이지 특정 상대 배정이나 관계
+  의무가 아니다.
 - 조우/반응 판단은 MBTI 일치, 평범한 친절, 한 번의 즐거운 대화만으로 연애 감정을
   추론하지 않는다. 실제 관찰 행동과 retrieved memory가 선호에 부합할 때만 정성적
   호감 가능성을 고려하며, 거절과 경계를 우선한다.
