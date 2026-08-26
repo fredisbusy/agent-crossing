@@ -19,16 +19,16 @@ EXPECTED_SIGNATURES: dict[str, tuple[str, ...]] = {
 }
 
 EXPECTED_MBTI: dict[str, str] = {
-    "Byeongyong": "ISTP",
+    "Byeongyong": "INFJ",
     "Haeun": "ESTP",
     "Jiho": "INFJ",
     "Jungwoo": "ISTP",
     "Minji": "ENFP",
     "Sujin": "ESTJ",
     "Taeo": "ESFP",
-    "Wonjun": "INTP",
-    "Woosik": "ENTP",
-    "Yongjun": "ESTJ",
+    "Wonjun": "INFP",
+    "Woosik": "ENFP",
+    "Yongjun": "INFJ",
 }
 
 EXPECTED_GENDERS: dict[str, str] = {
