@@ -805,10 +805,16 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
           — interview 자체는 `InterviewGate.ask` 재사용, 쌍→간선 dedup은
           `compute_relationship_density`
     - [x] 네트워크 밀도 `eta = 2|E| / (|V|(|V|-1))`를 계산한다
-    - [ ] 시뮬레이션 시작 시점과 종료 시점의 밀도를 모두 기록해 변화량을
-          남긴다 — 위 정보 확산 항목과 동일하게, 실제 시뮬레이션 실행에
-          배선하는 러너가 아직 없어 "시작/종료 두 시점 비교"를 자동으로
-          만들어내지 못한다.
+    - [x] 시뮬레이션 시작 시점과 종료 시점의 밀도를 모두 기록해 변화량을
+          남긴다 — Implemented 2026-08-27:
+          `run_diffusion_experiment.py::_mutual_acknowledgment_pairs`가
+          모든 agent 쌍에 "Do you know of X?" 방향별 interview를 수행해
+          양방향 모두 `aware=True`인 쌍만 무방향 간선으로 인정한다.
+          `run_diffusion_experiment`가 이를 seed 주입 직후(스케줄러 시작
+          전)와 종료 직후 두 시점에 각각 호출해
+          `DiffusionExperimentReport.relationship_density_before/after`로
+          `compute_relationship_density` 결과를 남긴다
+          (`tests/test_run_diffusion_experiment.py`).
 
 - [ ] `P2` 협업/조율 지표를 계산한다 (§7.1.2 Valentine's Day party 사례:
       초대받은 12명 중 5명 참석)
@@ -819,6 +825,25 @@ interview 질문으로 ablation 아키텍처를 비교, (B) §7 end-to-end evalu
           측정한다
     - [ ] 불참 agent에게 사유를 interview로 물어 근거를 남긴다 (§7.1.2:
           "너무 바빠서" 등 conflict 사유)
+
+### 5-A-1. 사고/발화 표현 다양성 (신규 — 세션 리뷰 2026-08-27)
+
+여러 세션을 리뷰한 결과, 인지 루프(retrieval/reflection/planning)와 관계
+수치·라벨(`relationships/rules.py::relationship_status_label`)은 논문
+스펙에 이미 충실하지만, 6~10명 주민의 `display_thought`/발화가 페르소나
+성격축(MBTI 등)에 따라 실제로 다른 "목소리"로 갈라지는지 검증하는
+장치가 없다. 톤이 수렴해도 잡아낼 방법이 없다는 뜻.
+
+- [ ] `P2` persona별 사고/발화 표현 다양성을 측정한다
+  - Depends on: 없음 (기존 `SessionCognitiveLogRecord.display_thought` 데이터 재사용)
+  - DoD:
+    - [ ] 동일 시간대에 여러 persona가 남긴 `display_thought`/발화 샘플을
+          모아 어휘·문장 길이·어조 지표(예: TTR, 평균 문장 길이, 어미 패턴)로
+          persona 간 분산을 계산한다
+    - [ ] 분산이 임계치 이하로 수렴하면(예: 특정 두 persona의 표현이
+          구분 불가할 정도로 비슷해지면) diagnostics 경고를 남긴다
+    - [ ] 다양성 점수를 dashboard 또는 CLI 리포트로 노출해 반복 실행 간
+          비교 가능하게 한다
 
 ### 5-B. Interview evaluator + Ablation (§6 Controlled Evaluation)
 

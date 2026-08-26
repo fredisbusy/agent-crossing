@@ -17,7 +17,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-from agents.evaluation.diffusion import DiffusionResult, compute_diffusion_rate
+from agents.evaluation.diffusion import (
+    DiffusionResult,
+    RelationshipDensityResult,
+    compute_diffusion_rate,
+    compute_relationship_density,
+)
 from agents.evaluation.interview import InterviewAnswer, InterviewGate, InterviewQuestion
 from agents.memory.memory_manager import ObservationContext
 from agents.persona_loader import PersonaLoader
@@ -56,7 +61,7 @@ class DiffusionExperimentConfig:
     persona_dir: str
     language: Literal["ko"] = "ko"
     tick_interval_seconds: float = 1.0
-    cognitive_time_step_seconds: int = 30
+    cognitive_time_step_seconds: int = 60
     turn_time_step_seconds: int = 300
 
 
@@ -91,6 +96,8 @@ class DiffusionExperimentReport:
     diffusion: DiffusionResult
     per_agent_aware: dict[str, bool]
     per_agent_reason: dict[str, str]
+    relationship_density_before: RelationshipDensityResult
+    relationship_density_after: RelationshipDensityResult
 
     def to_json(self) -> str:
         payload = asdict(self)
@@ -100,6 +107,14 @@ class DiffusionExperimentReport:
             "total_agent_count": self.diffusion.total_agent_count,
             "rate": self.diffusion.rate,
         }
+        for key in ("relationship_density_before", "relationship_density_after"):
+            result: RelationshipDensityResult = getattr(self, key)
+            payload[key] = {
+                "edges": [asdict(edge) for edge in result.edges],
+                "edge_count": result.edge_count,
+                "agent_count": result.agent_count,
+                "density": result.density,
+            }
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -155,15 +170,33 @@ async def run_diffusion_experiment(
         ),
     )
 
-    await runtime.start_scheduler()
-    await asyncio.sleep(config.run_duration_seconds)
-    await runtime.pause_scheduler()
-
     # Reuse the same LLM client the town's own gates already use rather than
     # opening a second connection with duplicated config.
     encounter_gate = runtime.encounter_gate
     assert isinstance(encounter_gate, EncounterGate)
     interview_gate = InterviewGate(generation_client=encounter_gate.generation_client)
+
+    # §7.1.1 start-of-run baseline: measured *after* the seed fact is
+    # injected but *before* the scheduler runs, so the seed itself never
+    # counts as an acquaintance edge — only pre-existing mutual awareness
+    # does.
+    relationship_density_before = compute_relationship_density(
+        agent_names=[agent.name for agent in runtime.agents],
+        mutual_acknowledgment_pairs=_mutual_acknowledgment_pairs(
+            runtime=runtime, interview_gate=interview_gate
+        ),
+    )
+
+    await runtime.start_scheduler()
+    await asyncio.sleep(config.run_duration_seconds)
+    await runtime.pause_scheduler()
+
+    relationship_density_after = compute_relationship_density(
+        agent_names=[agent.name for agent in runtime.agents],
+        mutual_acknowledgment_pairs=_mutual_acknowledgment_pairs(
+            runtime=runtime, interview_gate=interview_gate
+        ),
+    )
 
     per_agent_aware: dict[str, bool] = {}
     per_agent_reason: dict[str, str] = {}
@@ -192,7 +225,50 @@ async def run_diffusion_experiment(
         diffusion=diffusion,
         per_agent_aware=per_agent_aware,
         per_agent_reason=per_agent_reason,
+        relationship_density_before=relationship_density_before,
+        relationship_density_after=relationship_density_after,
     )
+
+
+def _mutual_acknowledgment_pairs(
+    *, runtime: WorldRuntime, interview_gate: InterviewGate
+) -> list[tuple[str, str]]:
+    """§7.1.1: interview every ordered agent pair with "Do you know of X?"
+
+    and keep only pairs where *both* directions answer aware=True (grounded
+    in that agent's own memory stream, per `InterviewGate.ask`).
+    """
+    agents = runtime.agents
+    aware_directional: dict[tuple[str, str], bool] = {}
+    for agent in agents:
+        for other in agents:
+            if agent.name == other.name:
+                continue
+            answer = interview_gate.ask(
+                question=InterviewQuestion(
+                    agent_name=agent.name,
+                    question=f"{other.name}을(를) 아는가?",
+                    current_time=runtime.current_time,
+                ),
+                memory_service=agent.memory_service,
+            )
+            aware_directional[(agent.name, other.name)] = answer.aware
+
+    pairs: list[tuple[str, str]] = []
+    seen: set[frozenset[str]] = set()
+    for agent in agents:
+        for other in agents:
+            if agent.name == other.name:
+                continue
+            pair_key = frozenset((agent.name, other.name))
+            if pair_key in seen:
+                continue
+            seen.add(pair_key)
+            if aware_directional.get((agent.name, other.name)) and aware_directional.get(
+                (other.name, agent.name)
+            ):
+                pairs.append((agent.name, other.name))
+    return pairs
 
 
 def _require_agent(runtime: WorldRuntime, agent_id: str) -> SimAgent:
