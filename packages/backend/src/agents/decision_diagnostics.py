@@ -6,6 +6,15 @@ from agents.reaction import EncounterDecision, ReactionDecision
 
 @dataclass(frozen=True)
 class ActionDiagnostics:
+    """행동 판단 과정의 요약 사고 텍스트.
+
+    `thought`는 모델의 원시 사고 과정이 아니라, 말풍선/로그에 노출해도 되는
+    curated 텍스트다(critique 우선, 없으면 reason으로 폴백). 모델이 실제로
+    생성한 원시 사고는 `model_thought`에만 남는다. 두 필드가 동일한 값을
+    갖는 것은 버그가 아니라, critique가 존재하는 한 `thought`가 그 값을
+    그대로 재사용하도록 설계된 폴백 규칙 때문이다.
+    """
+
     thought: str
     model_thought: str
     self_critique: str

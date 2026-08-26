@@ -8,7 +8,13 @@ from .engine import SimulationStepResult
 
 @dataclass(frozen=True)
 class DashboardEvent:
-    """Diagnostics-owned record of one completed cognitive decision."""
+    """Diagnostics-owned record of one completed cognitive decision.
+
+    `thought` is the curated, display-safe text (critique, falling back to
+    reason) used for the in-world thought bubble overlay — it is not the
+    model's raw reasoning. The unedited model output lives in
+    `model_thought`; see `agents.decision_diagnostics.ActionDiagnostics`.
+    """
 
     sequence: int
     turn: int

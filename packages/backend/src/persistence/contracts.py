@@ -108,6 +108,14 @@ class PositionHistorySave(BaseModel):
 
 
 class DashboardEventSave(BaseModel):
+    """Persisted snapshot of one `world.observability.DashboardEvent`.
+
+    `thought` mirrors `DashboardEvent.thought`: curated display text
+    (critique, falling back to reason), not the model's raw reasoning —
+    that lives in `model_thought`. Kept as `thought` (not renamed) so
+    existing saved-session snapshots stay restorable.
+    """
+
     sequence: int = Field(gt=0)
     turn: int = Field(ge=0)
     occurred_at: datetime.datetime

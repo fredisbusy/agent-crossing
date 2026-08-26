@@ -348,10 +348,13 @@ def build_failed_step_result(
     """Advance the world clock when a cognitive action fails unexpectedly."""
     now = current_time + datetime.timedelta(seconds=turn_time_step_seconds)
     error_type = type(error).__name__
+    # Truncated to avoid bloating the persisted log with full provider
+    # tracebacks/payloads; enough to distinguish rate-limit vs timeout vs auth.
+    error_message = str(error).strip()[:300]
     return SimulationStepResult(
         now=now,
         speaker_name=speaker_name,
-        trace={"runtime_error": error_type},
+        trace={"runtime_error": error_type, "runtime_error_message": error_message},
         reply="",
         silent_reason="action_loop_error",
         parse_failure=True,
@@ -364,6 +367,7 @@ def build_failed_step_result(
             decision_process={
                 "runtime": {
                     "error_type": error_type,
+                    "error_message": error_message,
                     "recovered": True,
                 },
                 "final_output": {

@@ -267,7 +267,10 @@ def test_world_runtime_keeps_clock_running_when_cognitive_step_fails() -> None:
     result = runtime.tick()
 
     assert result.silent_reason == "action_loop_error"
-    assert result.trace == {"runtime_error": "RuntimeError"}
+    assert result.trace == {
+        "runtime_error": "RuntimeError",
+        "runtime_error_message": "cognitive provider unavailable",
+    }
     assert runtime.current_time == current_time + datetime.timedelta(minutes=5)
     assert runtime.turn == 1
     assert runtime.parse_failures == 1
