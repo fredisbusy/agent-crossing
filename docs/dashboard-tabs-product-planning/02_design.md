@@ -9,6 +9,17 @@
 
 `/dashboard`는 게임을 보는 화면이 아니라 실제 에이전트 runtime을 설명하고 장애를 추적하는 **인지 관측 도구**다. 정보 구조는 다음 세 단계로 정리한다.
 
+### 개요 프로필 read model
+
+- `DashboardAgent`는 `age`, `gender`, `traits`, `persona`를 제공한다.
+- `age`, `traits`, `persona`는 현재 runtime identity/profile에서 읽고,
+  `gender`도 persona loader가 runtime identity에 명시적으로 적재한다. 이름으로
+  성별을 추측하거나 frontend에 주민별 상수를 중복 정의하지 않는다.
+- 개요 상단 전폭 카드에서 나이·성별을 빠르게 확인하고 traits는 태그로, 실제
+  `identity_stable_set` 전체는 읽기 쉬운 문장 목록으로 표시한다.
+- provider prompt, model thought, governance trace는 persona 표시 범위에 포함하지
+  않는다.
+
 1. **전역 상태**: 세계 시각, scheduler/cognition, 오류, 신선도
 2. **선택 agent 상태**: 개요와 5개 상세 탭
 3. **전역 event feed**: 우측 rail의 짧은 최신 사건

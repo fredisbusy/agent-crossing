@@ -17,6 +17,8 @@
   원문과 citation을 독립 조회한다.
 - network, planning, cognitive runtime 오류를 분리해 표시하고 수동 새로고침과
   freshness 정보를 제공한다.
+- 개요 탭에 실제 persona read model 기반 프로필 카드를 추가해 나이·성별,
+  traits, 고정 페르소나 문장 전체를 표시한다.
 
 ## 의도적으로 남긴 범위
 

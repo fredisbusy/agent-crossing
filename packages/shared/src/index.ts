@@ -159,6 +159,10 @@ export interface DashboardRelationshipEvent {
 export interface DashboardAgent {
   agent_id: AgentId;
   name: string;
+  age: number;
+  gender: string;
+  traits: string[];
+  persona: string[];
   current_action: string;
   destination: string | null;
   current_location_path: string | null;

@@ -65,3 +65,10 @@
 - memory 원문과 관계 evidence를 표시하며 public diagnostics 내부 trace field는 0개
 - scheduler running, planning/cognitive runtime error 없음
 - 탭 URL·키보드 이동과 기억/계획/로그 화면을 공개 브라우저에서 확인
+
+## 2026-08-26 follow-up
+
+> 대시보드 개요에
+>
+> - 캐릭터의 나이, 성별
+> - 캐릭터의 페르소나 내용도 볼수있게 해줘

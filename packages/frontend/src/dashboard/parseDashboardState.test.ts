@@ -21,6 +21,10 @@ const fixture = {
     {
       agent_id: "Jiho",
       name: "Jiho Park",
+      age: 29,
+      gender: "남성",
+      traits: ["INFJ", "차분함"],
+      persona: ["지호는 스토리하우스 도서관에서 일하는 사서다."],
       current_action: "at:허니컵 카페",
       destination: "브라이어 코브 > 허니컵 카페",
       current_location_path: "브라이어 코브 > 허니컵 카페",
@@ -116,6 +120,26 @@ describe("parseDashboardState", () => {
     expect(parsed?.agents[0]?.relationships[0]?.summary).toBe(
       "Jiho는 Sujin을 친구 이상으로 좋아한다.",
     );
+    expect(parsed?.agents[0]).toMatchObject({
+      age: 29,
+      gender: "남성",
+      traits: ["INFJ", "차분함"],
+    });
+    expect(parsed?.agents[0]?.persona[0]).toContain("사서");
+  });
+
+  it("rejects malformed public persona fields", () => {
+    const malformed = structuredClone(fixture);
+    malformed.agents[0].age = -1;
+    expect(parseDashboardState(malformed)).toBeNull();
+
+    const missingGender = structuredClone(fixture);
+    missingGender.agents[0].gender = "";
+    expect(parseDashboardState(missingGender)).toBeNull();
+
+    const malformedPersona = structuredClone(fixture);
+    malformedPersona.agents[0].persona = [42 as never];
+    expect(parseDashboardState(malformedPersona)).toBeNull();
   });
 
   it("rejects malformed memories instead of rendering invented data", () => {

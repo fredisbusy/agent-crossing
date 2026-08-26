@@ -467,6 +467,9 @@ Zustand에 저장한다. Phaser는 `tile_position`을 Grid Engine에 전달하�
   reflection 원문, reflection 임계치 진행률을 반환한다. 응답에는
   `snapshot_generated_at`, bounded event buffer의 `oldest_sequence`와
   `latest_sequence`를 포함해 freshness와 cursor gap을 판정할 수 있게 한다.
+- dashboard agent read model은 persona 원본의 `age`, 명시적 `gender`, `traits`와
+  현재 runtime의 `identity_stable_set` 전체를 `persona`로 반환한다. frontend는
+  이름으로 성별을 추측하거나 별도 페르소나 문구를 만들지 않는다.
 - `/dashboard`에는 로그인이나 접근 제한을 두지 않는다. memory, reflection,
   방향성 관계 summary/evidence 원문은 공개 화면에서 그대로 제공한다.
 - 공개 diagnostics event는 sequence/turn/time/agent/reply/silent/parse-failure/

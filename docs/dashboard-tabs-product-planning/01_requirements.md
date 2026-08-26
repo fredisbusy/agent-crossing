@@ -26,6 +26,7 @@
 | FR-O01 | 현재 상태를 요약한다        | 행동, 현재 위치, 목적지, 활성 minute plan, 최근 관찰 신호, 성찰 진행을 한 화면에 표시한다 |
 | FR-O02 | 의미가 다른 신호를 구분한다 | speech/thought/action과 plan context를 각각 올바른 레이블로 표시한다                      |
 | FR-O03 | 이상 상태를 우선한다        | runtime/planning/location 불일치를 정상 카드보다 먼저 발견할 수 있다                      |
+| FR-O04 | 캐릭터 설정을 확인한다      | persona 원본의 나이·성별·traits와 실제 runtime의 고정 페르소나 문장 전체를 표시한다       |
 
 ### 관계
 

@@ -9,6 +9,7 @@ class AgentIdentity:
     name: str  # 에이전트 이름
     age: int  # 에이전트 나이
     traits: list[str]  # 성격 특성 (예: 친절함, 호기심 등)
+    gender: str = "비공개"  # persona에 명시된 성별 표현
 
 
 @dataclass(frozen=True)

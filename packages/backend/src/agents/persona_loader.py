@@ -87,6 +87,7 @@ def _parse_persona_json(path: Path) -> AgentPersona:
         name=_expect_string(agent_data, "name"),
         age=_expect_int(agent_data, "age"),
         traits=_expect_string_list(agent_data, "traits"),
+        gender=_expect_string(agent_data, "gender"),
     )
 
     memories = _expect_list(payload, "seed_memories")

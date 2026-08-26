@@ -826,6 +826,10 @@ def _dashboard_state_response(
             DashboardAgentResponse(
                 agent_id=spatial_agent.agent_id,
                 name=spatial_agent.name,
+                age=runtime_agent.identity.age,
+                gender=runtime_agent.identity.gender,
+                traits=list(runtime_agent.identity.traits),
+                persona=list(runtime_agent.profile.fixed.identity_stable_set),
                 current_action=spatial_agent.current_action,
                 destination=spatial_agent.destination,
                 current_location_path=current_location_path,

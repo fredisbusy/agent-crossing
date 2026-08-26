@@ -20,6 +20,7 @@ import {
   Radio,
   RefreshCw,
   Sparkles,
+  UserRound,
 } from "lucide-react";
 import {
   useEffect,
@@ -459,6 +460,49 @@ function AgentOverview({ agent }: { agent: DashboardAgent }) {
     agent.bubble_kind === "thought" ? agent.bubble_text : null;
   return (
     <div className="dashboard-overview-grid">
+      <section className="dashboard-panel dashboard-profile-panel">
+        <div className="dashboard-panel-title">
+          <span>
+            <UserRound size={14} /> 프로필 · 페르소나
+          </span>
+          <strong>
+            {agent.age}세 · {agent.gender}
+          </strong>
+        </div>
+        <div className="dashboard-profile-layout">
+          <div className="dashboard-profile-summary">
+            <dl>
+              <div>
+                <dt>나이</dt>
+                <dd>{agent.age}세</dd>
+              </div>
+              <div>
+                <dt>성별</dt>
+                <dd>{agent.gender}</dd>
+              </div>
+            </dl>
+            <div className="dashboard-traits" aria-label="핵심 특성">
+              {agent.traits.map((trait) => (
+                <span key={trait}>{trait}</span>
+              ))}
+            </div>
+          </div>
+          <div className="dashboard-persona-copy">
+            <h3>고정 페르소나</h3>
+            {agent.persona.length ? (
+              <ul>
+                {agent.persona.map((statement, index) => (
+                  <li key={`${index}-${statement}`}>{statement}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="dashboard-empty-copy">
+                등록된 고정 페르소나가 없습니다.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
       <section className="dashboard-panel dashboard-now-panel">
         <div className="dashboard-panel-title">
           <span>

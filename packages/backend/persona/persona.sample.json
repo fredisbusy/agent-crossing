@@ -4,6 +4,7 @@
     "agent_id": "sample_agent",
     "name": "Sample Agent",
     "age": 30,
+    "gender": "비공개",
     "traits": ["차분함", "분석적임", "도움을 잘 줌"],
     "home": "Maple Residence 3F, North Room",
     "workplace": "Town Hall"

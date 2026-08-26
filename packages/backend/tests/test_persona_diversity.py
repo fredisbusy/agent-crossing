@@ -23,6 +23,15 @@ EXPECTED_MBTI: dict[str, str] = {
     "Taeo": "ESFP",
 }
 
+EXPECTED_GENDERS: dict[str, str] = {
+    "Haeun": "여성",
+    "Jiho": "남성",
+    "Jungwoo": "남성",
+    "Minji": "여성",
+    "Sujin": "여성",
+    "Taeo": "남성",
+}
+
 
 def test_roster_personas_have_distinct_non_work_behavioral_anchors() -> None:
     loader = PersonaLoader(PERSONA_DIR)
@@ -45,6 +54,15 @@ def test_roster_personas_have_distinct_non_work_behavioral_anchors() -> None:
         assert len(persona.current_plan_context) >= 3
         assert len(persona.seed_memories) >= 6
         assert all(signature in persona_text for signature in signatures)
+
+
+def test_roster_personas_define_dashboard_demographics() -> None:
+    loader = PersonaLoader(PERSONA_DIR)
+
+    for persona_name, gender in EXPECTED_GENDERS.items():
+        persona = loader.load(persona_name)
+        assert persona.agent.age > 0
+        assert persona.agent.gender == gender
 
 
 def test_roster_personas_encode_boundaries_and_repair_after_social_missteps() -> None:

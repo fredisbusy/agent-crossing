@@ -277,6 +277,11 @@ function parseAgent(value: unknown): DashboardAgent | null {
   if (
     typeof value.agent_id !== "string" ||
     typeof value.name !== "string" ||
+    !isNonNegativeInteger(value.age) ||
+    typeof value.gender !== "string" ||
+    !value.gender.trim() ||
+    !isStringArray(value.traits) ||
+    !isStringArray(value.persona) ||
     typeof value.current_action !== "string" ||
     (value.destination !== null && typeof value.destination !== "string") ||
     (value.current_location_path !== null &&
@@ -315,6 +320,10 @@ function parseAgent(value: unknown): DashboardAgent | null {
   return {
     agent_id: value.agent_id,
     name: value.name,
+    age: value.age,
+    gender: value.gender,
+    traits: value.traits,
+    persona: value.persona,
     current_action: value.current_action,
     destination: value.destination as string | null,
     current_location_path: value.current_location_path as string | null,

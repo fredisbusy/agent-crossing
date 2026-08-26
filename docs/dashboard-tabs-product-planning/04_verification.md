@@ -28,3 +28,22 @@ planning/settings 작업(`test_litellm_day_plan_retry`, planning graph 2건, set
 현재 앱 브라우저는 viewport capability를 제공하지 않아 390px 실기기 resize는
 수행하지 못했다. 반응형 CSS, 44px control, production build로 대체 검증했으며 실제
 모바일 기기 확인은 배포 체크리스트에 유지한다.
+
+## 2026-08-26 개요 프로필 후속 검증
+
+- Backend persona/dashboard targeted suite: 22 passed
+- Frontend Vitest: 28 passed, 6 files
+- Shared build, frontend production build: passed
+- Full backend suite: 233 passed, 11 skipped, 6 failures
+
+전체 backend의 실패 중 5개는 위에 기록한 기존 planning/settings 작업과 같고,
+추가 1개는 별도로 수정 중인 `briar-cove.tmj` 높이와 기존 world map 테스트 기대값의
+불일치다. 개요 프로필 targeted suite는 통과했다.
+
+- 공개 `/dashboard/state`에서 6명 모두 `age`, `gender`, `traits`, `persona`를
+  반환하는 것을 확인했다.
+- 공개 하은 개요에서 프로필 카드, 30세, 여성, 성격 태그, 고정 페르소나 6개가
+  표시되는 것을 확인했다.
+- 데스크톱과 390px viewport에서 프로필 카드가 각각 2열과 1열로 표시되며 가로
+  overflow가 없었다.
+- 공개 브라우저 console warning/error는 없었다.

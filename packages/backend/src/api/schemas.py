@@ -281,6 +281,10 @@ class DashboardRelationshipResponse(BaseModel):
 class DashboardAgentResponse(BaseModel):
     agent_id: str
     name: str
+    age: int = Field(ge=0)
+    gender: str = Field(min_length=1)
+    traits: list[str]
+    persona: list[str]
     current_action: str
     destination: str | None
     current_location_path: str | None

@@ -267,6 +267,81 @@
   grid-template-columns: 1.1fr 0.9fr;
   gap: 12px;
 }
+.dashboard-profile-panel {
+  grid-column: 1 / -1;
+  padding: 15px;
+}
+.dashboard-profile-layout {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.36fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 14px;
+}
+.dashboard-profile-summary {
+  padding-right: 18px;
+  border-right: 2px solid #d3c7a2;
+}
+.dashboard-profile-summary dl {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 14px;
+}
+.dashboard-profile-summary dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+}
+.dashboard-profile-summary dt {
+  color: #80775f;
+}
+.dashboard-profile-summary dd {
+  margin: 0;
+  color: #34483a;
+  font-weight: 700;
+}
+.dashboard-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dashboard-traits span {
+  padding: 5px 7px;
+  border: 1px solid #91a17a;
+  background: #e2e9cc;
+  color: #46604a;
+  font-size: 12px;
+  font-weight: 700;
+}
+.dashboard-persona-copy h3 {
+  margin: 0 0 10px;
+  color: #506251;
+  font-size: 13px;
+}
+.dashboard-persona-copy ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dashboard-persona-copy li {
+  position: relative;
+  padding-left: 15px;
+  color: #34483a;
+  font-family: "Apple SD Gothic Neo", sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.dashboard-persona-copy li::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: #6b8d62;
+  content: "◆";
+  font-size: 8px;
+}
 .dashboard-panel {
   border: 2px solid #b7aa7e;
   background: #fff8dc;
@@ -954,6 +1029,15 @@
   .dashboard-day-plan,
   .dashboard-relationship-grid {
     grid-template-columns: 1fr;
+  }
+  .dashboard-profile-layout {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-profile-summary {
+    padding-right: 0;
+    padding-bottom: 14px;
+    border-right: 0;
+    border-bottom: 2px solid #d3c7a2;
   }
   .dashboard-timeline-panel .dashboard-timeline {
     max-height: none;
