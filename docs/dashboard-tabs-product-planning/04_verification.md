@@ -62,3 +62,16 @@ planning/settings 작업(`test_litellm_day_plan_retry`, planning graph 2건, set
 - project backend virtualenv로 skill `quick_validate.py`를 실행해 `Skill is valid!`를
   확인했다. 준비 script는 일반 RGBA와 실제 체크무늬 원본을 각각 512×512 투명
   PNG로 변환했고, 검증 script는 현재 6개 asset을 모두 통과시켰다.
+
+## 2026-08-26 추가 주민 초상화 검증
+
+- 페르소나 디렉터리와 초상화 자산을 대조해 누락된 우식·용준·병용·원준을
+  식별했다.
+- 네 이미지를 512×512 RGBA PNG로 정규화하고 투명 배경 및 시각적 경계를
+  크림색 배경 합성본으로 확인했다.
+- 대시보드 초상화 resolver가 실제 게임 주민 10명을 모두 매핑하는지 단위
+  테스트로 검증했다.
+- 초상화 validator: 10개 asset 모두 통과
+- Frontend Vitest: 44 passed, 8 files
+- `pnpm -r build`: passed, production `dist/portraits`에 10개 asset 포함
+- 실행 환경의 DNS 제한으로 신규 공개 정적 URL 확인은 수행하지 못했다.

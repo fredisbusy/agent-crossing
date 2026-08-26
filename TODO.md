@@ -675,8 +675,10 @@ end-to-end 시나리오다.
     - [x] 탭 URL/필터 독립성/계획 검증/원문·내부 trace 경계/cursor 회귀 테스트를 추가한다
     - [x] 개요 탭에서 persona 원본의 나이·성별·traits와 runtime 고정 페르소나
       문장 전체를 표시하고 shared/API/runtime validation 계약으로 고정한다
-    - [x] 6명 페르소나 기반 픽셀 초상화를 생성해 주민 목록과 개요 프로필에
+    - [x] 10명 페르소나 기반 픽셀 초상화를 생성해 주민 목록과 개요 프로필에
       표시하고 미등록 주민에는 이니셜 fallback을 유지한다
+    - [x] 같은 화풍의 신규 초상화를 반복 생성·정규화·검증하는 project skill과
+      prompt template, ImageMagick helper를 제공한다
 
 - [x] `P2` God mode 입력으로 perception event를 주입한다 (§3.2 User Controls,
       §8.1 "Isabella's apartment: kitchen: stove is burning" 예시)
