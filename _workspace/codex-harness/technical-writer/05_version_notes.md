@@ -7,3 +7,10 @@
 - `TODO.md`에 구현 전 후속 항목과 DoD를 추가했다.
 - 코드와 API는 변경하지 않았다.
 - `SPEC.md`는 구현 시 실제 계약과 함께 갱신하도록 설계 문서에 후속 단계로 남겼다.
+
+## 2026-08-26 dashboard 전체 탭 기획 추가
+
+- 대시보드 6개 탭의 제품 기획 주제를 추가했다.
+- 공개 runtime 표본과 frontend/backend/docs 병렬 리뷰 결과를 반영했다.
+- 구현 전 후속 TODO를 추가하고 완료 처리하지 않았다.
+- source implementation은 변경하지 않았다.

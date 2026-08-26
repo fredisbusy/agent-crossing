@@ -619,6 +619,21 @@ end-to-end 시나리오다.
   - Follow-up: 도움·약속·갈등은 canonical committed action signal 구현 후 연결하며
     관계 수치를 planning prompt에 되먹임하지 않는다.
 
+- [ ] `P1` dashboard 탭 관측성·탐색성 개선을 구현한다
+  - Design: `docs/dashboard-tabs-product-planning/00_input.md`, `01_requirements.md`,
+    `02_design.md`, `05_review.md`
+  - Depends on: agent inspector, 방향성 관계 탭 구현
+  - DoD:
+    - [ ] 진단 로그 탭과 우측 전역 로그의 agent filter 상태를 분리한다
+    - [ ] dashboard 접근 주체·인증·private diagnostics 공개 범위를 확정한다
+    - [ ] live/persisted diagnostics redaction을 단일 allowlist 정책으로 통일한다
+    - [ ] 공개 runtime의 `current_location_path` 정확성과 runtime 오류 표시를 복구한다
+    - [ ] 전체 1초 polling을 summary/detail/event cursor 구조와 회복 가능한 polling으로 개선한다
+    - [ ] 기억·성찰·관계 근거에 total/cursor와 명시적 빈 상태를 제공한다
+    - [ ] 계획 timeline, 진행 상태, replan/error metadata를 제공한다
+    - [ ] 탭 키보드 탐색, URL 상태, 44px 터치 영역과 모바일 runtime 요약을 검증한다
+    - [ ] 탭 interaction, filter 독립성, polling 복구, 권한/redaction 통합 테스트를 추가한다
+
 - [x] `P2` God mode 입력으로 perception event를 주입한다 (§3.2 User Controls,
       §8.1 "Isabella's apartment: kitchen: stove is burning" 예시)
   - Depends on: agent inspector 구현

@@ -7,3 +7,12 @@
 
 핵심 개념인 “관계의 방향성과 근거”를 먼저 설명한 뒤 화면 구조와 구현 계약으로
 내려가도록 구성한다.
+
+## 2026-08-26 dashboard 전체 탭 기획
+
+1. Input, purpose, audience, scope, live sample
+2. Common and tab-specific functional/non-functional requirements
+3. Product definition and common shell
+4. Six tab plans
+5. Data flow, accessibility, metrics, tests
+6. P0/P1/P2 review and implementation backlog

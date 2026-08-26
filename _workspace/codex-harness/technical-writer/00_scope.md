@@ -7,3 +7,11 @@
   `TODO.md` 후속 구현 항목
 - 비범위: 코드 구현, API 변경, SPEC 계약 변경
 - 근거: 첨부 화면, `SPEC.md`, `TODO.md`, 관계 진단/API/shared/frontend 코드와 테스트
+
+## 2026-08-26 dashboard 전체 탭 기획
+
+- Mode: full documentation pipeline, implementation excluded
+- Audience: Agent Crossing product, frontend, backend, QA, operations
+- Goal: define all six dashboard tabs and identify evidence-backed improvements
+- Sources: SPEC/TODO, dashboard frontend, shared DTO, backend read model/tests, existing relationship design, public runtime sample
+- Final topic: `docs/dashboard-tabs-product-planning/`

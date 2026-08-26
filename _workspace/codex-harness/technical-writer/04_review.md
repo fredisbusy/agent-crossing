@@ -8,3 +8,11 @@
 - [x] 현재 위치와 목적지의 의미를 분리했다.
 - [x] 데스크톱·모바일·키보드·터치 수용 기준을 포함했다.
 - [x] 구현하지 않은 사항을 완료로 표현하지 않았다.
+
+## 2026-08-26 dashboard 전체 탭 기획
+
+- Frontend lane: six tabs, shared rails, filter-state defect, polling, accessibility and responsive gaps
+- Backend lane: authoritative sources, non-atomic composition, pagination gaps, relationship scan cost, sanitizer mismatch
+- Docs lane: SPEC/TODO constraints, existing relationship plan, harness structure and traceability
+- Main-agent live check: public response was 280,413 bytes with 6 agents, 350 memories, 30 directional relationships and 64 events; every `current_location_path` was null in that sample
+- No product metrics or runtime values were fabricated
