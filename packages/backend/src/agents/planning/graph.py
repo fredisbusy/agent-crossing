@@ -15,7 +15,6 @@ from llm.governance import (
     try_parse_minute_task_decomposition,
 )
 from llm.structured_outputs import (
-    DayPlanDraftOutput,
     HourlyPlanOutput,
     MinutePlanOutput,
     day_plan_output_model,
@@ -65,14 +64,19 @@ def _truncate_to_minute(moment: datetime.datetime) -> datetime.datetime:
 def _day_plan_item_bounds(
     request: DayPlanBroadStrokesRequest,
 ) -> tuple[int, int]:
-    planning_end = request.planning_window_end or datetime.datetime.combine(
-        request.today_date.date() + datetime.timedelta(days=1), datetime.time.min
-    )
+    if request.planning_window_end is None:
+        return 5, 8
+
+    planning_end = request.planning_window_end
     remaining_five_minute_slots = max(
         1, int((planning_end - request.today_date).total_seconds() // 300)
     )
-    max_items = min(16, remaining_five_minute_slots)
-    return min(5, max_items), max_items
+    max_items = min(8, remaining_five_minute_slots)
+    minimum_for_duration = max(
+        1,
+        (remaining_five_minute_slots * 5 + 180 - 1) // 180,
+    )
+    return min(max_items, max(min(5, max_items), minimum_for_duration)), max_items
 
 
 class PlanningGraphError(RuntimeError):
@@ -339,13 +343,9 @@ class PlanningGraphRunner:
             "response_text": self.planning_client.complete_planning_prompt(
                 prompt=state["current_prompt"],
                 options=DAY_PLAN_GENERATE_OPTIONS,
-                response_model=(
-                    DayPlanDraftOutput
-                    if max_items == 16
-                    else day_plan_output_model(
-                        min_items=min_items,
-                        max_items=max_items,
-                    )
+                response_model=day_plan_output_model(
+                    min_items=min_items,
+                    max_items=max_items,
                 ),
             )
         }
@@ -359,10 +359,15 @@ class PlanningGraphRunner:
             parsed = try_parse_day_plan(
                 state["response_text"],
                 min_items=min_items,
-                max_items=max_items,
+                max_items=min(8, max_items),
                 min_duration=5,
                 reference_date=state["request"].today_date.date(),
                 repair_excessive_duration=state["attempt_count"] >= MAX_PARSE_RETRIES,
+                fixed_window=(
+                    (state["request"].today_date, state["request"].planning_window_end)
+                    if state["request"].planning_window_end is not None
+                    else None
+                ),
             )
             planning_end = state["request"].planning_window_end
             if planning_end is not None:
@@ -398,6 +403,12 @@ class PlanningGraphRunner:
                 "or shorter. Replace any workday-sized block with separate morning, "
                 "midday, afternoon, and evening items; include a break or errand at a "
                 "different canonical location between long work periods."
+            )
+        elif state["parse_error"] == "planning_window_not_repairable_for_item_count":
+            duration_repair = (
+                "\n\nCRITICAL REPAIR: Return enough items for the fixed window: "
+                "each item may cover at most 180 minutes, and all items together "
+                "must be able to span the complete start-to-end duration."
             )
         return {
             "attempt_count": state["attempt_count"] + 1,
@@ -575,7 +586,7 @@ def _build_plan_retry_prompt(
         f"The previous response did not match the required {plan_name} JSON schema.\n"
         f"Failure reason: {previous_error}.\n\n"
         f"Return strict JSON only with this exact shape and no extra text: {json_shape}\n"
-        f"Do not repeat this invalid output: {previous_response[:180]!r}"
+        f"Do not repeat this invalid output: {previous_response[:4000]!r}"
     )
 
 

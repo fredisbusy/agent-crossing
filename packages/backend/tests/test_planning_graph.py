@@ -122,7 +122,8 @@ def _day_plan_request() -> DayPlanBroadStrokesRequest:
         persona_background="Music theory student focusing on composition.",
         yesterday_date=datetime.datetime(2026, 2, 12),
         yesterday_summary="Studied harmony and practiced composition in the evening.",
-        today_date=datetime.datetime(2026, 2, 13),
+        today_date=datetime.datetime(2026, 2, 13, 8),
+        planning_window_end=datetime.datetime(2026, 2, 13, 21),
     )
 
 
@@ -205,7 +206,7 @@ def test_planning_graph_runner_retries_invalid_day_plan_once() -> None:
     assert client.call_labels == ["day", "day"]
 
 
-def test_day_plan_retries_until_it_covers_the_authoritative_window() -> None:
+def test_day_plan_repairs_provider_start_to_cover_authoritative_window() -> None:
     client = StubPlanningClient()
 
     def day_response(start: str) -> str:
@@ -226,18 +227,24 @@ def test_day_plan_retries_until_it_covers_the_authoritative_window() -> None:
                     },
                     {
                         "start_time": "2026-02-13T12:00:00",
-                        "end_time": "2026-02-13T17:00:00",
+                        "end_time": "2026-02-13T15:00:00",
                         "location": "Town > Cafe > Patio",
-                        "action_content": "점심과 오후 일정을 보낸다.",
+                        "action_content": "점심 일정을 보낸다.",
                     },
                     {
-                        "start_time": "2026-02-13T17:00:00",
-                        "end_time": "2026-02-13T22:00:00",
+                        "start_time": "2026-02-13T15:00:00",
+                        "end_time": "2026-02-13T18:00:00",
+                        "location": "Town > Cafe > Patio",
+                        "action_content": "오후 일정을 보낸다.",
+                    },
+                    {
+                        "start_time": "2026-02-13T18:00:00",
+                        "end_time": "2026-02-13T21:00:00",
                         "location": "Town > Home > Desk",
                         "action_content": "저녁 활동을 한다.",
                     },
                     {
-                        "start_time": "2026-02-13T22:00:00",
+                        "start_time": "2026-02-13T21:00:00",
                         "end_time": "2026-02-14T00:00:00",
                         "location": "Town > Home > Desk",
                         "action_content": "하루를 정리하고 쉰다.",
@@ -246,10 +253,7 @@ def test_day_plan_retries_until_it_covers_the_authoritative_window() -> None:
             }
         )
 
-    client.responses_by_label["day"] = [
-        day_response("2026-02-13T06:30:00"),
-        day_response("2026-02-13T06:25:00"),
-    ]
+    client.responses_by_label["day"] = [day_response("2026-02-13T06:30:00")]
     request = _day_plan_request()
     request = DayPlanBroadStrokesRequest(
         agent_name=request.agent_name,
@@ -264,7 +268,7 @@ def test_day_plan_retries_until_it_covers_the_authoritative_window() -> None:
 
     items = PlanningGraphRunner(planning_client=client).generate_day_plan(request)
 
-    assert client.call_labels == ["day", "day"]
+    assert client.call_labels == ["day"]
     assert items[0].start_time == datetime.datetime(2026, 2, 13, 6, 25)
     assert items[-1].end_time == datetime.datetime(2026, 2, 14)
 
@@ -308,14 +312,14 @@ def test_day_plan_uses_single_tail_item_for_last_five_minutes() -> None:
     assert items_schema["maxItems"] == 1
 
 
-def test_day_plan_compacts_continuous_provider_draft_to_eight_items() -> None:
+def test_day_plan_compacts_oversized_legacy_draft_to_eight_items() -> None:
     client = StubPlanningClient()
-    boundaries = [0, 2, 4, 6, 8, 10, 12, 14, 16, 20, 24]
+    boundaries = [index * 90 for index in range(17)]
 
-    def timestamp(hour: int) -> str:
-        if hour == 24:
-            return "2026-08-26T00:00:00"
-        return f"2026-08-25T{hour:02d}:00:00"
+    def timestamp(minutes: int) -> str:
+        return (
+            datetime.datetime(2026, 8, 25) + datetime.timedelta(minutes=minutes)
+        ).isoformat()
 
     client.responses_by_label["day"] = [
         json.dumps(
@@ -358,7 +362,60 @@ def test_day_plan_compacts_continuous_provider_draft_to_eight_items() -> None:
     items_schema = client.response_models[0].model_json_schema()["properties"][
         "items"
     ]
-    assert items_schema["maxItems"] == 16
+    assert items_schema["maxItems"] == 8
+
+
+def test_day_plan_repairs_gap_and_overlap_when_item_count_is_feasible() -> None:
+    client = StubPlanningClient()
+    boundaries = [
+        ("06:00", "09:00"),
+        ("09:10", "12:10"),
+        ("12:00", "15:00"),
+        ("15:00", "18:00"),
+        ("18:00", "21:00"),
+        ("21:00", "00:00"),
+    ]
+    client.responses_by_label["day"] = [
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "start_time": f"2026-08-25T{start}:00",
+                        "end_time": (
+                            "2026-08-26T00:00:00"
+                            if end == "00:00"
+                            else f"2026-08-25T{end}:00"
+                        ),
+                        "location": "브라이어 코브 > 마을 광장",
+                        "action_content": f"일과 {index + 1}을 수행한다.",
+                    }
+                    for index, (start, end) in enumerate(boundaries)
+                ]
+            },
+            ensure_ascii=False,
+        )
+    ]
+    request = DayPlanBroadStrokesRequest(
+        agent_name="Jiho Park",
+        age=31,
+        innate_traits=["차분함"],
+        persona_background="브라이어 코브 주민",
+        yesterday_date=datetime.datetime(2026, 8, 24, 6),
+        yesterday_summary="평소 일과를 보냈다.",
+        today_date=datetime.datetime(2026, 8, 25, 6),
+        planning_window_end=datetime.datetime(2026, 8, 26),
+    )
+
+    items = PlanningGraphRunner(planning_client=client).generate_day_plan(request)
+
+    assert client.call_labels == ["day"]
+    assert items[0].start_time == request.today_date
+    assert items[-1].end_time == request.planning_window_end
+    assert all(item.duration_minutes == 180 for item in items)
+    assert all(
+        first.end_time == second.start_time
+        for first, second in zip(items, items[1:])
+    )
 
 
 def test_hourly_plan_retries_when_it_misses_the_current_world_time() -> None:

@@ -53,6 +53,7 @@ from persistence.contracts import (
     RuntimeSaveState,
     sanitized_diagnostics,
 )
+from settings import PLAN_GENERATION_MAX_CONCURRENCY
 
 from .engine import (
     SimulationEngine,
@@ -65,14 +66,6 @@ from .observability import DashboardEvent, DashboardEventBuffer
 from .spatial import SpatialWorldRuntime
 
 logger = logging.getLogger(__name__)
-
-# Upper bound on how many agents' plan-generation LLM calls run at once.
-# Must stay at or below the local Ollama server's configured parallel
-# request slots (`OLLAMA_NUM_PARALLEL`, currently 4 on this deployment —
-# see TODO.md's 2026-08-25 model sizing note) so that unbounded
-# fan-out (one call per agent) doesn't make the server queue requests
-# past `LLM_TIMEOUT_SECONDS` and surface as `planning_error`.
-PLAN_GENERATION_MAX_CONCURRENCY = 4
 
 
 def _as_life_agent(agent: SimAgent) -> LifeAgent:
@@ -674,24 +667,24 @@ class WorldRuntime:
     async def _run_scheduler(self) -> None:
         if self.planning_coordinator is not None:
             try:
-                schedules = [
-                    self.planning_coordinator.ensure_current(
-                        agent=_as_life_agent(agent),
-                        now=self.current_time,
-                        generate=False,
-                    )
-                    for agent in self.agents
-                ]
+                schedules: list[AgentPlanSnapshot] = []
+                needs_generation = False
+                for agent in self.agents:
+                    try:
+                        schedules.append(
+                            self.planning_coordinator.ensure_current(
+                                agent=_as_life_agent(agent),
+                                now=self.current_time,
+                                generate=False,
+                            )
+                        )
+                    except PlanningGenerationError:
+                        needs_generation = True
                 if self.spatial_runtime is not None:
                     for schedule in schedules:
                         self.spatial_runtime.set_schedule(schedule)
-            except PlanningGenerationError:
-                try:
+                if needs_generation:
                     await self._refresh_plans()
-                except Exception as error:
-                    self._set_planning_error(error)
-                    logger.exception("Authoritative plan generation failed")
-                    return
             except Exception as error:
                 self._set_planning_error(error)
                 logger.exception("Authoritative restored plan validation failed")
@@ -700,9 +693,17 @@ class WorldRuntime:
             try:
                 await asyncio.to_thread(self._advance_world_tick)
             except Exception as error:
+                # Do not kill the scheduler task on a single bad tick: that
+                # previously froze every agent's movement forever (spatial
+                # movement no longer gates on `planning_error`, but nothing
+                # advances `current_time`/plans either once this task is
+                # dead, and only a manual `POST /world/tick/start` could
+                # recover). Log, surface the error for diagnostics, and
+                # retry on the next tick interval instead.
                 self._set_planning_error(error)
                 logger.exception("Authoritative plan transition failed")
-                return
+                await asyncio.sleep(self.tick_interval_seconds)
+                continue
             for pair_key, session in list(self.sessions.items()):
                 existing_task = self._cognitive_tasks.get(pair_key)
                 if not session.is_active:
@@ -837,33 +838,55 @@ class WorldRuntime:
         `len(self.agents)`: fanning out one LLM call per agent (6 for the
         current village) exceeds the local Ollama server's parallel request
         slots, which makes the server queue the overflow and risks tripping
-        `LLM_TIMEOUT_SECONDS` on the waiting requests (observed as
-        `planning_error` stalling the whole scheduler).
+        `LLM_TIMEOUT_SECONDS` on the waiting requests.
+
+        Each agent's `ensure_current` call is isolated: one agent's
+        persistent failure (bad LLM output, timeout, ...) must not discard
+        every *other* agent's freshly-generated schedule, and must not stop
+        the scheduler — `_sync_or_schedule_plan_generation` naturally
+        re-queues only the still-stale agents on the next tick, so this is
+        a self-healing retry with the tick interval as backoff, not a
+        one-shot all-or-nothing batch.
         """
         assert self.planning_coordinator is not None
         planning_coordinator = self.planning_coordinator
-        try:
-            with ThreadPoolExecutor(
-                max_workers=min(PLAN_GENERATION_MAX_CONCURRENCY, len(self.agents))
-            ) as executor:
-                schedules = list(
-                    executor.map(
-                        lambda agent: planning_coordinator.ensure_current(
-                            agent=_as_life_agent(agent),
-                            now=planning_time,
-                            generate=True,
-                        ),
-                        self.agents,
-                    )
+
+        def _generate_one(
+            agent: SimAgent,
+        ) -> tuple[AgentPlanSnapshot | None, Exception | None]:
+            try:
+                return (
+                    planning_coordinator.ensure_current(
+                        agent=_as_life_agent(agent),
+                        now=planning_time,
+                        generate=True,
+                    ),
+                    None,
                 )
-        except Exception as error:
-            with self._step_lock:
-                self._set_planning_error(error)
-                self._scheduler_stop_requested = True
-            logger.exception("Background plan generation failed")
-            return
+            except Exception as error:  # noqa: BLE001 - isolated per agent below
+                return None, error
+
+        with ThreadPoolExecutor(
+            max_workers=min(PLAN_GENERATION_MAX_CONCURRENCY, len(self.agents))
+        ) as executor:
+            results = list(executor.map(_generate_one, self.agents))
+
+        schedules = [schedule for schedule, _ in results if schedule is not None]
+        errors = [error for _, error in results if error is not None]
+        for error in errors:
+            logger.exception(
+                "Background plan generation failed for one agent; other "
+                "agents' schedules still applied, this agent retries next cycle",
+                exc_info=error,
+            )
+
         with self._step_lock:
-            self._set_planning_error(None)
+            self._set_planning_error(
+                f"{len(errors)}/{len(self.agents)} agent(s) failed to (re)plan "
+                f"this cycle, retrying next tick: {errors[0]}"
+                if errors
+                else None
+            )
             if self.spatial_runtime is not None:
                 for schedule in schedules:
                     self.spatial_runtime.set_schedule(schedule)
@@ -998,30 +1021,52 @@ class WorldRuntime:
             min(PLAN_GENERATION_MAX_CONCURRENCY, len(self.agents))
         )
 
-        async def _refresh_one(agent: SimAgent) -> AgentPlanSnapshot:
+        async def _refresh_one(
+            agent: SimAgent,
+        ) -> tuple[AgentPlanSnapshot | None, Exception | None]:
             async with semaphore:
-                return await asyncio.to_thread(
-                    planning_coordinator.refresh_current,
-                    agent=_as_life_agent(agent),
-                    now=planning_date,
-                )
+                try:
+                    return (
+                        await asyncio.to_thread(
+                            planning_coordinator.refresh_current,
+                            agent=_as_life_agent(agent),
+                            now=planning_date,
+                        ),
+                        None,
+                    )
+                except Exception as error:  # noqa: BLE001 - isolate each resident
+                    return None, error
 
-        schedules = await asyncio.gather(
+        results = await asyncio.gather(
             *[_refresh_one(agent) for agent in self.agents]
         )
-        self._set_planning_error(None)
-        if self.spatial_runtime is not None:
-            for schedule in schedules:
-                self.spatial_runtime.set_schedule(schedule)
+        schedules = [schedule for schedule, _ in results if schedule is not None]
+        errors = [error for _, error in results if error is not None]
+        for error in errors:
+            logger.error(
+                "Initial plan generation failed for one resident; successful "
+                "resident plans remain active and only this resident will retry",
+                exc_info=error,
+            )
+        with self._step_lock:
+            self._set_planning_error(
+                f"{len(errors)}/{len(self.agents)} agent(s) failed to plan; "
+                f"successful plans are active and failures will retry: {errors[0]}"
+                if errors
+                else None
+            )
+            if self.spatial_runtime is not None:
+                for schedule in schedules:
+                    self.spatial_runtime.set_schedule(schedule)
 
-    def _set_planning_error(self, error: Exception | None) -> None:
+    def _set_planning_error(self, error: Exception | str | None) -> None:
         self.planning_error = None if error is None else str(error)
         if self.spatial_runtime is not None:
             self.spatial_runtime.set_planning_error(self.planning_error)
             self.spatial_runtime.update_world_state(
                 current_time=self.current_time,
                 turn=self.turn,
-                scheduler_running=(self.scheduler_running if error is None else False),
+                scheduler_running=self.scheduler_running,
             )
 
     def bootstrap_plans(self) -> None:

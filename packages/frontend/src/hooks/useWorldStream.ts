@@ -8,6 +8,12 @@ import { useEffect } from "react";
 import { useGameStore } from "../stores/game.store";
 
 const RECONNECT_DELAY_MS = 1500;
+const LAST_WORLD_SNAPSHOT_STORAGE_KEY = "agent-crossing:last-world-snapshot";
+
+export interface WorldSnapshotStorage {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -105,7 +111,7 @@ function parseAgent(value: unknown): SpatialAgentState | null {
   };
 }
 
-function parseSnapshot(value: unknown): SpatialWorldSnapshot | null {
+export function parseSnapshot(value: unknown): SpatialWorldSnapshot | null {
   if (
     !isRecord(value) ||
     (value.session_id !== null && typeof value.session_id !== "string") ||
@@ -137,6 +143,34 @@ function parseSnapshot(value: unknown): SpatialWorldSnapshot | null {
   };
 }
 
+export function loadLastWorldSnapshot(
+  storage: WorldSnapshotStorage,
+): SpatialWorldSnapshot | null {
+  try {
+    const serialized = storage.getItem(LAST_WORLD_SNAPSHOT_STORAGE_KEY);
+    return serialized === null
+      ? null
+      : parseSnapshot(JSON.parse(serialized) as unknown);
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastWorldSnapshot(
+  storage: WorldSnapshotStorage,
+  snapshot: SpatialWorldSnapshot,
+): void {
+  try {
+    storage.setItem(
+      LAST_WORLD_SNAPSHOT_STORAGE_KEY,
+      JSON.stringify(snapshot),
+    );
+  } catch {
+    // Storage can be unavailable in private browsing. The in-memory Zustand
+    // snapshot still remains authoritative for the current page lifetime.
+  }
+}
+
 function getWorldStreamUrl(): string {
   const configuredUrl = import.meta.env.VITE_WORLD_WS_URL;
   if (typeof configuredUrl === "string" && configuredUrl.length > 0) {
@@ -162,6 +196,11 @@ export function useWorldStream(): void {
     let reconnectTimer: number | null = null;
     let stopped = false;
 
+    const cachedSnapshot = loadLastWorldSnapshot(window.localStorage);
+    if (cachedSnapshot !== null) {
+      setSnapshot(cachedSnapshot);
+    }
+
     const connect = () => {
       setConnectionStatus("connecting");
       const connectedSocket = new WebSocket(getWorldStreamUrl());
@@ -180,6 +219,7 @@ export function useWorldStream(): void {
           try {
             const snapshot = parseSnapshot(JSON.parse(event.data) as unknown);
             if (snapshot !== null) {
+              saveLastWorldSnapshot(window.localStorage, snapshot);
               setSnapshot(snapshot);
             }
           } catch {

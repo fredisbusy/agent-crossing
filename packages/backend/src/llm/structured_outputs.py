@@ -95,22 +95,18 @@ class DayPlanOutputItem(StrictStructuredOutput):
 
 
 class DayPlanOutput(StrictStructuredOutput):
-    items: list[DayPlanOutputItem] = Field(min_length=5, max_length=16)
+    """Canonical broad-strokes plan after provider-draft normalization."""
 
-
-class DayPlanDraftOutput(StrictStructuredOutput):
-    """Bounded provider draft; semantic parsing compacts it to 5-8 strokes."""
-
-    items: list[DayPlanOutputItem] = Field(min_length=5, max_length=16)
+    items: list[DayPlanOutputItem] = Field(min_length=5, max_length=8)
 
 
 @lru_cache(maxsize=8)
 def day_plan_output_model(
     *, min_items: int, max_items: int
 ) -> type[BaseModel]:
-    if not 1 <= min_items <= max_items <= 16:
-        raise ValueError("day-plan schema bounds must satisfy 1 <= min <= max <= 16")
-    if min_items == 5 and max_items == 16:
+    if not 1 <= min_items <= max_items <= 8:
+        raise ValueError("day-plan schema bounds must satisfy 1 <= min <= max <= 8")
+    if min_items == 5 and max_items == 8:
         return DayPlanOutput
     return create_model(
         f"DayPlanOutput{min_items}To{max_items}",

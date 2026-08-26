@@ -87,6 +87,7 @@ def try_parse_day_plan(
     min_duration: int = 1,
     reference_date: datetime.date | None = None,
     repair_excessive_duration: bool = False,
+    fixed_window: tuple[datetime.datetime, datetime.datetime] | None = None,
 ) -> DayPlanParseResult:
     payload = parse_json_object(response_text)
     if payload is None:
@@ -115,12 +116,83 @@ def try_parse_day_plan(
         normalized = _split_excessive_day_plan_items(normalized)
 
     normalized.sort(key=lambda item: item.start_time)
+    if fixed_window is not None:
+        normalized = _fit_day_plan_items_to_window(
+            normalized,
+            window_start=fixed_window[0],
+            window_end=fixed_window[1],
+        )
     normalized = _compact_day_plan_items(
         normalized,
         max_items=max_items,
         max_duration=DAY_PLAN_MAX_DURATION_MINUTES,
     )
     return DayPlanParseResult(items=normalized)
+
+
+def _fit_day_plan_items_to_window(
+    items: list[DayPlanItem],
+    *,
+    window_start: datetime.datetime,
+    window_end: datetime.datetime,
+) -> list[DayPlanItem]:
+    """Deterministically repair timing while preserving plan order and content.
+
+    Provider timestamps are draft data. Once the item count and required fields
+    are valid, retain each proposed duration where possible, distribute only the
+    remaining fixed-window difference from the final item backwards, and rebuild
+    one continuous authoritative timeline. Every item remains within the same
+    5..180 minute contract; impossible item-count/window combinations still fail.
+    """
+    window_seconds = int((window_end - window_start).total_seconds())
+    if window_seconds <= 0 or window_seconds % 60 != 0:
+        raise DayPlanParseError("invalid_planning_window")
+    window_minutes = window_seconds // 60
+    minimum_total = len(items) * 5
+    maximum_total = len(items) * DAY_PLAN_MAX_DURATION_MINUTES
+    if not minimum_total <= window_minutes <= maximum_total:
+        raise DayPlanParseError("planning_window_not_repairable_for_item_count")
+
+    durations = [item.duration_minutes for item in items]
+    remaining_delta = window_minutes - sum(durations)
+    if remaining_delta > 0:
+        for index in range(len(durations) - 1, -1, -1):
+            added = min(
+                remaining_delta,
+                DAY_PLAN_MAX_DURATION_MINUTES - durations[index],
+            )
+            durations[index] += added
+            remaining_delta -= added
+            if remaining_delta == 0:
+                break
+    elif remaining_delta < 0:
+        remaining_to_trim = -remaining_delta
+        for index in range(len(durations) - 1, -1, -1):
+            trimmed = min(remaining_to_trim, durations[index] - 5)
+            durations[index] -= trimmed
+            remaining_to_trim -= trimmed
+            if remaining_to_trim == 0:
+                break
+        remaining_delta = -remaining_to_trim
+    if remaining_delta != 0:
+        raise DayPlanParseError("planning_window_not_repairable_for_item_count")
+
+    repaired: list[DayPlanItem] = []
+    cursor = window_start
+    for item, duration in zip(items, durations):
+        item_end = cursor + datetime.timedelta(minutes=duration)
+        repaired.append(
+            DayPlanItem(
+                start_time=cursor,
+                end_time=item_end,
+                location=item.location,
+                action_content=item.action_content,
+            )
+        )
+        cursor = item_end
+    if cursor != window_end:
+        raise DayPlanParseError("planning_window_repair_failed")
+    return repaired
 
 
 def _split_excessive_day_plan_items(items: list[DayPlanItem]) -> list[DayPlanItem]:

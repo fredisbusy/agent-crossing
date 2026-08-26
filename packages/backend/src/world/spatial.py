@@ -186,17 +186,16 @@ class SpatialWorldRuntime:
             self._scheduler_running = scheduler_running
 
     def set_planning_error(self, error: str | None) -> None:
+        """Record a diagnostics-only error string for the dashboard/UI.
+
+        This intentionally does NOT touch any agent's plan/route/destination:
+        a plan-generation failure for one agent (or a transient LLM/network
+        blip) must not freeze movement for every agent in the village. Agents
+        keep following their last-known route; `tick()` never gates on this
+        flag. See AGENTS.md/SPEC.md movement-independent-of-LLM-latency intent.
+        """
         with self._lock:
             self._planning_error = error
-            if error is not None:
-                for agent in self._agents.values():
-                    agent.plan = ""
-                    agent.explicit_location = None
-                    agent.schedule = None
-                    agent.destination = None
-                    agent.goal = None
-                    agent.route = []
-                    agent.current_action = "planning_error"
 
     def clear_cognitive_overlays(self) -> None:
         with self._lock:
@@ -232,28 +231,36 @@ class SpatialWorldRuntime:
             agent.cognitive_text = normalized_text
 
     def tick(self) -> SpatialWorldSnapshot:
+        """Advance every agent's movement, regardless of `_planning_error`.
+
+        Movement is deterministic and independent from LLM latency/failures
+        by design (this class's docstring): an agent with a stale-but-valid
+        route/destination should keep walking even while planning for it (or
+        some other agent) is currently failing/retrying in the background.
+        Gating this loop on a global error flag previously froze the entire
+        village whenever a single agent's plan generation failed once.
+        """
         with self._lock:
-            if self._planning_error is None:
-                occupied_tiles = {
-                    agent.tile_position for agent in self._agents.values()
-                }
-                for agent in self._agents.values():
-                    occupied_tiles.discard(agent.tile_position)
-                    before_tile = agent.tile_position
-                    before_destination = (
-                        agent.destination.location_path
-                        if agent.destination is not None
-                        else None
-                    )
-                    before_action = agent.current_action
-                    self._advance(agent, blocked_tiles=occupied_tiles)
-                    occupied_tiles.add(agent.tile_position)
-                    self._record_position_change(
-                        agent,
-                        before_tile=before_tile,
-                        before_destination=before_destination,
-                        before_action=before_action,
-                    )
+            occupied_tiles = {
+                agent.tile_position for agent in self._agents.values()
+            }
+            for agent in self._agents.values():
+                occupied_tiles.discard(agent.tile_position)
+                before_tile = agent.tile_position
+                before_destination = (
+                    agent.destination.location_path
+                    if agent.destination is not None
+                    else None
+                )
+                before_action = agent.current_action
+                self._advance(agent, blocked_tiles=occupied_tiles)
+                occupied_tiles.add(agent.tile_position)
+                self._record_position_change(
+                    agent,
+                    before_tile=before_tile,
+                    before_destination=before_destination,
+                    before_action=before_action,
+                )
             self.revision += 1
             return self._snapshot_unlocked()
 

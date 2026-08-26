@@ -184,10 +184,14 @@ Minute decomposition은 Park et al.의 Generative Agents 구현처럼 상위 tas
 `start_time`, `end_time`, `location`은 runtime이 연속적으로 조립한다.
 
 제품 runtime의 day plan은 생성 시점부터 다음 자정까지를 고정 planning window로
-사용하며 5~16개 항목이 빈틈·겹침 없이 전체 구간을 덮어야 한다. hourly plan도
+사용하며 5~8개 항목이 빈틈·겹침 없이 전체 구간을 덮어야 한다. hourly plan도
 active day-plan 종료까지 연속으로 덮어야 하며, 위치는 모델이 재작성하지 않고
-authoritative day-plan 위치를 상속한다. 시간창 불일치는 parsing governance의
-semantic error로 재시도하고, retry 소진 시 명시적 planning error로 중단한다.
+authoritative day-plan 위치를 상속한다. day-plan은 항목 개수·필수 필드·장소와
+각 항목의 5~180분 duration이 유효하면 provider timestamp를 draft로 취급한다.
+runtime은 항목 순서와 내용·장소를 보존하면서 시작 시각부터 연속으로 다시 잇고,
+고정 시간창과의 차이는 마지막 항목부터 역순으로 5~180분 범위에 분배해 자정까지
+정확히 맞춘다. 항목 개수로 시간창을 수학적으로 덮을 수 없거나 구조가 잘못된
+경우에만 semantic error로 재시도하고, retry 소진 시 planning error로 노출한다.
 
 각 액션 필수 필드:
 
@@ -210,7 +214,7 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
   짧은 tail action 또는 5분 단위가 아닌 연장 구간일 수 있다.
 - 고정 시간창보다 총합이 짧을 때는 논문 구현처럼 마지막 항목을 종료 시각까지 늘릴 수 있어 최종 canonical 항목은 15분을 초과할 수 있음
 - minute decomposition의 duration 합계는 현재 시각부터 active hourly 종료까지의 남은 시간과 정확히 같아야 함
-- day/hourly plan은 고정 planning window의 시작과 끝을 모두 덮고 항목 사이에 gap/overlap이 없어야 함
+- day/hourly plan은 고정 planning window의 시작과 끝을 모두 덮고 항목 사이에 gap/overlap이 없어야 함. 유효한 day-plan draft의 시간 경계는 위 규칙으로 deterministic canonicalize한다
 - hourly location은 active day-plan의 canonical location을 runtime이 상속함
 - duration 합계가 고정 시간창보다 길면 끝부분을 잘라내고, 짧으면 마지막 항목을 늘려 authoritative 종료 시각에 맞춤
 - JSON/schema/필수 행동/duration 단위 자체가 잘못된 경우에는 보정하지 않고 semantic parse error로 재시도함
@@ -237,7 +241,8 @@ semantic error로 재시도하고, retry 소진 시 명시적 planning error로 
 - day/hourly/minute 계획은 모두 planner가 생성한 authoritative 결과만 실행한다. 고정 문구나 상위 문장 복사로 계획을 대체하지 않는다.
 - 서비스 시작과 active parent 전환 시 필요한 계획 계층이 준비될 때까지 world clock을 진행하지 않는다.
 - 같은 tick에서 필요한 모든 agent 계획을 먼저 검증한 뒤 spatial schedule과 world clock을 원자적으로 갱신한다.
-- 계획 생성·파싱·장소/시간 검증이 실패하면 scheduler를 중단하고 `planning_error`를 WebSocket과 dashboard에 노출한다.
+- 한 주민의 계획 생성·파싱·장소/시간 검증이 실패해도 다른 주민의 검증된 schedule과 scheduler는 유지한다. 실패 주민만 마지막 authoritative 위치·경로에 머물며 백그라운드에서 재시도하고, `planning_error`는 WebSocket과 dashboard에 diagnostics로 노출한다.
+- WebSocket 연결이 끊기면 frontend는 마지막으로 runtime validation을 통과한 snapshot을 유지하며, 재연결 전 기본 spawn 위치로 되돌리지 않는다. 페이지가 다시 로드돼도 로컬 cache의 마지막 snapshot을 먼저 표시하고 새 authoritative frame 수신 즉시 교체한다.
 - 로컬 27B planner 호출은 생성 시간 제한을 두지 않고 완료될 때까지 기다린다. 연결·파싱·검증 실패는 fallback 없이 `planning_error`로 노출한다.
 - 로컬 Qwen의 structured JSON 생성은 thinking을 끄고 출력 토큰을 최종 JSON 본문에 사용한다.
 - structured JSON의 출력 토큰 수는 응답 길이 조절 수단이 아닌 안전 상한으로 사용한다. 상한 도달 종료 사유는 일반 parse error와 구분하고, 한 번 증액 재시도한 뒤에도 잘리면 명시적 오류로 중단한다.

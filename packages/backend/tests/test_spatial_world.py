@@ -161,17 +161,31 @@ def test_spatial_runtime_does_not_publish_blank_thought_overlay() -> None:
     assert jiho.bubble_kind == "action"
 
 
-def test_planning_error_clears_non_authoritative_plan_and_stops_movement() -> None:
+def test_planning_error_is_diagnostics_only_and_does_not_freeze_movement() -> None:
+    """A plan-generation failure (for any agent) must not stop the village.
+
+    `planning_error` is surfaced for the dashboard/UI, but movement is
+    deterministic and independent from LLM latency/failures: agents keep
+    following their last-known plan/route/destination while a failure is
+    being retried in the background.
+    """
     runtime = _runtime()
 
     runtime.set_planning_error("Jiho Park: minute plan parse failed")
     snapshot = runtime.tick()
 
     assert snapshot.planning_error == "Jiho Park: minute plan parse failed"
-    assert all(agent.active_minute is None for agent in snapshot.agents)
-    assert all(agent.destination is None for agent in snapshot.agents)
-    assert all(agent.current_action == "planning_error" for agent in snapshot.agents)
-    assert all(agent.plan == "" for agent in snapshot.agents)
+    assert {agent.destination for agent in snapshot.agents} == {
+        "브라이어 코브 > 허니컵 카페"
+    }
+    assert all(
+        agent.current_action.startswith("moving_to:") for agent in snapshot.agents
+    )
+    assert all(agent.route_remaining > 0 for agent in snapshot.agents)
+
+    runtime.set_planning_error(None)
+    cleared_snapshot = runtime.tick()
+    assert cleared_snapshot.planning_error is None
 
 
 def test_position_history_is_recorded_only_on_change_once_clock_is_known() -> None:

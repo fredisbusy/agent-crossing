@@ -139,12 +139,34 @@ class FailingSecondPlanningCoordinator:
         return object()
 
 
+class FailingSecondRefreshPlanningCoordinator:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def refresh_current(self, **kwargs: object) -> object:
+        _ = kwargs
+        self.calls += 1
+        if self.calls == 2:
+            raise RuntimeError("second resident plan failed")
+        return object()
+
+
 class RecordingSpatialRuntime:
     def __init__(self) -> None:
         self.schedules: list[object] = []
+        self.planning_error: str | None = None
+        self.scheduler_running = False
 
     def set_schedule(self, schedule: object) -> None:
         self.schedules.append(schedule)
+
+    def set_planning_error(self, error: str | None) -> None:
+        self.planning_error = error
+
+    def update_world_state(self, **kwargs: object) -> None:
+        scheduler_running = kwargs["scheduler_running"]
+        assert isinstance(scheduler_running, bool)
+        self.scheduler_running = scheduler_running
 
 
 def test_world_runtime_updates_counters_on_step() -> None:
@@ -297,6 +319,55 @@ async def _assert_authoritative_plan_refresh_holds_world_time_until_ready() -> N
     planning_time = datetime.datetime(2026, 8, 24, 6, 0)
     assert runtime.current_time == planning_time
     assert coordinator.refresh_times == [planning_time, planning_time]
+
+
+def test_initial_plan_refresh_keeps_successful_residents_active_on_one_failure() -> None:
+    asyncio.run(_assert_initial_plan_refresh_isolates_one_failure())
+
+
+async def _assert_initial_plan_refresh_isolates_one_failure() -> None:
+    agents = cast(list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")])
+    session = WorldConversationSession(agents=agents, dialogue_turn_window=None)
+    coordinator = FailingSecondRefreshPlanningCoordinator()
+    spatial = RecordingSpatialRuntime()
+    runtime = WorldRuntime(
+        agents=agents,
+        session=session,
+        engine=cast(
+            SimulationEngine,
+            cast(
+                object,
+                DummyEngine(
+                    result=SimulationStepResult(
+                        now=datetime.datetime(2026, 8, 24, 6, 5),
+                        speaker_name="Jiho",
+                        trace={},
+                        reply="",
+                        silent_reason="",
+                        parse_failure=False,
+                        observability=SimulationStepObservability(
+                            thought="",
+                            model_thought="",
+                            self_critique="",
+                            decision_reason="",
+                            action_summary="continue_current_plan",
+                            decision_process={},
+                        ),
+                    )
+                ),
+            ),
+        ),
+        current_time=datetime.datetime(2026, 8, 24, 6),
+        planning_coordinator=cast(PlanningCoordinator, cast(object, coordinator)),
+        spatial_runtime=cast(SpatialWorldRuntime, cast(object, spatial)),
+    )
+
+    await runtime._refresh_plans()
+
+    assert len(spatial.schedules) == 1
+    assert runtime.planning_error is not None
+    assert "1/2 agent(s) failed to plan" in runtime.planning_error
+    assert spatial.planning_error == runtime.planning_error
 
 
 def test_scheduler_clock_gates_on_in_flight_cognitive_turn() -> None:

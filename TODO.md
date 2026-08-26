@@ -507,6 +507,10 @@ end-to-end 시나리오다.
           스레드를 모두 완료까지 `await`/`join`한 뒤에야 다음 `_advance_world_tick`으로
           넘어간다. `WorldRuntime.step()`은 이미 동기 호출이라 별도 수정이 필요 없었다.
     - [x] planning fallback을 제거하고 생성·검증 실패를 UI와 dashboard에 명시적으로 노출한다
+    - [x] 구조적으로 유효한 day-plan의 gap/overlap은 항목 순서·내용·장소를
+          보존한 채 duration을 5~180분 범위로 분배해 고정 시간창에 후보정한다
+    - [x] 한 주민의 planning 실패를 격리하고 다른 주민의 schedule·이동과
+          scheduler를 유지하며 실패 주민은 마지막 authoritative 위치에서 재시도한다
     - [x] 로컬 planner의 생성 timeout을 제거하고 structured JSON 요청에서 Qwen thinking을 끈다
     - [x] 현재 시각을 덮지 않는 미래 계획을 active로 선택하지 않고 planning error로 중단한다
     - [x] 재시작 후에도 게임 시각, 위치, 계획 cache와 조우 cooldown을 복원한다
@@ -544,6 +548,8 @@ end-to-end 시나리오다.
     - [x] `revision`, `position`, `destination`, `action`, `plan`, `route_remaining`을 브로드캐스트한다
     - [x] 느린 클라이언트에는 stale frame 대신 최신 snapshot을 전달한다
     - [x] shared contract 기반 runtime validation 후 클라이언트에서 파싱한다
+    - [x] 연결 끊김/페이지 재로드 중 마지막 검증 snapshot을 보존해 기본 spawn
+          대신 마지막 수신 위치를 표시하고 새 frame 수신 시 교체한다
     - [x] client disconnect를 능동 수신하고 sender/receiver task와 구독을 함께 정리한다
     - [x] 활성 WebSocket 중 hot reload가 worker 종료를 막지 않는지 회귀 검증한다
 
