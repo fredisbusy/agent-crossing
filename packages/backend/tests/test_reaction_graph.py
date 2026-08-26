@@ -117,6 +117,39 @@ def test_reaction_graph_runner_retries_partner_nudge_once() -> None:
     assert result.trace.partner_retry_count == 1
 
 
+def test_reaction_graph_retries_utterance_repeated_from_earlier_encounter() -> None:
+    repeated = "어, 수진 씨. 여기서 다 뵙네요."
+    client = StubGenerationClient(
+        responses=[
+            _intent_json(should_react=True, reason="react"),
+            _utterance_json(utterance=repeated, reason="greet"),
+            _utterance_json(
+                utterance="수진 씨, 새 블렌드 테스트는 잘되고 있어요?",
+                reason="ask_specific_topic",
+            ),
+        ]
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+    request = _input()
+
+    decision = runner.decide_reaction(
+        ReactionDecisionInput(
+            agent_identity=request.agent_identity,
+            current_time=request.current_time,
+            observation_content=request.observation_content,
+            dialogue_history=[],
+            profile=request.profile,
+            retrieved_memories=[],
+            language="ko",
+            recent_self_utterances=[repeated],
+        )
+    )
+
+    assert client.calls == 3
+    assert decision.reaction == "수진 씨, 새 블렌드 테스트는 잘되고 있어요?"
+    assert decision.trace.semantic_retry_count == 1
+
+
 def test_reaction_graph_runner_degrades_truncated_intent_to_parse_failure() -> None:
     client = FailingGenerationClient(
         LlmOutputTruncatedError("finish_reason=max_tokens")

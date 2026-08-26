@@ -54,12 +54,14 @@ class DummyEngine:
         speaker: SimAgent,
         speaking_partner: SimAgent,
         session: object = None,
+        **kwargs: object,
     ) -> SimulationStepResult:
         _ = turn
         _ = current_time
         _ = speaker
         _ = speaking_partner
         _ = session
+        _ = kwargs
         return self.result
 
 
@@ -744,12 +746,11 @@ def test_should_converse_on_encounter_defaults_true_without_gate() -> None:
     runtime = _encounter_test_runtime(encounter_gate=None)
     speaker, other = runtime.agents
 
-    assert (
-        runtime._should_converse_on_encounter(
-            runtime.current_time, speaker=speaker, other=other
-        )
-        is True
+    decision = runtime._should_converse_on_encounter(
+        runtime.current_time, speaker=speaker, other=other
     )
+
+    assert decision.should_converse is True
 
 
 def test_should_converse_on_encounter_uses_configured_gate_for_pass_by() -> None:
@@ -758,12 +759,11 @@ def test_should_converse_on_encounter_uses_configured_gate_for_pass_by() -> None
     runtime = _encounter_test_runtime(encounter_gate=gate)
     speaker, other = runtime.agents
 
-    assert (
-        runtime._should_converse_on_encounter(
-            runtime.current_time, speaker=speaker, other=other
-        )
-        is False
+    decision = runtime._should_converse_on_encounter(
+        runtime.current_time, speaker=speaker, other=other
     )
+
+    assert decision.should_converse is False
     assert gate.calls == 1
 
 
@@ -772,12 +772,11 @@ def test_should_converse_on_encounter_uses_configured_gate_for_converse() -> Non
     runtime = _encounter_test_runtime(encounter_gate=gate)
     speaker, other = runtime.agents
 
-    assert (
-        runtime._should_converse_on_encounter(
-            runtime.current_time, speaker=speaker, other=other
-        )
-        is True
+    decision = runtime._should_converse_on_encounter(
+        runtime.current_time, speaker=speaker, other=other
     )
+
+    assert decision.should_converse is True
     assert gate.calls == 1
 
 
@@ -973,6 +972,120 @@ def test_start_dialogue_picks_the_qualifying_pair_among_three_agents() -> None:
     assert {agent.name for agent in opened_session.agents} == {"Sujin", "Minji"}
 
 
+def test_encounter_seed_becomes_the_dialogue_goal() -> None:
+    gate = StubEncounterGate(should_converse=True)
+    spatial_runtime = FakeSpatialRuntime(
+        agents=(
+            FakeAgentSnapshot(
+                agent_id="jiho",
+                current_action="inside:수진의 집",
+                tile_position=_tile(5, 5),
+                destination="브라이어 코브 > 수진의 집 > 거실",
+            ),
+            FakeAgentSnapshot(
+                agent_id="sujin",
+                current_action="inside:수진의 집",
+                tile_position=_tile(5, 6),
+                destination="브라이어 코브 > 수진의 집 > 거실",
+            ),
+        )
+    )
+    runtime = _encounter_test_runtime(
+        encounter_gate=gate,
+        spatial_runtime=spatial_runtime,
+    )
+    runtime.sessions.clear()
+
+    runtime._start_dialogue_for_real_encounter(runtime.current_time)
+
+    session = next(iter(runtime.sessions.values()))
+    assert session.dialogue_goal == (
+        "관계 맥락: 관계 요약 | 현재 상황: 상황 요약 | 대화 의도: 스텁 판정"
+    )
+
+
+def test_continuous_co_presence_does_not_reopen_dialogue_after_cooldown() -> None:
+    gate = StubEncounterGate(should_converse=True)
+    co_present = (
+        FakeAgentSnapshot(
+            agent_id="jiho",
+            current_action="arrived_at:카페",
+            tile_position=_tile(0, 0),
+            destination="카페",
+        ),
+        FakeAgentSnapshot(
+            agent_id="sujin",
+            current_action="arrived_at:카페",
+            tile_position=_tile(0, 1),
+            destination="카페",
+        ),
+    )
+    spatial_runtime = FakeSpatialRuntime(agents=co_present)
+    runtime = _encounter_test_runtime(
+        encounter_gate=gate,
+        spatial_runtime=spatial_runtime,
+    )
+    runtime.sessions.clear()
+
+    runtime._start_dialogue_for_real_encounter(runtime.current_time)
+    pair_key = _pair_key(*runtime.agents)
+    runtime.sessions.clear()
+    runtime._pair_cooldown_until[pair_key] = runtime.current_time
+
+    runtime._start_dialogue_for_real_encounter(
+        runtime.current_time + datetime.timedelta(minutes=31)
+    )
+
+    assert runtime.sessions == {}
+    assert gate.calls == 1
+
+
+def test_pair_must_separate_before_a_later_reencounter() -> None:
+    gate = StubEncounterGate(should_converse=True)
+    first = FakeAgentSnapshot(
+        agent_id="jiho",
+        current_action="arrived_at:카페",
+        tile_position=_tile(0, 0),
+        destination="카페",
+    )
+    nearby = FakeAgentSnapshot(
+        agent_id="sujin",
+        current_action="arrived_at:카페",
+        tile_position=_tile(0, 1),
+        destination="카페",
+    )
+    spatial_runtime = FakeSpatialRuntime(agents=(first, nearby))
+    runtime = _encounter_test_runtime(
+        encounter_gate=gate,
+        spatial_runtime=spatial_runtime,
+    )
+    runtime.sessions.clear()
+    runtime._start_dialogue_for_real_encounter(runtime.current_time)
+    runtime.sessions.clear()
+    pair_key = _pair_key(*runtime.agents)
+    runtime._pair_cooldown_until[pair_key] = runtime.current_time
+
+    spatial_runtime._agents = (
+        first,
+        FakeAgentSnapshot(
+            agent_id="sujin",
+            current_action="moving_to:도서관",
+            tile_position=_tile(10, 10),
+            destination="도서관",
+        ),
+    )
+    runtime._start_dialogue_for_real_encounter(
+        runtime.current_time + datetime.timedelta(minutes=10)
+    )
+    spatial_runtime._agents = (first, nearby)
+    runtime._start_dialogue_for_real_encounter(
+        runtime.current_time + datetime.timedelta(minutes=31)
+    )
+
+    assert len(runtime.sessions) == 1
+    assert gate.calls == 2
+
+
 def test_start_dialogue_does_not_bridge_home_wall() -> None:
     spatial_runtime = FakeSpatialRuntime(
         agents=(
@@ -1147,8 +1260,9 @@ class ConcurrencyTrackingEngine:
         speaker: SimAgent,
         speaking_partner: SimAgent,
         session: WorldConversationSession,
+        **kwargs: object,
     ) -> SimulationStepResult:
-        _ = turn, speaking_partner
+        _ = turn, speaking_partner, kwargs
         with self._lock:
             self.in_flight += 1
             self.max_concurrent = max(self.max_concurrent, self.in_flight)

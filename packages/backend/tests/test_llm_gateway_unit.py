@@ -334,6 +334,26 @@ def test_reaction_prompt_includes_concise_utterance_constraint() -> None:
     assert "introversion alone" in prompt
 
 
+def test_reaction_prompt_includes_recent_cross_session_utterances() -> None:
+    request = _input(dialogue_history=[])
+    prompt = build_reaction_utterance_prompt(
+        agent_identity=request.agent_identity,
+        current_time=request.current_time,
+        observation_content=request.observation_content,
+        dialogue_history=request.dialogue_history,
+        profile=request.profile,
+        retrieved_memories=request.retrieved_memories,
+        intent_reason="react",
+        intent_thought="",
+        intent_critique="",
+        dialogue_arc=None,
+        recent_self_utterances=["어, 수진 씨. 여기서 다 뵙네요."],
+    )
+
+    assert "across earlier encounters" in prompt
+    assert "어, 수진 씨. 여기서 다 뵙네요." in prompt
+
+
 def test_reaction_prompt_includes_few_shot_and_reflection_anchor() -> None:
     reflection_memory = MemoryObject(
         id=1,

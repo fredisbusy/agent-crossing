@@ -91,6 +91,18 @@ class StubLlmGateway:
         )
 
 
+class SpeakingStubLlmGateway(StubLlmGateway):
+    def decide_reaction(self, input: object) -> ReactionDecision:
+        _ = input
+        self.calls.append("decide_reaction")
+        return ReactionDecision(
+            should_react=True,
+            reaction="수진 씨, 새 블렌드는 잘되고 있어요?",
+            reason="구체적인 근황을 묻는다",
+            trace=ReactionDecisionTrace(raw_response="", parse_success=True),
+        )
+
+
 class StubPlanner:
     def __init__(self, calls: list[str]):
         self.calls: list[str] = calls
@@ -205,6 +217,30 @@ def test_brain_graph_skips_reflection_when_not_needed() -> None:
         "get_retrieval_memories",
         "decide_reaction",
     ]
+
+
+def test_brain_graph_does_not_duplicate_spoken_reply_as_decision_memory() -> None:
+    calls: list[str] = []
+    queued: list[str] = []
+    memory = StubMemoryManager(calls)
+    graph = AgentBrainGraphRunner(
+        agent_identity=AgentIdentity(
+            id="jiho",
+            name="Jiho",
+            age=29,
+            traits=["kind"],
+        ),
+        memory_manager=memory,
+        embedding_encoder=memory.embedding_encoder,
+        reflection_graph=StubReflectionGraph(calls, should_reflect=False),
+        llm_gateway=SpeakingStubLlmGateway(calls),
+        observation_writer=_observation_writer(queued),
+    )
+
+    result, _decision = graph.run(_input())
+
+    assert result.utterance == "수진 씨, 새 블렌드는 잘되고 있어요?"
+    assert queued == []
 
 
 def test_brain_graph_runs_reflection_before_retrieval_when_needed() -> None:

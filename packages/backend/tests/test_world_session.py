@@ -140,26 +140,43 @@ def test_restore_state_rejects_mismatched_participants() -> None:
         session.restore_state(saved)
 
 
-def test_build_turn_world_context_rotates_locations() -> None:
+def test_build_turn_world_context_uses_grounded_location_and_actions() -> None:
     context = build_turn_world_context(
         speaker_name="Jiho",
         partner_name="Sujin",
-        turn=5,
+        location="브라이어 코브 > 수진의 집 > 거실",
+        speaker_action="inside:수진의 집",
+        partner_action="inside:수진의 집",
     )
 
-    assert context["location"] == "Sujin 근처의 마을 광장"
+    assert context["location"] == "브라이어 코브 > 수진의 집 > 거실"
     assert context["focus"] == "Jiho가 Sujin 쪽을 바라보고 있다"
+    assert context["speaker_action"] == "inside:수진의 집"
+    assert context["partner_action"] == "inside:수진의 집"
 
 
 def test_build_turn_observed_events_uses_partner_utterance_when_available() -> None:
     events = build_turn_observed_events(
         language="en",
-        speaker_name="Jiho",
         partner_name="Sujin",
         incoming_partner_utterance="How was the decaf test?",
     )
 
     assert events == ["Heard Sujin's latest utterance: How was the decaf test?"]
+
+
+def test_build_turn_observed_events_uses_encounter_goal_instead_of_stock_greeting() -> None:
+    events = build_turn_observed_events(
+        language="ko",
+        partner_name="Sujin",
+        incoming_partner_utterance=None,
+        dialogue_goal="신메뉴 테스트의 진행 상황을 짧게 묻는다",
+    )
+
+    assert events == [
+        "대화 시작 상대: Sujin; 맥락: 신메뉴 테스트의 진행 상황을 짧게 묻는다"
+    ]
+    assert "마주쳤다" not in events[0]
 
 
 def test_infer_dialogue_goal_prefers_second_plan_context_when_available() -> None:

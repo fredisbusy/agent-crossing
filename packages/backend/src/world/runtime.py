@@ -23,7 +23,11 @@ from agents.decision_diagnostics import (
     build_encounter_diagnostics,
     build_plan_disruption_diagnostics,
 )
-from agents.reaction.encounter import EncounterDecisionInput, EncounterGate
+from agents.reaction.encounter import (
+    EncounterDecision,
+    EncounterDecisionInput,
+    EncounterGate,
+)
 from agents.relationships import (
     RelationshipEvent,
     RelationshipEventType,
@@ -61,9 +65,9 @@ from .engine import (
     SimulationStepResult,
     build_failed_step_result,
 )
-from .session import WorldConversationSession
+from .session import WorldConversationSession, build_turn_world_context
 from .observability import DashboardEvent, DashboardEventBuffer
-from .spatial import SpatialWorldRuntime
+from .spatial import SpatialAgentSnapshot, SpatialWorldRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +172,8 @@ class WorldRuntime:
         self.encounter_gate: EncounterGate | None = encounter_gate
         self.plan_react_gate: PlanDisruptionGate | None = plan_react_gate
         self._pair_cooldown_until: dict[str, datetime.datetime] = {}
+        self._co_present_pair_keys: set[str] = set()
+        self._pending_encounter_pair_keys: set[str] = set()
         self._last_perceived_action: dict[str, str] = {}
         self._plan_react_thread: threading.Thread | None = None
         self._dashboard_events: DashboardEventBuffer = DashboardEventBuffer()
@@ -221,6 +227,13 @@ class WorldRuntime:
                     speaker=speaker,
                     speaking_partner=speaking_partner,
                     session=session,
+                    world_context=self._dialogue_world_context(
+                        speaker=speaker,
+                        partner=speaking_partner,
+                    ),
+                    recent_speaker_replies=self._recent_replies_for_agent(
+                        agent_id=str(speaker.identity.id)
+                    ),
                 )
             except Exception as error:
                 logger.exception(
@@ -324,6 +337,66 @@ class WorldRuntime:
         first, second = session.agents
         return second if speaker is first else first
 
+    def _dialogue_world_context(
+        self, *, speaker: SimAgent, partner: SimAgent
+    ) -> dict[str, str]:
+        spatial_agents: tuple[SpatialAgentSnapshot, ...] = ()
+        if self.spatial_runtime is not None:
+            try:
+                spatial_agents = self.spatial_runtime.snapshot().agents
+            except AttributeError:
+                # Lightweight test doubles may implement encounter methods only.
+                pass
+        snapshots = {
+            snapshot.agent_id: snapshot for snapshot in spatial_agents
+        }
+        speaker_snapshot = snapshots.get(str(speaker.identity.id))
+        partner_snapshot = snapshots.get(str(partner.identity.id))
+        shared_location = (
+            speaker_snapshot.destination
+            if speaker_snapshot is not None
+            else None
+        ) or (
+            partner_snapshot.destination if partner_snapshot is not None else None
+        )
+        return build_turn_world_context(
+            speaker_name=speaker.name,
+            partner_name=partner.name,
+            location=shared_location,
+            speaker_action=(
+                speaker_snapshot.current_action
+                if speaker_snapshot is not None
+                else None
+            ),
+            partner_action=(
+                partner_snapshot.current_action
+                if partner_snapshot is not None
+                else None
+            ),
+        )
+
+    def _recent_replies_for_agent(
+        self, *, agent_id: str, limit: int = 12
+    ) -> list[str]:
+        if limit < 1:
+            return []
+        replies = [
+            event.reply
+            for event in self._dashboard_events.snapshot(limit=500)
+            if event.agent_id == agent_id and event.reply.strip()
+        ]
+        return replies[-limit:]
+
+    @staticmethod
+    def _dialogue_goal_from_encounter(decision: EncounterDecision) -> str:
+        return " | ".join(
+            (
+                f"관계 맥락: {decision.relationship_summary}",
+                f"현재 상황: {decision.context_summary}",
+                f"대화 의도: {decision.reason}",
+            )
+        )
+
     def _primary_session(self) -> tuple[WorldConversationSession, str | None]:
         """The session `step()`/`metrics()`/`state()` treat as *the* dialogue.
 
@@ -350,7 +423,11 @@ class WorldRuntime:
         }
 
     def _open_session_for_pair(
-        self, agent_a: SimAgent, agent_b: SimAgent
+        self,
+        agent_a: SimAgent,
+        agent_b: SimAgent,
+        *,
+        dialogue_goal: str | None = None,
     ) -> WorldConversationSession:
         """Start a new session for this pair alongside any other sessions
         already running (§3.4 pairwise model — multiple disjoint pairs may
@@ -361,6 +438,7 @@ class WorldRuntime:
             agents=[agent_a, agent_b],
             dialogue_turn_window=self._dialogue_turn_window,
             dialogue_target_turns=self._dialogue_target_turns,
+            dialogue_goal=dialogue_goal,
         )
         self.sessions[_pair_key(agent_a, agent_b)] = session
         return session
@@ -399,17 +477,59 @@ class WorldRuntime:
         if self.spatial_runtime is None:
             return
 
-        engaged = self._engaged_agent_ids()
-        snapshots = {
-            snapshot.agent_id: snapshot
-            for snapshot in self.spatial_runtime.snapshot().agents
+        qualifying_pairs = self._qualifying_encounter_pairs()
+        current_pair_keys = {
+            _pair_key(agent_a, agent_b) for agent_a, agent_b in qualifying_pairs
         }
-        for agent_a, agent_b in itertools.combinations(self.agents, 2):
+        departed_pair_keys = self._co_present_pair_keys - current_pair_keys
+        self._pending_encounter_pair_keys.difference_update(departed_pair_keys)
+        self._pending_encounter_pair_keys.update(
+            current_pair_keys - self._co_present_pair_keys
+        )
+        self._co_present_pair_keys = current_pair_keys
+
+        engaged = self._engaged_agent_ids()
+        for agent_a, agent_b in qualifying_pairs:
+            pair_key = _pair_key(agent_a, agent_b)
+            if pair_key not in self._pending_encounter_pair_keys:
+                continue
             if (
                 str(agent_a.identity.id) in engaged
                 or str(agent_b.identity.id) in engaged
             ):
+                self._pending_encounter_pair_keys.discard(pair_key)
                 continue
+            self._pending_encounter_pair_keys.discard(pair_key)
+            cooldown_until = self._pair_cooldown_until.get(pair_key)
+            if (
+                cooldown_until is not None
+                and now - cooldown_until < datetime.timedelta(minutes=30)
+            ):
+                continue
+
+            decision = self._should_converse_on_encounter(
+                now, speaker=agent_a, other=agent_b
+            )
+            if not decision.should_converse:
+                self._pair_cooldown_until[pair_key] = now
+                continue
+
+            self._open_session_for_pair(
+                agent_a,
+                agent_b,
+                dialogue_goal=self._dialogue_goal_from_encounter(decision),
+            )
+            return
+
+    def _qualifying_encounter_pairs(self) -> list[tuple[SimAgent, SimAgent]]:
+        if self.spatial_runtime is None:
+            return []
+        snapshots = {
+            snapshot.agent_id: snapshot
+            for snapshot in self.spatial_runtime.snapshot().agents
+        }
+        qualifying: list[tuple[SimAgent, SimAgent]] = []
+        for agent_a, agent_b in itertools.combinations(self.agents, 2):
             first = snapshots.get(str(agent_a.identity.id))
             second = snapshots.get(str(agent_b.identity.id))
             if first is None or second is None:
@@ -422,31 +542,15 @@ class WorldRuntime:
             both_arrived = first.current_action.startswith(
                 ("at:", "arrived_at:", "inside:")
             ) and second.current_action.startswith(("at:", "arrived_at:", "inside:"))
-            if not (
+            if (
                 both_arrived
                 and first_inside == second_inside
                 and first.destination is not None
                 and first.destination == second.destination
                 and distance <= 1
             ):
-                continue
-
-            pair_key = _pair_key(agent_a, agent_b)
-            cooldown_until = self._pair_cooldown_until.get(pair_key)
-            if (
-                cooldown_until is not None
-                and now - cooldown_until < datetime.timedelta(minutes=30)
-            ):
-                continue
-
-            if not self._should_converse_on_encounter(
-                now, speaker=agent_a, other=agent_b
-            ):
-                self._pair_cooldown_until[pair_key] = now
-                continue
-
-            self._open_session_for_pair(agent_a, agent_b)
-            return
+                qualifying.append((agent_a, agent_b))
+        return qualifying
 
     def _dispatch_tick_plan_disruption_check(self, now: datetime.datetime) -> None:
         """§4.3.1 organic per-tick perception (outside dialogue and god-mode).
@@ -538,14 +642,19 @@ class WorldRuntime:
 
     def _should_converse_on_encounter(
         self, now: datetime.datetime, *, speaker: SimAgent, other: SimAgent
-    ) -> bool:
+    ) -> EncounterDecision:
         """§3.4/§4.3 조우 시 pass-by vs converse 결정.
 
         `encounter_gate`가 구성되지 않은 경우 기존 동작(항상 대화)을 그대로
         유지한다.
         """
         if self.encounter_gate is None:
-            return True
+            return EncounterDecision(
+                should_converse=True,
+                relationship_summary=f"{speaker.name}와 {other.name}의 관계 정보 없음",
+                context_summary=f"{speaker.name}와 {other.name}가 같은 장소에 도착함",
+                reason="현재 계획과 관계 맥락에 맞는 짧은 대화를 나눈다",
+            )
 
         try:
             retrieved_memories = speaker.memory_service.get_retrieval_memories(
@@ -568,7 +677,12 @@ class WorldRuntime:
             )
         except Exception:
             logger.exception("encounter gate evaluation failed; defaulting to converse")
-            return True
+            return EncounterDecision(
+                should_converse=True,
+                relationship_summary="관계 요약 생성 실패",
+                context_summary="같은 장소에 도착함",
+                reason="조우 판정 실패로 기존 대화 동작을 유지한다",
+            )
 
         diagnostics = build_encounter_diagnostics(
             self_name=speaker.name, other_name=other.name, decision=decision
@@ -580,7 +694,7 @@ class WorldRuntime:
             diagnostics.should_converse,
             diagnostics.reason,
         )
-        return decision.should_converse
+        return decision
 
     def tick(self) -> SimulationStepResult:
         """Advance the single runtime clock by one perceive-plan-act tick."""
@@ -918,6 +1032,13 @@ class WorldRuntime:
                 speaker=speaker,
                 speaking_partner=speaking_partner,
                 session=session,
+                world_context=self._dialogue_world_context(
+                    speaker=speaker,
+                    partner=speaking_partner,
+                ),
+                recent_speaker_replies=self._recent_replies_for_agent(
+                    agent_id=str(speaker.identity.id)
+                ),
             )
         except Exception as error:
             logger.exception(
@@ -1362,6 +1483,11 @@ class WorldRuntime:
                 characters=state.characters,
             )
             self.spatial_runtime.restore_position_history(state.position_history)
+            self._co_present_pair_keys = {
+                _pair_key(agent_a, agent_b)
+                for agent_a, agent_b in self._qualifying_encounter_pairs()
+            }
+            self._pending_encounter_pair_keys = set()
             self._dashboard_events.restore(
                 [
                     DashboardEvent(

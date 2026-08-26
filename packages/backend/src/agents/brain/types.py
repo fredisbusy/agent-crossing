@@ -27,6 +27,7 @@ class DetermineContext:
     dialogue_arc: DialogueArc | None
     profile: AgentProfile
     language: Literal["ko", "en"]
+    recent_self_utterances: list[str]
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,8 @@ class ActionLoopInput:
     world_context: dict[str, str] | None = None
     observed_entities: list[str] | None = None
     observed_events: list[str] | None = None
+    recent_self_utterances: list[str] | None = None
+    """현재 세션 이전까지 포함한 최근 자신의 발화. 세션 간 표현 반복 억제에 사용한다."""
 
 
 @dataclass(frozen=True)

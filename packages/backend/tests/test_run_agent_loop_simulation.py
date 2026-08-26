@@ -40,21 +40,19 @@ def test_recent_replies_for_echo_check_returns_empty_for_non_positive_window() -
     assert replies == []
 
 
-def test_build_turn_observed_events_uses_pure_encounter_on_opening_turn() -> None:
+def test_build_turn_observed_events_uses_co_location_on_opening_turn() -> None:
     observed_events = build_turn_observed_events(
         language="ko",
-        speaker_name="Jiho Park",
         partner_name="Sujin Lee",
         incoming_partner_utterance=None,
     )
 
-    assert observed_events == ["Jiho Park가 Sujin Lee를 근처에서 마주쳤다."]
+    assert observed_events == ["같은 장소에 도착한 상대: Sujin Lee."]
 
 
 def test_build_turn_observed_events_prefers_latest_utterance_when_present() -> None:
     observed_events = build_turn_observed_events(
         language="ko",
-        speaker_name="Jiho Park",
         partner_name="Sujin Lee",
         incoming_partner_utterance="새로운 디카프 블렌드 테스트 중이에요.",
     )

@@ -246,6 +246,8 @@ class AgentBrainGraphRunner:
         lines.append(f"현재 계획={current_plan or '없음'}")
         lines.append(f"성격={', '.join(self.agent_identity.traits)}")
         lines.append(f"위치={context.get('location', '알 수 없음')}")
+        lines.append(f"나의 현재 행동={context.get('speaker_action', '알 수 없음')}")
+        lines.append(f"상대의 현재 행동={context.get('partner_action', '알 수 없음')}")
 
         entity_text = (
             ", ".join(input.observed_entities) if input.observed_entities else "없음"
@@ -332,6 +334,7 @@ class AgentBrainGraphRunner:
                 profile=input.profile,
                 retrieved_memories=retrieved_memories,
                 language=input.language,
+                recent_self_utterances=list(input.recent_self_utterances or []),
             )
         }
 
@@ -353,6 +356,9 @@ class AgentBrainGraphRunner:
                     retrieved_memories=determine_context.retrieved_memories,
                     dialogue_arc=determine_context.dialogue_arc,
                     language=determine_context.language,
+                    recent_self_utterances=(
+                        determine_context.recent_self_utterances
+                    ),
                 )
             )
         }
@@ -376,13 +382,6 @@ class AgentBrainGraphRunner:
         )
         if reaction_decision.should_react and talk is None:
             action_intent = "react_without_utterance"
-
-        if should_speak and talk is not None:
-            self.observation_writer(
-                content=f"나는 이렇게 반응하기로 결정했다: {talk}",
-                now=input.current_time,
-                profile=input.profile,
-            )
 
         silent_reason = ""
         if not should_speak:

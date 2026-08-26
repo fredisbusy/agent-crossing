@@ -89,6 +89,8 @@ class SimulationEngine:
         speaker: SimAgent,
         speaking_partner: SimAgent,
         session: WorldConversationSession,
+        world_context: dict[str, str] | None = None,
+        recent_speaker_replies: list[str] | None = None,
     ) -> SimulationStepResult:
         """Run one dialogue turn for `session` (§3.4 pairwise sessions).
 
@@ -97,6 +99,7 @@ class SimulationEngine:
         (`WorldRuntime.sessions`); this engine instance is shared across
         all of them.
         """
+        _ = turn
         if not session.is_active:
             return self._build_inactive_step_result(
                 current_time=current_time,
@@ -110,18 +113,20 @@ class SimulationEngine:
             seconds=self.config.turn_time_step_seconds
         )
         action_result, reaction_decision = self._run_action_loop(
-            turn=turn,
             now=now,
             speaker=speaker,
             speaking_partner=speaking_partner,
             incoming_partner_utterance=incoming_partner_utterance,
             session=session,
+            world_context=world_context,
+            recent_speaker_replies=recent_speaker_replies or [],
         )
         raw_reply = (action_result.utterance or action_result.talk or "").strip()
-        recent_replies = recent_replies_for_echo_check(
+        session_replies = recent_replies_for_echo_check(
             session_history=session.history,
             window=self.config.repetition_window,
         )
+        recent_replies = [*(recent_speaker_replies or []), *session_replies]
         policy_result = apply_reply_policy(
             raw_reply=raw_reply,
             recent_replies=recent_replies,
@@ -297,18 +302,19 @@ class SimulationEngine:
     def _run_action_loop(
         self,
         *,
-        turn: int,
         now: datetime.datetime,
         speaker: SimAgent,
         speaking_partner: SimAgent,
         incoming_partner_utterance: str | None,
         session: WorldConversationSession,
+        world_context: dict[str, str] | None,
+        recent_speaker_replies: list[str],
     ) -> tuple[ActionLoopResult, ReactionDecision | None]:
         observed_events = build_turn_observed_events(
             language=self.config.language,
-            speaker_name=speaker.name,
             partner_name=speaking_partner.name,
             incoming_partner_utterance=incoming_partner_utterance,
+            dialogue_goal=session.dialogue_goal,
         )
         return speaker.brain.action_loop(
             ActionLoopInput(
@@ -317,13 +323,17 @@ class SimulationEngine:
                 profile=speaker.profile,
                 dialogue_arc=session.dialogue_arc_for(speaker=speaker),
                 language=self.config.language,
-                world_context=build_turn_world_context(
+                world_context=world_context
+                or build_turn_world_context(
                     speaker_name=speaker.name,
                     partner_name=speaking_partner.name,
-                    turn=turn,
+                    location=None,
+                    speaker_action=None,
+                    partner_action=None,
                 ),
                 observed_entities=[speaking_partner.name],
                 observed_events=observed_events,
+                recent_self_utterances=recent_speaker_replies,
             )
         )
 

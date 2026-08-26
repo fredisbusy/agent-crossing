@@ -33,6 +33,7 @@ class ReactionDecisionInput:
     retrieved_memories: list[MemoryObject]
     dialogue_arc: DialogueArc | None = None
     language: Literal["ko", "en"] = "ko"
+    recent_self_utterances: list[str] | None = None
 
 
 @dataclass(frozen=True)

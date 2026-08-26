@@ -420,6 +420,7 @@ def build_reaction_utterance_prompt(
     intent_thought: str,
     intent_critique: str,
     dialogue_arc: DialogueArc | None = None,
+    recent_self_utterances: list[str] | None = None,
 ) -> str:
     summary_description = _build_summary_description(agent_identity, profile)
     agent_status = _build_agent_status(profile)
@@ -440,6 +441,14 @@ def build_reaction_utterance_prompt(
         for index, (partner_talk, my_talk) in enumerate(dialogue_history, start=1):
             sections.append(f"- turn {index} partner: {partner_talk or 'none'}")
             sections.append(f"- turn {index} self: {my_talk or 'none'}")
+
+    if recent_self_utterances:
+        sections.append(
+            "Recent utterances by this agent across earlier encounters (do not reuse or closely paraphrase these):"
+        )
+        sections.extend(
+            f"- {utterance}" for utterance in recent_self_utterances[-8:]
+        )
 
     if dialogue_arc is not None:
         sections.extend(_build_dialogue_arc_section(dialogue_arc=dialogue_arc))

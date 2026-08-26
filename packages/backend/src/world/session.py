@@ -27,27 +27,28 @@ def infer_dialogue_goal(*, speaker: SimAgent) -> str:
 
 
 def build_turn_world_context(
-    *, speaker_name: str, partner_name: str, turn: int
+    *,
+    speaker_name: str,
+    partner_name: str,
+    location: str | None,
+    speaker_action: str | None,
+    partner_action: str | None,
 ) -> dict[str, str]:
-    locations = [
-        "마을 광장",
-        "카페 입구",
-        "도서관 산책로",
-        "공원 벤치",
-    ]
-    location = locations[(turn - 1) % len(locations)]
+    grounded_location = location.strip() if location and location.strip() else "현재 위치"
     return {
-        "location": f"{partner_name} 근처의 {location}",
+        "location": grounded_location,
         "focus": f"{speaker_name}가 {partner_name} 쪽을 바라보고 있다",
+        "speaker_action": (speaker_action or "알 수 없음").strip(),
+        "partner_action": (partner_action or "알 수 없음").strip(),
     }
 
 
 def build_turn_observed_events(
     *,
     language: Literal["ko", "en"],
-    speaker_name: str,
     partner_name: str,
     incoming_partner_utterance: str | None,
+    dialogue_goal: str | None = None,
 ) -> list[str]:
     if incoming_partner_utterance and incoming_partner_utterance.strip():
         if language == "ko":
@@ -56,9 +57,17 @@ def build_turn_observed_events(
             f"Heard {partner_name}'s latest utterance: {incoming_partner_utterance}"
         ]
 
+    if dialogue_goal and dialogue_goal.strip():
+        if language == "ko":
+            return [
+                f"대화 시작 상대: {partner_name}; 맥락: {dialogue_goal.strip()}"
+            ]
+        return [
+            f"Context for starting a conversation with {partner_name}: {dialogue_goal.strip()}"
+        ]
     if language == "ko":
-        return [f"{speaker_name}가 {partner_name}를 근처에서 마주쳤다."]
-    return [f"{speaker_name} encountered {partner_name} nearby."]
+        return [f"같은 장소에 도착한 상대: {partner_name}."]
+    return [f"Arrived at the same place as {partner_name}."]
 
 
 class WorldConversationSession:
@@ -68,6 +77,7 @@ class WorldConversationSession:
         agents: list[SimAgent],
         dialogue_turn_window: int | None,
         dialogue_target_turns: int = DEFAULT_DIALOGUE_TARGET_TURNS,
+        dialogue_goal: str | None = None,
     ):
         if len(agents) != 2:
             raise ValueError(
@@ -85,7 +95,7 @@ class WorldConversationSession:
         self.turn_index: int = 0
         self.history: list[tuple[str, str]] = []
         self.dialogue_turns_taken: int = 0
-        self.dialogue_goal: str | None = None
+        self.dialogue_goal: str | None = dialogue_goal
         self.dialogue_history_by_agent: dict[str, list[tuple[str, str]]] = {
             agent.name: [] for agent in agents
         }

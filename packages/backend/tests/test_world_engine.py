@@ -166,6 +166,53 @@ def test_step_suppresses_repeated_reply_when_policy_enabled() -> None:
     assert session.history == [("Sujin", "안녕하세요")]
 
 
+def test_step_suppresses_reply_repeated_in_an_earlier_session() -> None:
+    repeated = "어, 수진 씨. 여기서 다 뵙네요."
+    speaker = DummyAgent(
+        name="Jiho",
+        profile=object(),
+        brain=DummyBrain(
+            next_result=ActionLoopResult(
+                current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+                talk=repeated,
+                utterance=repeated,
+            ),
+            next_reaction_decision=_reaction_decision(),
+            queued=[],
+        ),
+    )
+    partner = DummyAgent(
+        name="Sujin",
+        profile=object(),
+        brain=DummyBrain(
+            next_result=ActionLoopResult(
+                current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+                talk=None,
+            ),
+            queued=[],
+        ),
+    )
+    session = WorldConversationSession(
+        agents=cast(list[SimAgent], [speaker, partner]),
+        dialogue_turn_window=None,
+    )
+    engine = SimulationEngine(config=_engine_config(suppress_repeated_replies=True))
+
+    result = engine.step(
+        turn=1,
+        current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+        speaker=cast(SimAgent, cast(object, speaker)),
+        speaking_partner=cast(SimAgent, cast(object, partner)),
+        session=session,
+        recent_speaker_replies=[repeated],
+    )
+
+    assert result.reply == ""
+    assert "repeat_echo_suppressed" in result.silent_reason
+    assert speaker.brain.last_input is not None
+    assert speaker.brain.last_input.recent_self_utterances == [repeated]
+
+
 def test_step_suppresses_meta_leak_reply() -> None:
     speaker = DummyAgent(
         name="Jiho",

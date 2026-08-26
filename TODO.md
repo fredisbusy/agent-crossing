@@ -284,6 +284,20 @@ end-to-end 시나리오다.
     - [x] 결정 근거(관계/맥락 요약, §4.3 예시의 relationship + context summary
           두 프롬프트)를 추적 가능하게 남긴다 (`build_encounter_diagnostics`)
     - [x] converse 결정 시 기존 dialogue 세션(§2-D 짧은 대화 아크)으로 연결된다
+  - Verified/strengthened 2026-08-26:
+    - [x] 연속 co-presence를 30분마다 새 조우로 재판정하지 않는다. 두 agent가
+          분리된 뒤 다시 인접 상태로 진입해야 새 encounter edge가 생긴다.
+    - [x] EncounterGate의 relationship/context/reason을 `dialogue_goal`로 전달해
+          첫 발화가 일반적인 만남 인사 대신 해당 조우의 구체적 맥락을 사용한다.
+    - [x] dialogue turn의 위치와 현재 행동은 spatial runtime snapshot에서 가져오며,
+          turn 번호에 따라 가짜 장소를 순환하지 않는다.
+    - [x] dashboard에 저장된 agent별 최근 발화를 세션 간 repetition guard에 포함하고,
+          동일·유사 발화는 exact policy와 semantic retry로 억제한다.
+    - [x] 말하기 결정과 실제 발화를 이중 observation memory로 저장하지 않는다.
+    - [x] 회귀 테스트: `test_continuous_co_presence_does_not_reopen_dialogue_after_cooldown`,
+          `test_pair_must_separate_before_a_later_reencounter`,
+          `test_step_suppresses_reply_repeated_in_an_earlier_session`,
+          `test_generate_utterance_retries_cross_session_repeated_utterance`
 
 - [x] `P2` 대화 결과를 plan 업데이트에 반영한다
   - Depends on: pass-by vs converse 결정 구현

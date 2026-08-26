@@ -254,7 +254,10 @@ runtime은 항목 순서와 내용·장소를 보존하면서 시작 시각부�
 - canonical 마을·건물·장소 경로와 사용자 노출 지도 라벨은 한국어 이름을 사용한다.
 - hourly/minute plan은 canonical 한국어 장소 경로를 축약하거나 일반화하지 않고 그대로 유지한다.
 - minute plan의 시각과 장소는 모델 출력에서 받지 않고 검증된 hourly window와 canonical location에서 파생한다.
-- 두 agent가 같은 canonical 목적지에서 인접했을 때만 대화 세션을 열고, 종료 뒤 30분 동안 재조우 대화를 억제한다.
+- 두 agent가 같은 canonical 목적지에 새로 도착해 인접 상태로 진입했을 때만 조우 후보를 만든다.
+  대화 종료 뒤에도 계속 같은 장소에 머무르는 것은 새 조우가 아니며, 두 agent가 공간적으로
+  분리된 뒤 다시 인접 상태로 진입해야만 다음 조우로 판정한다. 종료 뒤 30분의 쌍별 cooldown은
+  재진입 시점에도 별도로 적용한다.
 - Jiho의 Sujin에 대한 호감은 Jiho만 가진 private seed memory다. Sujin은 이를 선험적으로 알지 못하며 독립된 일정, 판단, 경계를 유지한다.
 
 react 정책:
@@ -368,8 +371,16 @@ react 정책:
 - 조우 시 pass-by vs converse 결정. `agents/reaction/encounter.py`의 `EncounterGate`가
   관계 요약(relationship_summary) + 상황 요약(context_summary) 두 프롬프트 패턴(§4.3
   예시)으로 판단하고 근거를 로그로 남긴다. converse 결정 시 기존 짧은 대화 아크
-  세션(§2-D)으로 연결한다. `encounter_gate`가 구성되지 않으면 기존 동작(항상 대화)을
-  유지한다.
+  세션(§2-D)으로 연결한다. 이때 gate가 만든 관계 요약·상황 요약·결정 근거를 세션의
+  `dialogue_goal`로 전달해 첫 발화를 구체적인 조우 맥락에서 시작한다. turn마다 제공되는
+  공간 컨텍스트는 회전식 예시 장소가 아니라 spatial runtime의 실제 canonical 목적지와
+  두 agent의 현재 행동을 사용한다. `encounter_gate`가 구성되지 않으면 기존 동작(항상
+  대화)을 유지한다.
+- 대화 반복 방지는 현재 세션 기록에만 한정하지 않는다. 저장·복원되는 dashboard event의
+  agent별 최근 발화를 다음 세션의 발화 프롬프트, semantic retry, exact reply policy에 함께
+  넣어 이전 조우의 문장이나 근접한 바꿔쓰기를 다시 말하지 않게 한다. Brain은 발화 결정을
+  별도 observation으로 중복 저장하지 않고, 실제 외부 발화만 session broadcast 경계에서
+  observation memory로 기록한다.
 - 대화 중 핵심 정보를 상대 메모리에 주입 가능. `WorldConversationSession.broadcast_reply`가
   발화를 상대 agent의 observation memory로 저장하며, day plan 생성이
   `PlanningCoordinator._generate_day_plan`을 통해 최근 관련 기억을 retrieval 후보로

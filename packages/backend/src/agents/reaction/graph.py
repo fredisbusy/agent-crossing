@@ -295,8 +295,12 @@ class ReactionGraphRunner:
             intent_thought=intent.thought,
             intent_critique=intent.critique,
             dialogue_arc=input.dialogue_arc,
+            recent_self_utterances=input.recent_self_utterances,
         )
-        semantic_history = recent_self_utterances(input.dialogue_history, window=5)
+        semantic_history = [
+            *(input.recent_self_utterances or []),
+            *recent_self_utterances(input.dialogue_history, window=5),
+        ][-8:]
         return {
             "utterance_prompt": utterance_prompt,
             "working_prompt": utterance_prompt,
