@@ -279,6 +279,11 @@ react 정책:
   depth는 tile y 좌표를 기준으로 정렬한다.
 - `home` kind는 Smallville Figure 2처럼 지붕 없는 dollhouse 평면도로 메인 맵에
   침실, 주방, 공용실, 욕실과 핵심 가구를 항상 노출한다.
+- 브라이어 코브 로스터는 기존 주민 6명에 36세 남성 주민 우식·용준·병용·원준을
+  더한 10명이다. 네 주민은 각각 자기 이름의 canonical home과 스폰을 가지며,
+  `home_style`은 우식의 실험 작업대, 용준의 배드민턴 장비와 기록판, 병용의 큰
+  원목 테이블과 음료장, 원준의 사진·영상 작업대를 관찰 가능한 실내 소품으로만
+  표현한다. 이 장식은 persona나 계획의 의미를 대신 결정하지 않는다.
 - cafe/library/market도 지붕 없는 kind별 dollhouse interior를 메인 맵에 항상
   노출한다. 문 portal은 같은 semantic `kind`의 확대 interior scene template에
   연결하고 출구 portal로 outdoor scene에 복귀한다.

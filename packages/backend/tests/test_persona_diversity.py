@@ -6,30 +6,49 @@ from agents.persona_loader import PersonaLoader
 PERSONA_DIR = Path(__file__).resolve().parents[1] / "persona"
 
 EXPECTED_SIGNATURES: dict[str, tuple[str, ...]] = {
+    "Byeongyong": ("원목", "우동", "아지트"),
     "Haeun": ("야구", "맥주", "새 취미", "플러팅", "삐"),
     "Jiho": ("수선", "건조한 농담", "독서 모임"),
     "Jungwoo": ("나무", "짧은 문장", "수프"),
     "Minji": ("즉석카메라", "말이 빠", "개인 에세이"),
     "Sujin": ("십자말풀이", "거절", "휴식"),
     "Taeo": ("손북", "과장", "피크닉"),
+    "Wonjun": ("사진", "단어 지도", "기록관"),
+    "Woosik": ("생활 도감", "작업대", "설명"),
+    "Yongjun": ("배드민턴", "공동 기록판", "다음 판"),
 }
 
 EXPECTED_MBTI: dict[str, str] = {
+    "Byeongyong": "ISTP",
     "Haeun": "ESTP",
     "Jiho": "INFJ",
     "Jungwoo": "ISTP",
     "Minji": "ENFP",
     "Sujin": "ESTJ",
     "Taeo": "ESFP",
+    "Wonjun": "INTP",
+    "Woosik": "ENTP",
+    "Yongjun": "ESTJ",
 }
 
 EXPECTED_GENDERS: dict[str, str] = {
+    "Byeongyong": "남성",
     "Haeun": "여성",
     "Jiho": "남성",
     "Jungwoo": "남성",
     "Minji": "여성",
     "Sujin": "여성",
     "Taeo": "남성",
+    "Wonjun": "남성",
+    "Woosik": "남성",
+    "Yongjun": "남성",
+}
+
+NEW_RESIDENT_AGES: dict[str, int] = {
+    "Byeongyong": 36,
+    "Wonjun": 36,
+    "Woosik": 36,
+    "Yongjun": 36,
 }
 
 
@@ -63,6 +82,9 @@ def test_roster_personas_define_dashboard_demographics() -> None:
         persona = loader.load(persona_name)
         assert persona.agent.age > 0
         assert persona.agent.gender == gender
+
+    for persona_name, age in NEW_RESIDENT_AGES.items():
+        assert loader.load(persona_name).agent.age == age
 
 
 def test_roster_personas_encode_boundaries_and_repair_after_social_missteps() -> None:

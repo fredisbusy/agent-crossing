@@ -1,6 +1,8 @@
 import Phaser from "phaser";
-import type { TiledObject } from "../map/tiled";
+import { getProperty, type TiledObject } from "../map/tiled";
 import { HOME_ROOMS, type HomeRoom } from "./homeInterior";
+
+type HomeStyle = "standard" | "tinkerer" | "shuttle" | "host" | "archive";
 
 export interface DollhouseHomeView {
   name: string;
@@ -91,6 +93,15 @@ export function drawDollhouseHome(
   drawKitchen(graphics, splitX + 8, y + 8, width * 0.46);
   drawCommonRoom(graphics, x + 10, splitY + 10, width * 0.55, height * 0.34);
   drawBathroom(graphics, bathX + 8, splitY + 8, width * 0.27, height * 0.34);
+  drawHomeSignature(
+    graphics,
+    homeStyle(getProperty(location, "home_style", "standard")),
+    x,
+    y,
+    width,
+    height,
+    accentColor,
+  );
 
   graphics.lineStyle(5, 0xf0dca7, 1);
   graphics.strokeRect(x - 3, y - 3, width + 6, height + 6);
@@ -111,6 +122,108 @@ export function drawDollhouseHome(
       bathroom: roomPosition(x, y, width, height, "bathroom"),
     },
   };
+}
+
+function homeStyle(value: string): HomeStyle {
+  return ["tinkerer", "shuttle", "host", "archive"].includes(value)
+    ? (value as HomeStyle)
+    : "standard";
+}
+
+function drawHomeSignature(
+  graphics: Phaser.GameObjects.Graphics,
+  style: HomeStyle,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  accentColor: number,
+): void {
+  if (style === "tinkerer") {
+    const benchX = x + width * 0.08;
+    const benchY = y + height * 0.76;
+    graphics.fillStyle(0x4f382b, 1);
+    graphics.fillRect(benchX, benchY, width * 0.42, 11);
+    graphics.fillRect(benchX + 5, benchY + 10, 4, 13);
+    graphics.fillRect(benchX + width * 0.36, benchY + 10, 4, 13);
+    graphics.fillStyle(0x75c7d8, 1);
+    graphics.fillRect(benchX + 8, benchY - 6, 12, 6);
+    graphics.fillStyle(0xe8bd55, 1);
+    graphics.fillRect(benchX + 25, benchY - 8, 8, 8);
+    graphics.lineStyle(2, accentColor, 1);
+    graphics.lineBetween(benchX + 20, benchY - 3, benchX + 27, benchY - 4);
+    graphics.lineBetween(benchX + 33, benchY - 4, benchX + 44, benchY + 1);
+    return;
+  }
+
+  if (style === "shuttle") {
+    const boardX = x + width * 0.31;
+    const boardY = y + height * 0.08;
+    graphics.fillStyle(0x274955, 1);
+    graphics.fillRect(boardX, boardY, width * 0.13, height * 0.18);
+    graphics.fillStyle(0xf4df8f, 1);
+    graphics.fillRect(boardX + 4, boardY + 5, width * 0.04, 4);
+    graphics.fillRect(boardX + 4, boardY + 13, width * 0.07, 4);
+    const racketY = y + height * 0.76;
+    graphics.lineStyle(3, 0xe9edf0, 1);
+    graphics.strokeCircle(x + width * 0.18, racketY, 11);
+    graphics.strokeCircle(x + width * 0.34, racketY, 11);
+    graphics.lineStyle(4, accentColor, 1);
+    graphics.lineBetween(
+      x + width * 0.18 + 7,
+      racketY + 8,
+      x + width * 0.25,
+      racketY + 23,
+    );
+    graphics.lineBetween(
+      x + width * 0.34 - 7,
+      racketY + 8,
+      x + width * 0.28,
+      racketY + 23,
+    );
+    return;
+  }
+
+  if (style === "host") {
+    const tableX = x + width * 0.14;
+    const tableY = y + height * 0.7;
+    const tableWidth = width * 0.37;
+    graphics.fillStyle(0x74472f, 1);
+    graphics.fillRect(tableX, tableY, tableWidth, 22);
+    graphics.fillStyle(0xc99758, 1);
+    graphics.fillRect(tableX + 4, tableY + 4, tableWidth - 8, 14);
+    graphics.fillStyle(0x49352b, 1);
+    graphics.fillRect(tableX - 8, tableY + 5, 7, 13);
+    graphics.fillRect(tableX + tableWidth + 1, tableY + 5, 7, 13);
+    graphics.fillStyle(0xe7d8aa, 1);
+    graphics.fillRect(tableX + tableWidth * 0.42, tableY + 7, 13, 8);
+    graphics.fillStyle(accentColor, 1);
+    graphics.fillRect(x + width * 0.87, y + height * 0.22, 5, 12);
+    graphics.fillRect(x + width * 0.91, y + height * 0.2, 5, 14);
+    return;
+  }
+
+  if (style === "archive") {
+    const studioX = x + width * 0.08;
+    const studioY = y + height * 0.7;
+    graphics.fillStyle(0x44362e, 1);
+    graphics.fillRect(studioX, studioY, width * 0.43, 10);
+    graphics.fillStyle(0x6fc2d6, 1);
+    graphics.fillRect(studioX + 6, studioY - 12, 18, 11);
+    graphics.fillStyle(0xd98e92, 1);
+    graphics.fillRect(studioX + 28, studioY - 10, 16, 9);
+    graphics.fillStyle(0x2f3b49, 1);
+    graphics.fillRect(studioX + 16, studioY + 10, 5, 12);
+    graphics.fillStyle(0xf0e0ad, 1);
+    for (let photo = 0; photo < 3; photo += 1) {
+      graphics.fillRect(
+        x + width * (0.3 + photo * 0.07),
+        y + height * 0.58,
+        9,
+        8,
+      );
+    }
+  }
 }
 
 export function createIndoorResidentView(
