@@ -45,5 +45,6 @@ docs/<topic-slug>/
 | 폴더 | 내용 |
 | --- | --- |
 | `architecture-analysis/` | `.claude/` 하네스 도메인 분할 기준 코드베이스 검증 분석 |
+| `dashboard-relationship-redesign/` | 관계 탭의 정보 구조·문구·데이터 계약 개선 기획 |
 | `langgraph-migration/` | LangGraph 마이그레이션 스파이크 (완료, 기록용) |
 | `smallville-interiors/` | Smallville 논문 Figure 2 기준 실내 렌더링 참조 |

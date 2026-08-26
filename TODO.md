@@ -604,6 +604,18 @@ end-to-end 시나리오다.
     - [x] 선택 agent의 관점에서 다른 agent와의 비대칭 관계 요약과 근거를 표시한다
     - [x] 정식 호감도 모델이 없는 동안 memory importance를 거짓 호감 점수로 변환하지 않는다
 
+- [ ] `P2` 관계 탭의 근거 적합성과 정보 구조를 개선한다
+  - Depends on: agent inspector 구현
+  - Design: `docs/dashboard-relationship-redesign/00_input.md` ~ `05_review.md`
+  - DoD:
+    - [ ] 이름만 포함된 PLAN, 이동 상태, prompt형 진단 문자열을 관계 요약과 근거에서 제외한다
+    - [ ] 관계 근거 조회를 일반 기억 탭의 `memory_limit`과 분리하고 전체 근거 수와 표시 수를 구분한다
+    - [ ] `affinity_score=null`, `measurement=not_modeled`와 비대칭 private perspective를 유지한다
+    - [ ] 관계 정보와 상대의 현재 행동·위치·목적지를 시각적·의미적으로 분리한다
+    - [ ] 개요 탭의 전체 관계 패널 중복을 제거하고 관계 탭을 대상 목록 + 상세 구조로 정리한다
+    - [ ] 한국어 문구, 빈 상태, 키보드, 44px 터치 영역, 모바일 반응형을 검증한다
+    - [ ] 실제 `/dashboard/state`와 공개 `/dashboard`에서 내부 문자열 미노출과 위치 정확성을 확인한다
+
 - [x] `P2` God mode 입력으로 perception event를 주입한다 (§3.2 User Controls,
       §8.1 "Isabella's apartment: kitchen: stove is burning" 예시)
   - Depends on: agent inspector 구현
