@@ -134,7 +134,7 @@ export class MainScene extends Phaser.Scene {
   private readonly indoorAgentViews = new Map<string, IndoorResidentView>();
   private gridMovement?: ServerGridMovement;
   private unsubscribeStore?: () => void;
-  private followedAgentId = "jiho";
+  private followedAgentId: string | undefined;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private dragOrigin?: Phaser.Math.Vector2;
   private pinchStartDistance?: number;
@@ -660,14 +660,23 @@ export class MainScene extends Phaser.Scene {
         camera.setZoom(Phaser.Math.Clamp(camera.zoom - dy * 0.001, 1, 2.4));
       },
     );
-    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (this.hasTwoPointersDown()) {
-        this.beginPinch();
-        this.dragOrigin = undefined;
-        return;
-      }
-      this.dragOrigin = new Phaser.Math.Vector2(pointer.x, pointer.y);
-    });
+    this.input.on(
+      "pointerdown",
+      (
+        pointer: Phaser.Input.Pointer,
+        currentlyOver: Phaser.GameObjects.GameObject[],
+      ) => {
+        if (this.hasTwoPointersDown()) {
+          this.beginPinch();
+          this.dragOrigin = undefined;
+          return;
+        }
+        if (!currentlyOver.some((object) => this.isAgentGameObject(object))) {
+          this.stopFollowing();
+        }
+        this.dragOrigin = new Phaser.Math.Vector2(pointer.x, pointer.y);
+      },
+    );
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
       if (this.hasTwoPointersDown()) {
         const distance = this.pointerDistance();
@@ -704,6 +713,16 @@ export class MainScene extends Phaser.Scene {
       this.dragOrigin = undefined;
     });
     this.followAgent(useGameStore.getState().selectedAgentId);
+  }
+
+  private isAgentGameObject(object: Phaser.GameObjects.GameObject): boolean {
+    for (const view of this.agentViews.values()) {
+      if (view.container === object) return true;
+    }
+    for (const view of this.indoorAgentViews.values()) {
+      if (view.container === object) return true;
+    }
+    return false;
   }
 
   private hasTwoPointersDown(): boolean {
@@ -747,6 +766,11 @@ export class MainScene extends Phaser.Scene {
 
   private stopFollowing(): void {
     this.cameras.main.stopFollow();
+    // Clear the followed agent, not just the Phaser follow lock — otherwise
+    // the next agent-state update re-locks the camera onto them (e.g. via
+    // the indoor startFollow calls in applyAgentStates) the moment they
+    // step into a home/building, undoing the user's manual pan.
+    this.followedAgentId = undefined;
   }
 
   private drawWorldTitle(): void {
