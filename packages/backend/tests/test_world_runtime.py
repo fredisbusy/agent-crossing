@@ -1352,3 +1352,26 @@ def test_concurrent_dialogue_sessions_run_in_parallel_without_interfering() -> N
         str(yuna.identity.id),
     }
     assert ("clear_all", "") not in overlay_runtime.calls
+
+
+def test_session_end_clears_speech_bubble_overlay_for_both_participants() -> None:
+    """Regression: a finished dialogue must not leave either side's last
+    line stuck on their sprite — previously only the current turn's
+    `speaker` had their overlay cleared, so once a session ended the
+    non-speaking partner's last bubble lingered forever (e.g. still shown
+    while that agent is asleep hours later)."""
+    runtime = _encounter_test_runtime(agent_names=("Jiho", "Sujin"))
+    runtime.sessions.clear()
+    jiho, sujin = runtime.agents
+
+    engine = ConcurrencyTrackingEngine()
+    runtime.engine = cast(SimulationEngine, cast(object, engine))
+    overlay_runtime = RecordingSpatialOverlayRuntime()
+    runtime.spatial_runtime = cast(SpatialWorldRuntime, cast(object, overlay_runtime))
+
+    runtime._open_session_for_pair(jiho, sujin)
+    runtime._run_cognitive_turn(_pair_key(jiho, sujin))
+
+    assert runtime.sessions == {}
+    cleared_agent_ids = {agent_id for kind, agent_id in overlay_runtime.calls if kind == "clear"}
+    assert cleared_agent_ids == {str(jiho.identity.id), str(sujin.identity.id)}

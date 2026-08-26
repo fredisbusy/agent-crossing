@@ -1149,6 +1149,19 @@ class WorldRuntime:
                 )
                 self._pair_cooldown_until[pair_key] = self.current_time
                 self.sessions.pop(pair_key, None)
+                if self.spatial_runtime is not None:
+                    # Otherwise the last line either side spoke lingers on
+                    # their sprite indefinitely — it's only ever overwritten
+                    # if that same agent becomes a dialogue speaker again,
+                    # so a finished daytime conversation can still be
+                    # showing on an agent who is now asleep.
+                    self.spatial_runtime.clear_cognitive_overlay(
+                        agent_id=speaker.identity.id
+                    )
+                    if speaking_partner is not None:
+                        self.spatial_runtime.clear_cognitive_overlay(
+                            agent_id=speaking_partner.identity.id
+                        )
             if step_result.parse_failure:
                 self.parse_failures += 1
             if not step_result.reply:
