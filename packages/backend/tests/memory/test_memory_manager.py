@@ -260,6 +260,69 @@ def test_reflection_can_reference_prior_reflection_memory() -> None:
     assert second_reflection.citations == [first_reflection.id, observation.id]
 
 
+class KeywordEmbeddingEncoder:
+    """지정한 키워드가 포함되면 유사한 벡터를, 아니면 직교 벡터를 반환하는 스텁."""
+
+    def __init__(self, *, keyword: str):
+        self.keyword: str = keyword
+
+    def encode(self, context: EmbeddingEncodingContext) -> np.ndarray:
+        vector = np.zeros(EMBEDDING_DIMENSION)
+        if self.keyword in context.text:
+            vector[0] = 1.0
+            vector[1] = 0.01
+        else:
+            vector[1] = 1.0
+        return vector
+
+
+def test_create_reflection_skips_semantically_duplicate_insight() -> None:
+    stream = MemoryStream()
+    scorer = StubScorer(score_value=7)
+    service = MemoryManager(
+        memory_stream=stream,
+        importance_scorer=scorer,
+        embedding_encoder=KeywordEmbeddingEncoder(keyword="수진"),
+    )
+
+    now = datetime.datetime(2026, 2, 13, 12, 0, 0)
+
+    first_reflection = service.create_reflection(
+        InsightWithCitation(
+            context="지호는 수진에 대해 깊은 개인적 호감을 느끼며 정서적 유대감을 가지고 있습니다.",
+            citation_memory_ids=[],
+        ),
+        now=now,
+        context=ReflectionContext(agent_name="Jiho Park", identity_stable_set=[]),
+    )
+    assert first_reflection is not None
+
+    duplicate_reflection = service.create_reflection(
+        InsightWithCitation(
+            context="지호는 수진을 향한 자신의 감정이 단순한 우정을 넘어선 것임을 인지하고 있습니다.",
+            citation_memory_ids=[],
+        ),
+        now=now,
+        context=ReflectionContext(agent_name="Jiho Park", identity_stable_set=[]),
+    )
+    assert duplicate_reflection is None
+
+    distinct_reflection = service.create_reflection(
+        InsightWithCitation(
+            context="병용은 계획적인 성향을 가지고 있다.",
+            citation_memory_ids=[],
+        ),
+        now=now,
+        context=ReflectionContext(agent_name="Jiho Park", identity_stable_set=[]),
+    )
+    assert distinct_reflection is not None
+
+    stored_reflections = [
+        memory for memory in stream.snapshot() if memory.node_type == NodeType.REFLECTION
+    ]
+    assert len(stored_reflections) == 2
+
+
 # class StubReflectionService:
 #     def __init__(self):
 #         self.recorded_importance: list[int] = []

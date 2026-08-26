@@ -6,7 +6,9 @@ from typing import Protocol
 import numpy as np
 from llm import ImportanceScorer, ImportanceScoringContext, clamp_importance
 from llm.embedding_encoder import EmbeddingEncodingContext
+from llm.guardrails import SEMANTIC_HARD_BLOCK_THRESHOLD
 from llm.llm_gateway import InsightWithCitation
+from utils.math import cosine_similarity
 
 from .memory_object import MemoryObject, NodeType
 from .memory_stream import MemoryStream
@@ -153,10 +155,30 @@ class MemoryManager:
         now: datetime.datetime,
         context: ReflectionContext,
         importance: int | None = None,
-    ) -> MemoryObject:
+    ) -> MemoryObject | None:
+        """새 성찰을 저장한다.
+
+        같은 리플렉션 배치 내에서 여러 질문이 겹치는 근거 메모리를 참조할 때
+        의미상 거의 동일한 insight가 중복 생성되는 경우가 있어(SEMANTIC_HARD_BLOCK_THRESHOLD
+        이상 유사), 기존 REFLECTION과 임베딩 코사인 유사도가 임계값을 넘으면 저장을 건너뛰고
+        None을 반환한다.
+        """
         embedding = self.embedding_encoder.encode(
             EmbeddingEncodingContext(text=insight.context)
         )
+
+        existing_reflection_embeddings = [
+            memory.embedding
+            for memory in self.memory_stream.memories
+            if memory.node_type is NodeType.REFLECTION
+        ]
+        if existing_reflection_embeddings:
+            max_similarity = max(
+                cosine_similarity(embedding, reference_embedding)
+                for reference_embedding in existing_reflection_embeddings
+            )
+            if max_similarity >= SEMANTIC_HARD_BLOCK_THRESHOLD:
+                return None
 
         final_importance = importance
         if final_importance is None:

@@ -194,8 +194,9 @@ class ReflectionGraphRunner:
         self,
         state: ReflectionGraphState,
     ) -> dict[str, int]:
+        persisted_count = 0
         for insight in state["generated_insights"]:
-            _ = self.memory_manager.create_reflection(
+            persisted = self.memory_manager.create_reflection(
                 insight,
                 now=state["now"],
                 context=ReflectionContext(
@@ -203,10 +204,12 @@ class ReflectionGraphRunner:
                     identity_stable_set=self.identity_stable_set,
                 ),
             )
+            if persisted is not None:
+                persisted_count += 1
 
         return {
             "persisted_reflection_count": (
-                state["persisted_reflection_count"] + len(state["generated_insights"])
+                state["persisted_reflection_count"] + persisted_count
             )
         }
 
