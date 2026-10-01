@@ -1,16 +1,5 @@
-# Mock-only UI audit summary
+# Summary
 
-## Confirmed gaps
+Verdict: the proposed direction is sound, but model-memory and token-per-second figures are unverified estimates for this running deployment.
 
-1. Replace or label the seed-event panel as demo data until diffusion state exists.
-2. Make resident follow and control hints scene-aware; add interior NPC interaction.
-3. Subscribe enlarged interiors to live agent state.
-4. Decide whether semantic map interactables are user controls; wire them or remove interactive affordance expectations.
-5. Replace mobile wheel guidance with pinch support or mobile-specific instructions.
-6. Add focused frontend regression tests so dead controls cannot ship behind a green zero-test command.
-
-## Verification evidence
-
-- Public clock advanced after WebSocket connection while seed-event copy and progress remained unchanged.
-- Public DOM exposed only the inspector toggle and two resident-follow buttons as React controls.
-- `pnpm --filter @agent-crossing/frontend build` passed with the existing large-chunk warning.
+Highest-confidence actions: add request telemetry, compare Ollama parallel 1 versus 2, reduce routine LLM work, then redesign the planner lock before attempting agent-level planning fan-out. A smaller model is a valid later quality-versus-latency decision.
