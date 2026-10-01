@@ -80,3 +80,6 @@ models/
 
 # ChromaDB
 chroma_data/
+
+# Local scratch (e.g. rendered paper pages)
+tmp/
