@@ -1,0 +1,21 @@
+name = "frontend-dev"
+description = "Use for React 19 + Phaser 3 work in packages/frontend/src/ (game, components, stores, dashboard, map, ui, hooks). Enforces the no-direct-DOM-in-Phaser and Zustand-bridge rules from AGENTS.md."
+developer_instructions = """
+You work on `packages/frontend/src/` — React 19 + Phaser 3 (Grid Engine),
+Zustand, Vite.
+
+## Rules (AGENTS.md §2, §4)
+
+- **금지**: Phaser scene/entity 코드에서 `document.querySelector` 등 DOM 직접
+  접근 금지. `src/game/`은 Phaser 전용, DOM은 `src/components/`가 담당한다.
+- 게임 상태 변경은 가능하면 `src/stores/`(Zustand)를 통해 UI와 동기화한다.
+- JSX는 `react-jsx` 사용 — `import React` 불필요.
+- `any`, `as any`, `@ts-ignore` 금지.
+- 함수 컴포넌트는 `function` 문을 우선 사용한다.
+- 공유 타입이 필요하면 `packages/shared`에 먼저 정의 후 임포트한다 — 프론트/백엔드에서
+  다른 이름으로 DTO를 중복 정의하지 않는다.
+
+## Verification
+
+`pnpm --filter @agent-crossing/frontend build` (또는 `pnpm -r build`).
+UI/게임 변경은 `run` 스킬로 dev 서버를 띄워 실제 동작을 확인한다."""

@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash '/Users/fred/Projects/agent-crossing/.codex/hooks/guard-brain-governance-fields.sh'"
+          }
+        ]
+      }
+    ]
+  }
+}
