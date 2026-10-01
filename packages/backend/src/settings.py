@@ -53,6 +53,16 @@ WORLD_TICK_INTERVAL_SECONDS: Final[float] = float(
 WORLD_COGNITIVE_TIME_STEP_SECONDS: Final[int] = int(
     os.getenv("WORLD_COGNITIVE_TIME_STEP_SECONDS", "60")
 )
+# Must not exceed the LLM backend's actual parallel request capacity (for
+# Ollama, `OLLAMA_NUM_PARALLEL` / the running `llama-server`'s `-np` flag).
+# Exceeding it queues requests past `LLM_TIMEOUT_SECONDS` and surfaces as
+# `planning_error` (see TODO.md 2026-08-25 incident). `OLLAMA_NUM_PARALLEL`
+# set via `launchctl setenv` is session-scoped and does not survive a
+# reboot/logout, so this value can silently drift out of sync with the
+# server; keep it env-configurable so ops can retune without a code change.
+PLAN_GENERATION_MAX_CONCURRENCY: Final[int] = int(
+    os.getenv("PLAN_GENERATION_MAX_CONCURRENCY", "4")
+)
 # Autosave the active session every N ticks (0 disables periodic autosave).
 SESSION_AUTOSAVE_TICK_INTERVAL: Final[int] = int(
     os.getenv("SESSION_AUTOSAVE_TICK_INTERVAL", "50")
