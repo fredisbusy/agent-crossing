@@ -22,10 +22,13 @@ def building_of(location_path: str) -> str | None:
 
 
 def is_near(a: Resident, b: Resident, radius: int) -> bool:
-    """같은 건물 안이거나 맨해튼 거리가 `radius` 이하면 가깝다."""
+    """같은 건물(또는 같은 야외 구역) 안이면 가깝다. 건물 밖 길에서는 맨해튼 거리가
+    `radius` 이하일 때만 가깝다. 벽 너머 다른 건물의 주민은 보지 못한다."""
     sa, sb = a.body.state, b.body.state
     building = building_of(sa.location_path)
-    if building is not None and building == building_of(sb.location_path):
+    if building != building_of(sb.location_path):
+        return False
+    if building is not None:
         return True
     distance = abs(sa.tile.x - sb.tile.x) + abs(sa.tile.y - sb.tile.y)
     return distance <= radius

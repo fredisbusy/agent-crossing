@@ -34,8 +34,15 @@ class EncounterTracker:
 
 
 def can_talk(a: Resident, b: Resident) -> bool:
-    """둘 다 대화 중이 아니고, 둘 다 서 있거나 같은 방이어야 한다."""
+    """둘 다 깨어 있고 대화 중이 아니며, 둘 다 서 있거나 같은 방이어야 한다."""
     if a.body.conversation_id or b.body.conversation_id:
+        return False
+    if is_asleep(a) or is_asleep(b):
         return False
     same_room = a.body.state.location_path == b.body.state.location_path
     return same_room or (not a.body.is_moving and not b.body.is_moving)
+
+
+def is_asleep(resident: Resident) -> bool:
+    action = resident.body.state.action
+    return action is not None and action.kind == "sleep"

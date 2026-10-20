@@ -74,17 +74,17 @@ def test_one_turn_per_game_minute_and_bodies_frozen_during_conversation() -> Non
     assert sim.text_state().count('"in_conversation":true') == 2
 
 
-def test_bystander_within_radius_hears_utterance_but_far_resident_does_not() -> None:
+def test_bystander_in_same_building_hears_utterance_but_other_area_does_not() -> None:
     ann = ScriptedMind(encounter="converse", replies=["비밀 이야기", None])
     bob = ScriptedMind(encounter="converse", replies=["그래", None])
-    near = ScriptedMind(plan=stay(600, where=GARDEN))
-    far = ScriptedMind(plan=stay(600, where=SQUARE))
+    near = ScriptedMind(encounter="pass_by", plan=stay(600, where=CAFE))
+    far = ScriptedMind(plan=stay(600, where=GARDEN))
     sim = make_sim(
         {
             "ann": (CAFE, ann),
             "bob": (CAFE, bob),
-            "cat": (GARDEN, near),
-            "dan": (SQUARE, far),
+            "cat": (CAFE, near),
+            "dan": (GARDEN, far),
         }
     )
     asyncio.run(sim.run_minutes(5))
