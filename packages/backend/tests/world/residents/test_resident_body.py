@@ -72,9 +72,18 @@ def test_moves_one_tile_per_step_and_updates_location_on_arrival() -> None:
     assert not body.is_moving
 
 
+def test_move_counts_as_expired_on_arrival() -> None:
+    body = make_body()
+    body.set_intent(intent(ROOM_B), NOW)
+    assert not body.is_expired(NOW)
+    for _ in range(7):
+        body.step()
+    assert body.is_expired(NOW)
+
+
 def test_action_expires_at_until() -> None:
     body = make_body()
-    body.set_intent(intent(ROOM_A, minutes=5), NOW)
+    body.set_intent(intent(ROOM_A, minutes=5).model_copy(update={"kind": "idle"}), NOW)
     assert not body.is_expired(NOW + datetime.timedelta(minutes=4))
     assert body.is_expired(NOW + datetime.timedelta(minutes=5))
 

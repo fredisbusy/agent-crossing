@@ -53,8 +53,10 @@ class Body:
         return bool(self._path)
 
     def is_expired(self, now: datetime.datetime) -> bool:
-        """진행 중인 행동이 없거나 `until <= now`면 True."""
-        return self._action is None or self._action.until <= now
+        """진행 중인 행동이 없거나, `until <= now`이거나, `move`가 도착으로 끝났으면 True."""
+        if self._action is None or self._action.until <= now:
+            return True
+        return self._action.kind == "move" and not self._path
 
     def set_intent(
         self, intent: ActionIntent, now: datetime.datetime
