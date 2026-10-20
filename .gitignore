@@ -80,3 +80,6 @@ models/
 
 # ChromaDB
 chroma_data/
+
+# Claude Code worktrees
+.claude/worktrees/
