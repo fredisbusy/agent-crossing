@@ -1,0 +1,58 @@
+{
+  "talkativeness": 0.9,
+  "share_probability": 0.8,
+  "min_friendship_to_accept_invite": 0,
+  "max_turns": 6,
+  "tone": "casual",
+  "entries": [
+    {
+      "start": "21:30",
+      "location_path": "{bedroom}",
+      "description": "잠든다",
+      "emoji": "😴",
+      "action": "sleep"
+    },
+    {
+      "start": "05:30",
+      "location_path": "{home}",
+      "description": "차를 마신다",
+      "emoji": "🍵"
+    },
+    {
+      "start": "07:00",
+      "location_path": "Smallville > Johnson Park > Garden",
+      "description": "정원을 돌본다",
+      "emoji": "🌻"
+    },
+    {
+      "start": "10:00",
+      "location_path": "Smallville > Hobbs Cafe > Seating",
+      "description": "카페에서 이야기를 나눈다",
+      "emoji": "☕"
+    },
+    {
+      "start": "12:00",
+      "location_path": "{home}",
+      "description": "점심을 먹는다",
+      "emoji": "🍚"
+    },
+    {
+      "start": "14:00",
+      "location_path": "Smallville > Town Square",
+      "description": "광장 벤치에 앉아 있다",
+      "emoji": "🪑"
+    },
+    {
+      "start": "17:00",
+      "location_path": "Smallville > The Rose and Crown Pub > Bar",
+      "description": "한잔하며 이야기한다",
+      "emoji": "🍺"
+    },
+    {
+      "start": "19:00",
+      "location_path": "{home}",
+      "description": "저녁을 먹는다",
+      "emoji": "🍲"
+    }
+  ]
+}

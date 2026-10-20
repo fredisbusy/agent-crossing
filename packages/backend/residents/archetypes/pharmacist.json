@@ -1,0 +1,88 @@
+{
+  "talkativeness": 0.4,
+  "share_probability": 0.4,
+  "min_friendship_to_accept_invite": 10,
+  "max_turns": 4,
+  "tone": "polite",
+  "entries": [
+    {
+      "start": "22:30",
+      "location_path": "{bedroom}",
+      "description": "잠든다",
+      "emoji": "😴",
+      "action": "sleep"
+    },
+    {
+      "start": "07:00",
+      "location_path": "{home}",
+      "description": "아침을 준비한다",
+      "emoji": "🍞"
+    },
+    {
+      "start": "09:00",
+      "location_path": "Smallville > The Willows Market > Store",
+      "description": "가게 일을 본다",
+      "emoji": "💊",
+      "action": "use_object",
+      "weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "start": "09:00",
+      "location_path": "Smallville > Johnson Park > Garden",
+      "description": "정원을 가꾼다",
+      "emoji": "🌷",
+      "weekdays": [
+        6
+      ]
+    },
+    {
+      "start": "12:00",
+      "location_path": "Smallville > Hobbs Cafe > Seating",
+      "description": "점심을 먹는다",
+      "emoji": "🍜"
+    },
+    {
+      "start": "13:00",
+      "location_path": "Smallville > The Willows Market > Store",
+      "description": "가게 일을 본다",
+      "emoji": "💊",
+      "action": "use_object",
+      "weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "start": "13:00",
+      "location_path": "Smallville > Town Square",
+      "description": "광장에서 쉰다",
+      "emoji": "🪑",
+      "weekdays": [
+        6
+      ]
+    },
+    {
+      "start": "18:00",
+      "location_path": "{home}",
+      "description": "저녁을 먹는다",
+      "emoji": "🍲"
+    },
+    {
+      "start": "20:00",
+      "location_path": "Smallville > Town Square",
+      "description": "산책한다",
+      "emoji": "🚶"
+    }
+  ]
+}

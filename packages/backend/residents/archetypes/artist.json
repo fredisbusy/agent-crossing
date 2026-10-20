@@ -1,0 +1,54 @@
+{
+  "talkativeness": 0.45,
+  "share_probability": 0.5,
+  "min_friendship_to_accept_invite": 3,
+  "max_turns": 4,
+  "tone": "casual",
+  "entries": [
+    {
+      "start": "02:00",
+      "location_path": "{bedroom}",
+      "description": "잠든다",
+      "emoji": "😴",
+      "action": "sleep"
+    },
+    {
+      "start": "10:00",
+      "location_path": "{home}",
+      "description": "느지막이 아침을 먹는다",
+      "emoji": "🥐"
+    },
+    {
+      "start": "11:30",
+      "location_path": "Smallville > Artist's Co-living Space > Studio",
+      "description": "그림을 그린다",
+      "emoji": "🎨",
+      "action": "use_object"
+    },
+    {
+      "start": "15:00",
+      "location_path": "Smallville > Hobbs Cafe > Seating",
+      "description": "카페에서 스케치한다",
+      "emoji": "✏️"
+    },
+    {
+      "start": "17:30",
+      "location_path": "Smallville > Johnson Park > Garden",
+      "description": "풍경을 관찰한다",
+      "emoji": "🌄"
+    },
+    {
+      "start": "19:30",
+      "location_path": "Smallville > Artist's Co-living Space > Studio",
+      "description": "밤새 작업한다",
+      "emoji": "🎨",
+      "action": "use_object"
+    },
+    {
+      "start": "23:00",
+      "location_path": "Smallville > The Rose and Crown Pub > Bar",
+      "description": "영감을 찾는다",
+      "emoji": "🍷"
+    }
+  ]
+}
