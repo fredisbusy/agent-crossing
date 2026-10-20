@@ -8,7 +8,8 @@
     "test:backend": "uv run --project packages/backend pytest -c packages/backend/pyproject.toml packages/backend/tests",
     "sync": "uv sync --project packages/backend",
     "build": "pnpm -r build",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "check:structure": "python3 scripts/check_structure.py"
   },
   "devDependencies": {
     "prettier": "^3.0.0"
