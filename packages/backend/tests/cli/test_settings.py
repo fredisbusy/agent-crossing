@@ -31,7 +31,7 @@ print(json.dumps({
             "GOOGLE_AI_STUDIO_API_KEY",
         }
     }
-    src_path = str(Path(__file__).resolve().parents[1] / "src")
+    src_path = str(Path(__file__).resolve().parents[2] / "src")
     existing_pythonpath = process_env.get("PYTHONPATH", "")
     process_env["PYTHONPATH"] = (
         f"{src_path}{os.pathsep}{existing_pythonpath}"
