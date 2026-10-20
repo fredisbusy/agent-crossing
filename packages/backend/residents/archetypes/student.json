@@ -1,0 +1,72 @@
+{
+  "talkativeness": 0.7,
+  "share_probability": 0.5,
+  "min_friendship_to_accept_invite": 0,
+  "max_turns": 4,
+  "tone": "casual",
+  "entries": [
+    {
+      "start": "00:30",
+      "location_path": "{bedroom}",
+      "description": "잠든다",
+      "emoji": "😴",
+      "action": "sleep"
+    },
+    {
+      "start": "08:30",
+      "location_path": "{home}",
+      "description": "준비를 한다",
+      "emoji": "🎒"
+    },
+    {
+      "start": "09:30",
+      "location_path": "Smallville > Oak Hill College > Classroom",
+      "description": "수업을 듣는다",
+      "emoji": "📚",
+      "weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "start": "12:00",
+      "location_path": "Smallville > Hobbs Cafe > Seating",
+      "description": "카페에서 점심을 먹는다",
+      "emoji": "🥪"
+    },
+    {
+      "start": "13:30",
+      "location_path": "Smallville > Oak Hill College > Library",
+      "description": "공부한다",
+      "emoji": "📖",
+      "weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "start": "17:30",
+      "location_path": "Smallville > Johnson Park > Garden",
+      "description": "공원을 거닌다",
+      "emoji": "🌳"
+    },
+    {
+      "start": "19:00",
+      "location_path": "Smallville > The Rose and Crown Pub > Bar",
+      "description": "친구들과 어울린다",
+      "emoji": "🍻"
+    },
+    {
+      "start": "22:30",
+      "location_path": "{home}",
+      "description": "쉰다",
+      "emoji": "🎮"
+    }
+  ]
+}

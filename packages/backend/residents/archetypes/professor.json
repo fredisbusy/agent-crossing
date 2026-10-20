@@ -1,0 +1,75 @@
+{
+  "talkativeness": 0.5,
+  "share_probability": 0.7,
+  "min_friendship_to_accept_invite": 5,
+  "max_turns": 6,
+  "tone": "polite",
+  "entries": [
+    {
+      "start": "23:00",
+      "location_path": "{bedroom}",
+      "description": "잠든다",
+      "emoji": "😴",
+      "action": "sleep"
+    },
+    {
+      "start": "07:00",
+      "location_path": "{home}",
+      "description": "신문을 읽는다",
+      "emoji": "📰"
+    },
+    {
+      "start": "09:00",
+      "location_path": "Smallville > Oak Hill College > Classroom",
+      "description": "강의를 한다",
+      "emoji": "🎓",
+      "weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "start": "09:00",
+      "location_path": "Smallville > Oak Hill College > Library",
+      "description": "책을 읽는다",
+      "emoji": "📖",
+      "weekdays": [
+        5,
+        6
+      ]
+    },
+    {
+      "start": "12:30",
+      "location_path": "Smallville > Hobbs Cafe > Seating",
+      "description": "점심을 먹는다",
+      "emoji": "🥗"
+    },
+    {
+      "start": "14:00",
+      "location_path": "Smallville > Oak Hill College > Library",
+      "description": "연구한다",
+      "emoji": "🔬"
+    },
+    {
+      "start": "17:30",
+      "location_path": "Smallville > Johnson Park > Garden",
+      "description": "산책한다",
+      "emoji": "🌳"
+    },
+    {
+      "start": "19:00",
+      "location_path": "{home}",
+      "description": "저녁을 먹는다",
+      "emoji": "🍲"
+    },
+    {
+      "start": "20:30",
+      "location_path": "{home}",
+      "description": "글을 쓴다",
+      "emoji": "✍️"
+    }
+  ]
+}
