@@ -1,10 +1,6 @@
 {
-  "dir:packages/backend/tests": 18,
   "file:packages/backend/src/agents/brain/graph.py": 545,
   "file:packages/backend/src/agents/planning/graph.py": 451,
   "file:packages/backend/src/agents/planning/state.py": 483,
-  "file:packages/backend/src/agents/reaction/graph.py": 498,
-  "file:packages/backend/src/llm/governance/parsing.py": 494,
-  "file:packages/backend/src/llm/prompt_builders.py": 710,
-  "file:packages/backend/tests/test_llm_gateway_unit.py": 1348
+  "file:packages/backend/src/agents/reaction/graph.py": 498
 }
