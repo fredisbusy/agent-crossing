@@ -318,29 +318,33 @@
 
 ### 6-A. 1차: 계약과 독립 모듈 (병렬)
 
-- [ ] `P0` 공유 계약을 확정한다 (`world/contracts.py`, `packages/shared`)
+- [x] `P0` 공유 계약을 확정한다 (`world/contracts.py`, `packages/shared`)
   - DoD:
-    - [ ] Mind 프로토콜, 화행, 관찰, 행동 의도, 몸 상태, 월드 스냅샷 타입이 정의된다
-    - [ ] 백엔드 Pydantic 모델과 shared TS 타입 이름이 같다
-- [ ] `P1` 공간: Tiled 맵 로더, 충돌 그리드, A*, 위치 경로 트리를 구현한다 (`world/space/`)
+    - [x] Mind 프로토콜, 화행, 관찰, 행동 의도, 몸 상태, 월드 스냅샷 타입이 정의된다
+    - [x] 백엔드 Pydantic 모델과 shared TS 타입 이름이 같다
+- [x] `P1` 공간: Tiled 맵 로더, 충돌 그리드, A*, 위치 경로 트리를 구현한다 (`world/space/`)
   - DoD:
-    - [ ] Smallville 구성을 본뜬 코드 생성 맵이 `packages/shared/maps/`에 있다
-    - [ ] 위치 경로 → 목표 타일 해소, 경로 불가 시 fallback이 테스트된다
-- [ ] `P1` ScheduleMind: 일정표·조건 분기·우호도·사실 저장소·화행 규칙·대사 템플릿 (`minds/schedule/`)
+    - [x] Smallville 구성을 본뜬 코드 생성 맵이 `packages/shared/maps/`에 있다
+    - [x] 위치 경로 → 목표 타일 해소, 경로 불가 시 fallback이 테스트된다
+- [x] `P1` ScheduleMind: 일정표·조건 분기·우호도·사실 저장소·화행 규칙·대사 템플릿 (`minds/schedule/`)
   - DoD:
-    - [ ] 초대를 수락하면 일정표에 항목이 생기고 그 시각에 그 장소로 가는 행동을 낸다
-    - [ ] 들은 사실을 다음 조우에서 확률적으로 전달한다(시드 고정 시 결정론)
-- [ ] `P1` 주민·몸·시계·마을 틱 루프 (`world/residents/`, `world/town/`)
+    - [x] 초대를 수락하면 일정표에 항목이 생기고 그 시각에 그 장소로 가는 행동을 낸다
+    - [x] 들은 사실을 다음 조우에서 확률적으로 전달한다(시드 고정 시 결정론)
+- [x] `P1` 주민·몸·시계·마을 틱 루프 (`world/residents/`, `world/town/`)
   - DoD:
-    - [ ] 주민 설정에서 mind 종류와 에이전트 수를 지정한다
-    - [ ] 행동 중인 주민의 마음을 부르지 않고, 조우 시 pass-by/converse를 묻는다
-    - [ ] faithful 모드에서 같은 시드면 같은 결과가 나온다
-- [ ] `P2` 프런트: Phaser 4 이전, 공유 맵 렌더링, 스냅샷 보간, QA 훅
+    - [x] 주민 설정에서 mind 종류와 에이전트 수를 지정한다
+    - [x] 행동 중인 주민의 마음을 부르지 않고, 조우 시 pass-by/converse를 묻는다
+    - [x] faithful 모드에서 같은 시드면 같은 결과가 나온다
+- [x] `P2` 프런트: Phaser 4 이전, 공유 맵 렌더링, 스냅샷 보간, QA 훅
   - DoD:
-    - [ ] `window.render_game_to_text` / `window.advanceTime`이 개발 빌드에서 동작한다
-- [ ] `P2` 구조 정책 기준선 줄이기: `llm/` 큰 파일 분할, `tests/` 소스 구조 미러링
+    - [x] `window.render_game_to_text` / `window.advanceTime`이 개발 빌드에서 동작한다
+- [x] `P2` 구조 정책 기준선 줄이기: `llm/` 큰 파일 분할, `tests/` 소스 구조 미러링
+- [ ] `P2` 남은 기준선: `agents/` brain·planning·reaction graph, planning state 분할
 
 ### 6-B. 2차: 통합
+
+- [ ] `P1` NPC 문체 다양화: 원형 공유 주민의 행동 서술·대사가 같지 않게, 영문 장소명 대신 자연스러운 이름 (SPEC §16 식별 지표)
+- [ ] `P2` 시나리오 씨앗: 주민 설정에 초기 사실(`FactStore`)을 넣어 전원 NPC 마을에서도 확산 시작
 
 - [ ] `P1` LLMMind 어댑터(기존 brain을 Mind 프로토콜로 감싸기, 발화 화행 구조화 출력)
 - [ ] `P1` 실제 공간 + 두 마음으로 마을 하루 돌리기(텍스트 로그)
