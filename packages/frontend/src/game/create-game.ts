@@ -21,6 +21,7 @@ export function createTownGame(parent: HTMLElement): TownGameHandle {
     parent,
     backgroundColor: "#3f6b46",
     pixelArt: true,
+    audio: { noAudio: true },
     scale: { mode: Phaser.Scale.RESIZE, width: "100%", height: "100%" },
     scene: [scene],
   });
