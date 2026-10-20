@@ -37,12 +37,13 @@ def can_talk(a: Resident, b: Resident) -> bool:
     """둘 다 깨어 있고 대화 중이 아니며, 둘 다 서 있거나 같은 방이어야 한다."""
     if a.body.conversation_id or b.body.conversation_id:
         return False
-    if is_asleep(a) or is_asleep(b):
+    if not is_awake(a) or not is_awake(b):
         return False
     same_room = a.body.state.location_path == b.body.state.location_path
     return same_room or (not a.body.is_moving and not b.body.is_moving)
 
 
-def is_asleep(resident: Resident) -> bool:
+def is_awake(resident: Resident) -> bool:
+    """행동을 아직 정하지 않았거나(막 생성됨) 자는 중이면 깨어 있지 않다."""
     action = resident.body.state.action
-    return action is not None and action.kind == "sleep"
+    return action is not None and action.kind != "sleep"

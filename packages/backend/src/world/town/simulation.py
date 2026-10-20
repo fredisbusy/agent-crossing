@@ -72,9 +72,9 @@ class TownSimulation:
             resident.body.step()
         pairs = near_pairs(self.residents, self._radius)
         self._perceive(pairs)
+        await self._wake_minds()
         await self._encounters(pairs)
         await self._advance_conversations()
-        await self._wake_minds()
 
     async def run_minutes(self, minutes: int) -> None:
         for _ in range(minutes):
