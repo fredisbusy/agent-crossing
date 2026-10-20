@@ -34,6 +34,8 @@ class Body:
         self._location_path = space.location_at(tile)
         self._action: ActionIntent | None = None
         self._path: tuple[TilePosition, ...] = ()
+        self._failed_destination: str | None = None
+        """마지막으로 갈 수 없었던 목적지. 같은 실패를 반복 보고하지 않는다."""
         self.conversation_id: str | None = None
 
     @property
@@ -61,7 +63,10 @@ class Body:
     def set_intent(
         self, intent: ActionIntent, now: datetime.datetime
     ) -> Observation | None:
-        """행동을 받는다. 갈 수 없으면 제자리 idle로 바꾸고 관찰을 돌려 준다."""
+        """행동을 받는다. 갈 수 없으면 제자리 idle로 바꾸고 관찰을 돌려 준다.
+
+        같은 목적지로 다시 실패하면 관찰 없이 idle만 유지해 마음을 매 틱 깨우지 않는다.
+        """
         self._path = ()
         if intent.location_path == self._location_path:
             self._action = intent
@@ -69,12 +74,16 @@ class Body:
         goal = self._space.tile_of(intent.location_path)
         path = self._space.find_path(self._tile, goal) if goal is not None else None
         if path is None:
+            repeated = intent.location_path == self._failed_destination
+            self._failed_destination = intent.location_path
             self._action = ActionIntent(
                 kind="idle",
                 description="제자리에 머문다",
                 location_path=self._location_path,
                 until=intent.until,
             )
+            if repeated:
+                return None
             return Observation(
                 kind="event",
                 text=f"{intent.location_path}로 갈 수 없었다",
@@ -82,6 +91,7 @@ class Body:
                 location_path=self._location_path,
                 subject_id=self._resident_id,
             )
+        self._failed_destination = None
         self._action = intent
         self._path = path
         return None

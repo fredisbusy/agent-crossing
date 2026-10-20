@@ -29,7 +29,9 @@ class Resident:
             start_location=config.start_location,
         )
         self.pending: list[Observation] = []
-        """마음이 아직 받지 않은 관찰."""
+        """마음이 아직 받지 않은 관찰. 시야·엿들은 말은 쌓아 두었다가 다음 깨움 때 전달한다."""
+        self.wake_requested: bool = False
+        """다음 틱에 마음을 깨운다(대화 종료, 이동 실패 등 SPEC §14의 즉시 깨움 사유)."""
 
     @property
     def resident_id(self) -> str:

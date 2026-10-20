@@ -123,3 +123,12 @@ def test_missing_start_location_raises() -> None:
 def test_public_view_has_no_mind_kind() -> None:
     assert "mind_kind" not in ResidentPublicView.model_fields
     assert "mind" not in ResidentPublicView.model_fields
+
+
+def test_repeated_failure_to_same_destination_is_reported_once() -> None:
+    body = make_body()
+    assert body.set_intent(intent(ROOM_C), NOW) is not None
+    assert body.set_intent(intent(ROOM_C), NOW) is None
+    assert body.state.action is not None and body.state.action.kind == "idle"
+    assert body.set_intent(intent(ROOM_B), NOW) is None
+    assert body.set_intent(intent(ROOM_C), NOW) is not None

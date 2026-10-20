@@ -213,7 +213,9 @@ class TownSimulation:
                 self._deliver(conversation, utterance)
             if conversation.finished:
                 for member_id in conversation.participant_ids:
-                    self._by_id[member_id].body.conversation_id = None
+                    member = self._by_id[member_id]
+                    member.body.conversation_id = None
+                    member.wake_requested = True
         self._conversations = [c for c in self._conversations if not c.finished]
 
     def _deliver(self, conversation: TownConversation, utterance: Utterance) -> None:
@@ -241,12 +243,13 @@ class TownSimulation:
             r
             for r in self.residents
             if r.body.conversation_id is None
-            and (r.pending or r.body.is_expired(self.clock.now))
+            and (r.wake_requested or r.body.is_expired(self.clock.now))
         ]
         if not woken:
             return
         calls: list[Coroutine[Any, Any, ActionIntent]] = []
         for resident in woken:
+            resident.wake_requested = False
             self.mind_calls[resident.config.mind] += 1
             ctx = await self._observe_drained(resident)
             calls.append(resident.mind.next_action(ctx))
@@ -255,3 +258,4 @@ class TownSimulation:
             failure = resident.body.set_intent(intent, self.clock.now)
             if failure is not None:
                 resident.pending.append(failure)
+                resident.wake_requested = True

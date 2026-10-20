@@ -77,7 +77,7 @@ def test_one_turn_per_game_minute_and_bodies_frozen_during_conversation() -> Non
 def test_bystander_in_same_building_hears_utterance_but_other_area_does_not() -> None:
     ann = ScriptedMind(encounter="converse", replies=["비밀 이야기", None])
     bob = ScriptedMind(encounter="converse", replies=["그래", None])
-    near = ScriptedMind(encounter="pass_by", plan=stay(600, where=CAFE))
+    near = ScriptedMind(encounter="pass_by", plan=stay(10, where=CAFE))
     far = ScriptedMind(plan=stay(600, where=GARDEN))
     sim = make_sim(
         {
@@ -87,7 +87,7 @@ def test_bystander_in_same_building_hears_utterance_but_other_area_does_not() ->
             "dan": (GARDEN, far),
         }
     )
-    asyncio.run(sim.run_minutes(5))
+    asyncio.run(sim.run_minutes(12))
     heard = [o for o in near.observed if o.kind == "utterance"]
     assert sorted(o.utterance.text for o in heard if o.utterance) == ["그래", "비밀 이야기"]
     assert {o.subject_id for o in heard} == {"ann", "bob"}

@@ -5,6 +5,7 @@ from .config import (
     apply_mind_selection,
     load_resident_configs,
 )
+from .mind_factory import ScheduleMindFactory
 from .resident import MindFactory, Resident
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
     "MindFactory",
     "Resident",
     "ResidentConfig",
+    "ScheduleMindFactory",
     "apply_mind_selection",
     "load_resident_configs",
 ]

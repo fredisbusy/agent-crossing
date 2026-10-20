@@ -47,21 +47,27 @@ def test_mind_call_counts_split_by_kind() -> None:
     assert sim.mind_calls["schedule"] == 1
 
 
-def test_new_observation_wakes_mind_despite_running_action() -> None:
+def test_sight_does_not_wake_running_action_but_arrives_at_next_wake() -> None:
     watcher = ScriptedMind(plan=stay(minutes=600, where=SQUARE))
     walker = ScriptedMind(plan=move_to(SQUARE, minutes=600))
     sim = make_sim({"ann": (SQUARE, watcher), "bob": (CAFE, walker)})
     asyncio.run(sim.run_minutes(30))
-    assert watcher.next_action_calls > 1
-    texts = [o.text for o in watcher.observed]
-    assert any("Bob" in text for text in texts)
+    assert watcher.next_action_calls == 1
+    assert watcher.observed == []
+
+    patient = ScriptedMind(plan=stay(minutes=20, where=SQUARE))
+    walker = ScriptedMind(plan=move_to(SQUARE, minutes=600))
+    sim = make_sim({"ann": (SQUARE, patient), "bob": (CAFE, walker)})
+    asyncio.run(sim.run_minutes(30))
+    assert patient.next_action_calls == 2
+    assert any("Bob" in o.text for o in patient.observed)
 
 
 def test_sight_text_format_and_no_meta_words() -> None:
-    watcher = ScriptedMind(plan=stay(minutes=600))
+    watcher = ScriptedMind(plan=stay(minutes=2))
     reader = ScriptedMind(plan=stay(minutes=600, description="책을 읽는다"))
     sim = make_sim({"ann": (CAFE, watcher), "bob": (CAFE, reader)})
-    asyncio.run(sim.run_minutes(3))
+    asyncio.run(sim.run_minutes(4))
     sights = [o for o in watcher.observed if o.kind == "sight"]
     assert sights
     assert any(o.text == f"Bob가 {CAFE}에서 책을 읽는다" for o in sights)
