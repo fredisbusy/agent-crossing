@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { TILE_SIZE } from "../../town-layout";
 import { buildFallbackMap } from "./fallback-map";
 import { extractLocationAreas, type LocationArea } from "./locations";
+import { drawPixelKit, isPixelKitEnabled, planPixelKit, preloadPixelKit } from "./pixel-kit";
 import { GROUND_LAYER, LOCATIONS_LAYER, TILESET_NAME } from "./tiled-types";
 import { paintTileset, TILESET_PIXEL_HEIGHT, TILESET_PIXEL_WIDTH } from "./tileset-art";
 
@@ -21,6 +22,7 @@ export interface TownMap {
 export function preloadTownMap(scene: Phaser.Scene): void {
   // 파일이 없어도 장면은 계속 진행하고, 이후 대체 맵을 쓴다.
   scene.load.tilemapTiledJSON(TOWN_MAP_KEY, TOWN_MAP_URL);
+  if (isPixelKitEnabled()) preloadPixelKit(scene);
 }
 
 function ensureTilesetTexture(scene: Phaser.Scene): void {
@@ -38,6 +40,10 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
   if (!tileset) return null;
   const layer = tilemap.createLayer(GROUND_LAYER, tileset, 0, 0);
   if (!layer) return null;
+  if (isPixelKitEnabled()) {
+    const ground = layer.layer.data.flatMap((row) => row.map((tile) => tile.index));
+    drawPixelKit(scene, planPixelKit(ground, tilemap.width, tilemap.height), tilemap.widthInPixels, tilemap.heightInPixels);
+  }
   // `collision` 레이어는 백엔드 경로 탐색 전용이라 그리지 않는다.
   const objects = tilemap.getObjectLayer(LOCATIONS_LAYER)?.objects ?? [];
   return {
