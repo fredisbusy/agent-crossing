@@ -6,6 +6,7 @@ from agents.sim_agent import SimAgent
 from world.observation_builder import format_other_said, format_self_said
 
 DEFAULT_DIALOGUE_TARGET_TURNS = 5
+DialogueMode = Literal["open", "arc"]
 
 
 def infer_dialogue_goal(*, speaker: SimAgent) -> str:
@@ -28,6 +29,12 @@ def infer_dialogue_goal(*, speaker: SimAgent) -> str:
 def build_turn_world_context(
     *, speaker_name: str, partner_name: str, turn: int
 ) -> dict[str, str]:
+    if _is_morning_dew_pair(speaker_name=speaker_name, partner_name=partner_name):
+        return {
+            "location": "Morning Dew Cafe near the counter",
+            "focus": f"{speaker_name} is talking with {partner_name} during a short cafe visit",
+        }
+
     locations = [
         "town square",
         "cafe entrance",
@@ -39,6 +46,18 @@ def build_turn_world_context(
         "location": f"{location} near {partner_name}",
         "focus": f"{speaker_name} is facing {partner_name}",
     }
+
+
+def _is_morning_dew_pair(*, speaker_name: str, partner_name: str) -> bool:
+    normalized_names = {
+        _normalize_agent_name(speaker_name),
+        _normalize_agent_name(partner_name),
+    }
+    return normalized_names == {"jiho", "sujin"}
+
+
+def _normalize_agent_name(name: str) -> str:
+    return name.strip().split(" ")[0].lower()
 
 
 def build_turn_observed_events(
@@ -67,6 +86,7 @@ class WorldConversationSession:
         agents: list[SimAgent],
         dialogue_turn_window: int | None,
         dialogue_target_turns: int = DEFAULT_DIALOGUE_TARGET_TURNS,
+        dialogue_mode: DialogueMode = "arc",
     ):
         if len(agents) < 2:
             raise ValueError("At least two agents are required")
@@ -74,10 +94,15 @@ class WorldConversationSession:
             raise ValueError("dialogue_turn_window must be at least 1")
         if dialogue_target_turns < 2:
             raise ValueError("dialogue_target_turns must be at least 2")
+        if dialogue_mode not in ("open", "arc"):
+            raise ValueError("dialogue_mode must be 'open' or 'arc'")
+        if dialogue_mode not in ("open", "arc"):
+            raise ValueError("dialogue_mode must be 'open' or 'arc'")
 
         self.agents: list[SimAgent] = agents
         self.dialogue_turn_window: int | None = dialogue_turn_window
         self.dialogue_target_turns: int = dialogue_target_turns
+        self.dialogue_mode: DialogueMode = dialogue_mode
         self.is_active: bool = True
         self.turn_index: int = 0
         self.history: list[tuple[str, str]] = []
@@ -131,7 +156,7 @@ class WorldConversationSession:
         *,
         speaker: SimAgent,
     ) -> DialogueArc | None:
-        if not self.is_active:
+        if not self.is_active or self.dialogue_mode == "open":
             return None
 
         if self.dialogue_goal is None:

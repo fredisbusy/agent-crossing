@@ -144,7 +144,7 @@
   - Depends on: day plan 생성기 구현
   - DoD:
     - [x] active day plan 항목 입력을 기준으로 near-future hourly plan을 생성한다
-    - [ ] 현재 시점 기준 active day plan 항목을 선택한다
+    - [x] 현재 시점 기준 active day plan 항목을 선택한다
     - [x] hourly plan이 시간 순서로 정렬된다
 
 - [ ] `P1` minute plan(5~15분 단위) 생성기를 구현한다
@@ -152,8 +152,8 @@
   - DoD:
     - [x] minute plan 단위가 5~15분 범위를 만족한다
     - [x] active hourly plan 항목 입력을 기준으로 near-future minute plan을 생성한다
-    - [ ] 현재 시점 기준 active hourly plan 항목을 선택한다
-    - [ ] 현재 시점 기준 다음 실행 항목을 즉시 찾을 수 있다
+    - [x] 현재 시점 기준 active hourly plan 항목을 선택한다
+    - [x] 현재 시점 기준 다음 실행 항목을 즉시 찾을 수 있다
 
 ### 3-B. Tick react 판정과 부분 재계획
 
@@ -214,6 +214,14 @@
     - [x] reaction prompt가 goal/remaining turns/wrap-up 지시를 반영한다
     - [x] 관련 단위 테스트로 session 상태와 prompt 반영을 검증한다
     - [x] closing 결정이 `end_dialogue` 구조화 신호를 통해 세션 종료로 연결된다
+
+- [x] `P1` simulation 대화 모드를 open/arc로 분리하고 plan diagnostics를 노출한다
+  - Depends on: 짧은 대화 아크를 session/reaction 경계에 도입한다
+  - DoD:
+    - [x] `dialogue_mode="arc"`에서 기존 짧은 대화 아크 동작을 유지한다
+    - [x] `dialogue_mode="open"`에서 `end_dialogue` 신호가 세션을 조기 종료하지 않는다
+    - [x] Jiho/Sujin simulation world context를 Morning Dew Cafe로 고정한다
+    - [x] `SimulationStepResult`/observability/API 응답에 plan diagnostics를 추가한다
 
 ### 4-A. Backend 실시간 파이프라인
 

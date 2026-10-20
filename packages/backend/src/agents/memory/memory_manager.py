@@ -31,6 +31,13 @@ class ReflectionContext:
     current_plan: str | None = None
 
 
+@dataclass(frozen=True)
+class PlanContext:
+    agent_name: str
+    identity_stable_set: list[str]
+    current_plan: str | None = None
+
+
 class EmbeddingEncoder(Protocol):
     def encode(self, context: EmbeddingEncodingContext) -> np.ndarray: ...
 
@@ -173,6 +180,40 @@ class MemoryManager:
             node_type=NodeType.REFLECTION,
             citations=filtered_citations,
             content=insight.context,
+            now=now,
+            importance=final_importance,
+            embedding=embedding,
+        )
+
+        return self.memory_stream.memories[-1]
+
+    def create_plan(
+        self,
+        *,
+        content: str,
+        now: datetime.datetime,
+        context: PlanContext,
+        importance: int | None = None,
+    ) -> MemoryObject:
+        embedding = self.embedding_encoder.encode(
+            EmbeddingEncodingContext(text=content)
+        )
+
+        final_importance = importance
+        if final_importance is None:
+            scoring_context = ImportanceScoringContext(
+                observation=content,
+                agent_name=context.agent_name,
+                identity_stable_set=context.identity_stable_set,
+                current_plan=context.current_plan,
+            )
+            final_importance = self.importance_scorer.score(scoring_context)
+        final_importance = clamp_importance(final_importance)
+
+        self.memory_stream.add_memory(
+            node_type=NodeType.PLAN,
+            citations=None,
+            content=content,
             now=now,
             importance=final_importance,
             embedding=embedding,

@@ -1,5 +1,5 @@
 import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from agents.brain import ActionLoopInput, ActionLoopResult
@@ -36,6 +36,8 @@ class SimulationStepResult:
     parse_failure: bool
     """관측/로그 출력용 진단 페이로드."""
     observability: "SimulationStepObservability"
+    """현재 계획/대화 모드 관련 운영 진단 정보."""
+    plan_diagnostics: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,8 @@ class SimulationStepObservability:
     action_summary: str
     """의사결정 중간 산출물과 정책 결과를 담은 상세 구조."""
     decision_process: dict[str, object]
+    """현재 계획/대화 모드 관련 운영 진단 정보."""
+    plan_diagnostics: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -132,6 +136,11 @@ class SimulationEngine:
             policy_suppress_reason=policy_result.suppress_reason,
             policy_fallback_reason=policy_result.fallback_reason,
             final_reply=policy_result.reply,
+            speaker=speaker,
+        )
+        plan_diagnostics = observability.plan_diagnostics
+        should_finish_dialogue = (
+            self.session.dialogue_mode == "arc" and action_result.end_dialogue
         )
 
         if not policy_result.reply:
@@ -145,7 +154,7 @@ class SimulationEngine:
             )
             if not silent_reason:
                 silent_reason = "unknown"
-            if action_result.end_dialogue:
+            if should_finish_dialogue:
                 self.session.finish_dialogue()
             return SimulationStepResult(
                 now=now,
@@ -155,6 +164,7 @@ class SimulationEngine:
                 silent_reason=silent_reason,
                 parse_failure=parse_failure,
                 observability=observability,
+                plan_diagnostics=plan_diagnostics,
             )
 
         self.session.commit_speaker_reply(
@@ -168,7 +178,7 @@ class SimulationEngine:
             now=now,
             language=self.config.language,
         )
-        if action_result.end_dialogue:
+        if should_finish_dialogue:
             self.session.finish_dialogue()
         return SimulationStepResult(
             now=now,
@@ -178,6 +188,7 @@ class SimulationEngine:
             silent_reason="",
             parse_failure=parse_failure,
             observability=observability,
+            plan_diagnostics=plan_diagnostics,
         )
 
     def _build_observability(
@@ -187,8 +198,13 @@ class SimulationEngine:
         policy_suppress_reason: str,
         policy_fallback_reason: str,
         final_reply: str,
+        speaker: SimAgent,
     ) -> SimulationStepObservability:
         diagnostics = action_result.diagnostics
+        plan_diagnostics = self._build_plan_diagnostics(
+            speaker=speaker,
+            action_result=action_result,
+        )
         return SimulationStepObservability(
             thought=diagnostics.thought if diagnostics else "",
             model_thought=diagnostics.model_thought if diagnostics else "",
@@ -201,7 +217,35 @@ class SimulationEngine:
                 policy_fallback_reason=policy_fallback_reason,
                 final_reply=final_reply,
             ),
+            plan_diagnostics=plan_diagnostics,
         )
+
+    def _build_plan_diagnostics(
+        self,
+        *,
+        speaker: SimAgent,
+        action_result: ActionLoopResult,
+    ) -> dict[str, object]:
+        profile = getattr(speaker, "profile", None)
+        extended = getattr(profile, "extended", None)
+        current_plan_context = list(getattr(extended, "current_plan_context", []))
+        active_plan = current_plan_context[0] if current_plan_context else None
+        end_dialogue_honored = (
+            self.session.dialogue_mode == "arc" and action_result.end_dialogue
+        )
+        return {
+            "dialogue_mode": self.session.dialogue_mode,
+            "dialogue_goal": self.session.dialogue_goal,
+            "dialogue_turns_taken": self.session.dialogue_turns_taken,
+            "dialogue_target_turns": self.session.dialogue_target_turns,
+            "model_requested_end_dialogue": action_result.end_dialogue,
+            "end_dialogue_honored": end_dialogue_honored,
+            "active_plan": active_plan,
+            "current_plan_context": current_plan_context,
+            "current_plan_item": action_result.current_plan_item,
+            "plan_updated": action_result.plan_updated,
+            "replan_reason": action_result.replan_reason,
+        }
 
     def _build_decision_process(
         self,
@@ -224,6 +268,11 @@ class SimulationEngine:
             "speak_decision": action_result.speak_decision,
             "end_dialogue": action_result.end_dialogue,
         }
+        base_process["plan"] = {
+            "current_plan_item": action_result.current_plan_item,
+            "plan_updated": action_result.plan_updated,
+            "replan_reason": action_result.replan_reason,
+        }
         return base_process
 
     def _build_inactive_step_result(
@@ -235,6 +284,19 @@ class SimulationEngine:
         now = current_time + datetime.timedelta(
             seconds=self.config.turn_time_step_seconds
         )
+        plan_diagnostics = {
+            "dialogue_mode": self.session.dialogue_mode,
+            "dialogue_goal": self.session.dialogue_goal,
+            "dialogue_turns_taken": self.session.dialogue_turns_taken,
+            "dialogue_target_turns": self.session.dialogue_target_turns,
+            "model_requested_end_dialogue": False,
+            "end_dialogue_honored": False,
+            "active_plan": None,
+            "current_plan_context": [],
+            "current_plan_item": "",
+            "plan_updated": False,
+            "replan_reason": "",
+        }
         return SimulationStepResult(
             now=now,
             speaker_name=speaker.name,
@@ -261,7 +323,9 @@ class SimulationEngine:
                         "end_dialogue": False,
                     },
                 },
+                plan_diagnostics=plan_diagnostics,
             ),
+            plan_diagnostics=plan_diagnostics,
         )
 
     def _run_action_loop(

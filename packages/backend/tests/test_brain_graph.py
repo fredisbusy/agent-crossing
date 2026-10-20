@@ -4,8 +4,13 @@ from typing import Literal, cast
 import numpy as np
 from agents.agent import AgentIdentity, AgentProfile, ExtendedPersona, FixedPersona
 from agents.brain import ActionLoopInput, ActionLoopResult, AgentBrainGraphRunner
-from agents.planning.models import DayPlanBroadStrokesRequest, DayPlanItem
 from agents.memory.memory_object import MemoryObject, NodeType
+from agents.planning.models import (
+    DayPlanBroadStrokesRequest,
+    DayPlanItem,
+    HourlyPlanItem,
+    MinutePlanItem,
+)
 from agents.reaction import ReactionDecision, ReactionDecisionTrace
 
 
@@ -57,6 +62,27 @@ class StubMemoryManager:
         self.calls.append("get_retrieval_memories")
         return []
 
+    def create_plan(
+        self,
+        *,
+        content: str,
+        now: datetime.datetime,
+        context: object,
+        importance: int | None = None,
+    ) -> MemoryObject:
+        _ = content, context, importance
+        self.calls.append("create_plan")
+        return MemoryObject(
+            id=2,
+            node_type=NodeType.PLAN,
+            citations=None,
+            content="plan",
+            created_at=now,
+            last_accessed_at=now,
+            importance=6,
+            embedding=np.zeros(2, dtype=np.float32),
+        )
+
 
 class StubReflectionGraph:
     def __init__(self, calls: list[str], *, should_reflect: bool):
@@ -102,8 +128,44 @@ class StubPlanner:
         self.calls.append(f"generate_day_plan:{request.agent_name}")
         return [
             DayPlanItem(
-                start_time=datetime.datetime(2026, 3, 3, 9, 0, 0),
-                end_time=datetime.datetime(2026, 3, 3, 10, 0, 0),
+                start_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+                end_time=datetime.datetime(2026, 3, 3, 14, 0, 0),
+                location="Town > Home > Desk",
+                action_content="Work through a composition block.",
+            )
+        ]
+
+    def generate_hourly_plan(
+        self,
+        *,
+        agent_name: str,
+        current_time: datetime.datetime,
+        day_plan_item: DayPlanItem,
+    ) -> list[HourlyPlanItem]:
+        _ = current_time, day_plan_item
+        self.calls.append(f"generate_hourly_plan:{agent_name}")
+        return [
+            HourlyPlanItem(
+                start_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+                end_time=datetime.datetime(2026, 3, 3, 13, 0, 0),
+                location="Town > Home > Desk",
+                action_content="Draft composition exercises.",
+            )
+        ]
+
+    def generate_minute_plan(
+        self,
+        *,
+        agent_name: str,
+        current_time: datetime.datetime,
+        hourly_plan_item: HourlyPlanItem,
+    ) -> list[MinutePlanItem]:
+        _ = current_time, hourly_plan_item
+        self.calls.append(f"generate_minute_plan:{agent_name}")
+        return [
+            MinutePlanItem(
+                start_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+                end_time=datetime.datetime(2026, 3, 3, 12, 10, 0),
                 location="Town > Home > Desk",
                 action_content="Draft a composition exercise.",
             )
@@ -237,7 +299,7 @@ def test_brain_graph_runs_reflection_before_retrieval_when_needed() -> None:
     ]
 
 
-def test_brain_graph_seeds_plan_context_with_planner_when_missing() -> None:
+def test_brain_graph_updates_plan_context_after_retrieval() -> None:
     calls: list[str] = []
     memory = StubMemoryManager(calls)
     profile = _profile()
@@ -266,4 +328,49 @@ def test_brain_graph_seeds_plan_context_with_planner_when_missing() -> None:
     )
 
     assert profile.extended.current_plan_context == ["Draft a composition exercise."]
-    assert calls[0] == "generate_day_plan:Jiho"
+    assert calls == [
+        "encode_observation",
+        "create_observation",
+        "record_observation_importance",
+        "should_reflect",
+        "get_retrieval_memories",
+        "generate_day_plan:Jiho",
+        "generate_hourly_plan:Jiho",
+        "generate_minute_plan:Jiho",
+        "decide_reaction",
+    ]
+
+
+def test_brain_graph_updates_plan_memory_after_partner_utterance() -> None:
+    calls: list[str] = []
+    memory = StubMemoryManager(calls)
+    graph = AgentBrainGraphRunner(
+        agent_identity=AgentIdentity(
+            id="jiho",
+            name="Jiho",
+            age=29,
+            traits=["kind"],
+        ),
+        memory_manager=memory,
+        embedding_encoder=memory.embedding_encoder,
+        reflection_graph=StubReflectionGraph(calls, should_reflect=False),
+        llm_gateway=StubLlmGateway(calls),
+        observation_writer=_ignore_observation,
+        planner=StubPlanner(calls),
+    )
+
+    result = graph.run(
+        ActionLoopInput(
+            current_time=datetime.datetime(2026, 3, 3, 12, 1, 0),
+            dialogue_history=[("새 디카프 블렌드 반응이 좋아요.", "")],
+            profile=_profile(),
+            language=cast(Literal["ko", "en"], "ko"),
+            observed_entities=["Sujin"],
+        )
+    )
+
+    assert result.plan_updated is True
+    assert result.replan_reason == "dialogue_partner_utterance"
+    assert "Continue the open conversation with Sujin" in result.current_plan_item
+    assert calls.index("get_retrieval_memories") < calls.index("create_plan")
+    assert calls.index("create_plan") < calls.index("decide_reaction")

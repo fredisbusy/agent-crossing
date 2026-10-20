@@ -115,8 +115,14 @@ def test_step_commits_reply_and_broadcasts_to_partner() -> None:
     assert speaker.brain.last_input.dialogue_arc is not None
     assert speaker.brain.last_input.dialogue_arc.phase == "opening"
     assert speaker.brain.last_input.dialogue_arc.target_turns == 5
+    assert speaker.brain.last_input.world_context == {
+        "location": "Morning Dew Cafe near the counter",
+        "focus": "Jiho is talking with Sujin during a short cafe visit",
+    }
     assert speaker.brain.queued == ["나는 이렇게 말했다: 안녕하세요"]
     assert partner.brain.queued == ["Jiho가 이렇게 말했다: 안녕하세요"]
+    assert result.plan_diagnostics["dialogue_mode"] == "arc"
+    assert result.observability.plan_diagnostics == result.plan_diagnostics
 
 
 def test_step_suppresses_repeated_reply_when_policy_enabled() -> None:
@@ -339,3 +345,58 @@ def test_step_finishes_session_when_action_marks_dialogue_end() -> None:
     assert follow_up.reply == ""
     assert follow_up.silent_reason == "dialogue_session_ended"
     assert partner.brain.last_input is None
+
+
+def test_step_keeps_open_mode_active_when_action_marks_dialogue_end() -> None:
+    speaker = DummyAgent(
+        name="Jiho",
+        profile=object(),
+        brain=DummyBrain(
+            next_result=ActionLoopResult(
+                current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+                talk="조금 더 이야기해요.",
+                utterance="조금 더 이야기해요.",
+                end_dialogue=True,
+                diagnostics=_diagnostics(thought="계속 대화"),
+                reaction_trace=ReactionDecisionTrace(
+                    raw_response="",
+                    parse_success=True,
+                ),
+            ),
+            queued=[],
+            last_input=None,
+        ),
+    )
+    partner = DummyAgent(
+        name="Sujin",
+        profile=object(),
+        brain=DummyBrain(
+            next_result=ActionLoopResult(
+                current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+                talk="좋아요.",
+            ),
+            queued=[],
+            last_input=None,
+        ),
+    )
+    session = WorldConversationSession(
+        agents=cast(list[SimAgent], [speaker, partner]),
+        dialogue_turn_window=None,
+        dialogue_mode="open",
+    )
+    engine = SimulationEngine(session=session, config=_engine_config())
+
+    result = engine.step(
+        turn=1,
+        current_time=datetime.datetime(2026, 3, 3, 12, 0, 0),
+        speaker=cast(SimAgent, cast(object, speaker)),
+        speaking_partner=cast(SimAgent, cast(object, partner)),
+    )
+
+    assert result.reply == "조금 더 이야기해요."
+    assert session.is_active is True
+    assert speaker.brain.last_input is not None
+    assert speaker.brain.last_input.dialogue_arc is None
+    assert result.plan_diagnostics["dialogue_mode"] == "open"
+    assert result.plan_diagnostics["model_requested_end_dialogue"] is True
+    assert result.plan_diagnostics["end_dialogue_honored"] is False

@@ -68,6 +68,10 @@ def test_default_turn_time_step_seconds() -> None:
     assert DEFAULT_CONFIG.turn_time_step_seconds == 45
 
 
+def test_default_dialogue_mode_is_open() -> None:
+    assert DEFAULT_CONFIG.dialogue_mode == "open"
+
+
 def test_semantic_repeat_rate_detects_highly_similar_replies() -> None:
     history = [
         ("Jiho Park", "오늘은 커피 이야기하자"),

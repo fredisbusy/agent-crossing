@@ -6,6 +6,7 @@ import numpy as np
 
 from agents.agent import AgentProfile
 from agents.memory.memory_object import MemoryObject
+from agents.planning.models import MinutePlanItem
 from agents.reaction import DialogueArc, ReactionDecisionTrace
 
 from ..decision_diagnostics import ActionDiagnostics
@@ -29,6 +30,10 @@ class DetermineContext:
     dialogue_arc: DialogueArc | None
     profile: AgentProfile
     language: Literal["ko", "en"]
+    current_plan_item: MinutePlanItem | None = None
+    next_plan_item: MinutePlanItem | None = None
+    plan_updated: bool = False
+    replan_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -65,3 +70,9 @@ class ActionLoopResult:
     """LLM governance에서 생성한 reaction 추적 정보."""
     diagnostics: ActionDiagnostics | None = None
     """행동 판단 관측용 진단 정보."""
+    current_plan_item: str = ""
+    """이번 tick에서 기준으로 사용한 현재 minute plan 설명."""
+    plan_updated: bool = False
+    """이번 tick에서 현재 이후 계획이 갱신되었는지 여부."""
+    replan_reason: str = ""
+    """계획 갱신 사유 코드."""

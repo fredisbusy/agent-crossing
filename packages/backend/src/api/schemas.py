@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class StatusResponse(BaseModel):
@@ -22,6 +22,7 @@ class WorldStepResponse(BaseModel):
     reply: str
     silent_reason: str
     trace: dict[str, object]
+    plan_diagnostics: dict[str, object] = Field(default_factory=dict)
     parse_failure_rate: float
     silent_rate: float
     semantic_repeat_rate: float

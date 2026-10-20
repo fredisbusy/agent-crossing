@@ -1,6 +1,6 @@
 import datetime
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from agents.agent import AgentProfile, ExtendedPersona, FixedPersona
@@ -90,15 +90,39 @@ def test_dialogue_turn_window_must_be_positive_if_provided() -> None:
         _ = WorldConversationSession(agents=agents, dialogue_turn_window=0)
 
 
+def test_dialogue_mode_must_be_known() -> None:
+    agents = cast(list[SimAgent], [DummyAgent(name="Jiho"), DummyAgent(name="Sujin")])
+
+    with pytest.raises(ValueError):
+        _ = WorldConversationSession(
+            agents=agents,
+            dialogue_turn_window=None,
+            dialogue_mode=cast(Any, "closed"),
+        )
+
+
 def test_build_turn_world_context_rotates_locations() -> None:
     context = build_turn_world_context(
-        speaker_name="Jiho",
-        partner_name="Sujin",
+        speaker_name="Mina",
+        partner_name="Tae",
         turn=5,
     )
 
-    assert context["location"] == "town square near Sujin"
-    assert context["focus"] == "Jiho is facing Sujin"
+    assert context["location"] == "town square near Tae"
+    assert context["focus"] == "Mina is facing Tae"
+
+
+def test_build_turn_world_context_keeps_jiho_sujin_at_morning_dew_cafe() -> None:
+    context = build_turn_world_context(
+        speaker_name="Jiho Park",
+        partner_name="Sujin Lee",
+        turn=3,
+    )
+
+    assert context == {
+        "location": "Morning Dew Cafe near the counter",
+        "focus": "Jiho Park is talking with Sujin Lee during a short cafe visit",
+    }
 
 
 def test_build_turn_observed_events_uses_partner_utterance_when_available() -> None:
@@ -191,6 +215,39 @@ def test_dialogue_arc_for_moves_into_closing_phase_near_target() -> None:
         phase="closing",
         should_wrap_up=True,
     )
+
+
+def test_dialogue_arc_for_returns_none_in_open_mode() -> None:
+    speaker = cast(
+        SimAgent,
+        cast(
+            object,
+            DummyInteractiveAgent(
+                name="Jiho",
+                profile=_profile(plans=["Talk with Sujin at Morning Dew Cafe."]),
+                brain=DummyBrain(queued=[]),
+            ),
+        ),
+    )
+    partner = cast(
+        SimAgent,
+        cast(
+            object,
+            DummyInteractiveAgent(
+                name="Sujin",
+                profile=_profile(plans=["Talk with Jiho at Morning Dew Cafe."]),
+                brain=DummyBrain(queued=[]),
+            ),
+        ),
+    )
+    session = WorldConversationSession(
+        agents=[speaker, partner],
+        dialogue_turn_window=None,
+        dialogue_mode="open",
+    )
+
+    assert session.dialogue_arc_for(speaker=speaker) is None
+    assert session.dialogue_goal is None
 
 
 def test_finish_dialogue_deactivates_session_and_clears_active_context() -> None:

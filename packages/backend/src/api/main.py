@@ -92,6 +92,7 @@ async def post_world_step() -> WorldStepResponse:
         reply=step_result.reply,
         silent_reason=step_result.silent_reason,
         trace=step_result.trace,
+        plan_diagnostics=step_result.plan_diagnostics,
         parse_failure_rate=metrics.parse_failure_rate,
         silent_rate=metrics.silent_rate,
         semantic_repeat_rate=metrics.semantic_repeat_rate,

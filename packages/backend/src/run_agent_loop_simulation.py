@@ -16,6 +16,7 @@ from settings import (
     LLM_TIMEOUT_SECONDS,
 )
 from world.runtime import WorldRuntimeConfig, build_world_runtime
+from world.session import DialogueMode
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,8 @@ class LoopSimulationConfig:
     """대화 이력 컨텍스트 윈도우(턴). None이면 전체 이력 사용."""
     dialogue_target_turns: int = 5
     """짧은 대화 아크에서 선호하는 목표 턴 수."""
+    dialogue_mode: DialogueMode = "open"
+    """대화 제어 모드. open은 자연 대화, arc는 짧은 대화 아크를 적용."""
     language: Literal["ko", "en"] = "ko"
     """시뮬레이션 언어."""
     fallback_on_empty_reply: bool = False
@@ -86,6 +89,7 @@ def _run_simulation(
             persona_dir=config.persona_dir,
             dialogue_turn_window=config.dialogue_turn_window,
             dialogue_target_turns=config.dialogue_target_turns,
+            dialogue_mode=config.dialogue_mode,
             language=language,
             fallback_on_empty_reply=config.fallback_on_empty_reply,
             suppress_repeated_replies=config.suppress_repeated_replies,
@@ -173,6 +177,7 @@ def _print_session_log_header(*, config: LoopSimulationConfig) -> None:
     print(f"- semantic_hard_threshold={SEMANTIC_HARD_BLOCK_THRESHOLD}")
     print(f"- semantic_soft_threshold={SEMANTIC_SOFT_PENALTY_THRESHOLD}")
     print(f"- dialogue_target_turns={config.dialogue_target_turns}")
+    print(f"- dialogue_mode={config.dialogue_mode}")
     print(f"- suppress_repeated_replies={config.suppress_repeated_replies}")
     print(f"- fallback_on_empty_reply={config.fallback_on_empty_reply}")
 

@@ -3,6 +3,7 @@ import datetime
 import numpy as np
 from agents.memory.memory_manager import MemoryManager
 from agents.memory.memory_manager import ObservationContext
+from agents.memory.memory_manager import PlanContext
 from agents.memory.memory_manager import ReflectionContext
 from agents.memory.memory_object import NodeType
 from agents.memory.memory_stream import MemoryStream
@@ -99,6 +100,33 @@ def test_create_observation_uses_scorer_value() -> None:
     )
 
     assert memory.importance == 3
+
+
+def test_create_plan_stores_plan_memory_and_scoring_context() -> None:
+    stream = MemoryStream()
+    scorer = StubScorer(score_value=8)
+    service = MemoryManager(
+        memory_stream=stream,
+        importance_scorer=scorer,
+        embedding_encoder=StubEmbeddingEncoder(),
+    )
+
+    now = datetime.datetime(2026, 2, 13, 12, 0, 0)
+    memory = service.create_plan(
+        content="current_minute_plan=Sketch the first phrase.",
+        now=now,
+        context=PlanContext(
+            agent_name="Jiho Park",
+            identity_stable_set=["Jiho values musical practice."],
+            current_plan="Sketch the first phrase.",
+        ),
+    )
+
+    assert memory.node_type == NodeType.PLAN
+    assert memory.citations is None
+    assert memory.importance == 8
+    assert scorer.last_context is not None
+    assert scorer.last_context.current_plan == "Sketch the first phrase."
 
 
 def test_create_reflection_stores_filtered_citations_and_scored_importance() -> None:

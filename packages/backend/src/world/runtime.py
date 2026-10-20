@@ -14,7 +14,7 @@ from llm.clients.provider_factory import build_provider_client
 from agents.world_factory import init_agents
 
 from .engine import SimulationEngine, SimulationEngineConfig, SimulationStepResult
-from .session import WorldConversationSession
+from .session import DialogueMode, WorldConversationSession
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,7 @@ class WorldRuntimeConfig:
     persona_dir: str
     dialogue_turn_window: int | None = None
     dialogue_target_turns: int = 5
+    dialogue_mode: DialogueMode = "arc"
     language: Literal["ko", "en"] = "ko"
     fallback_on_empty_reply: bool = False
     suppress_repeated_replies: bool = True
@@ -168,6 +169,7 @@ def build_world_runtime(*, config: WorldRuntimeConfig) -> WorldRuntime:
         agents=agents,
         dialogue_turn_window=config.dialogue_turn_window,
         dialogue_target_turns=config.dialogue_target_turns,
+        dialogue_mode=config.dialogue_mode,
     )
     engine = SimulationEngine(
         session=session,

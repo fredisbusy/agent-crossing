@@ -155,7 +155,9 @@ async def test_post_world_step_returns_metrics_and_trace() -> None:
                 decision_reason="",
                 action_summary="react_to_partner",
                 decision_process={},
+                plan_diagnostics={"dialogue_mode": "open"},
             ),
+            plan_diagnostics={"dialogue_mode": "open"},
         ),
         _metrics=ConversationMetrics(
             parse_failure_rate=0.0,
@@ -171,6 +173,7 @@ async def test_post_world_step_returns_metrics_and_trace() -> None:
     assert response.turn == 1
     assert response.speaker_name == "Jiho"
     assert response.reply == "안녕하세요"
+    assert response.plan_diagnostics == {"dialogue_mode": "open"}
     assert response.parse_failure_rate == 0.0
 
 
