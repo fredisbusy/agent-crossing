@@ -1,0 +1,21 @@
+{
+  "resident_id": "sam_moore",
+  "display_name": "Sam Moore",
+  "age": 70,
+  "description": [
+    "Sam Moore is a retired man who enjoys walking in Johnson Park.",
+    "Sam is kind, talkative, and cares about his neighbors."
+  ],
+  "mind": "schedule",
+  "agent_priority": 7,
+  "home_location": "Smallville > Moore Family House > Living Room",
+  "start_location": "Smallville > Moore Family House > Living Room",
+  "archetype": "retiree",
+  "placeholders": {
+    "home": "Smallville > Moore Family House > Living Room",
+    "bedroom": "Smallville > Moore Family House > Bedroom"
+  },
+  "seed_memories": [
+    "Sam lives with his wife Jennifer."
+  ]
+}
