@@ -1,0 +1,21 @@
+{
+  "resident_id": "mei_lin",
+  "display_name": "Mei Lin",
+  "age": 43,
+  "description": [
+    "Mei Lin is a professor at Oak Hill College and John's wife.",
+    "Mei is supportive of her family and her students."
+  ],
+  "mind": "schedule",
+  "agent_priority": 5,
+  "home_location": "Smallville > Lin Family House > Kitchen",
+  "start_location": "Smallville > Lin Family House > Kitchen",
+  "archetype": "professor",
+  "placeholders": {
+    "home": "Smallville > Lin Family House > Kitchen",
+    "bedroom": "Smallville > Lin Family House > Bedroom"
+  },
+  "seed_memories": [
+    "Mei teaches classes at Oak Hill College."
+  ]
+}
