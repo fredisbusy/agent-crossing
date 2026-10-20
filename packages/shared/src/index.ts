@@ -14,3 +14,5 @@ export interface WorldAgentState {
   emoji: string | null;
   timestamp: string;
 }
+
+export * from "./world";
