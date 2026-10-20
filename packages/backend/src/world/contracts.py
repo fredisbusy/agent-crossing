@@ -7,7 +7,7 @@
 import datetime
 from typing import Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ResidentId = str
 """주민 식별자. 주민 설정 파일의 `resident_id`."""
@@ -55,6 +55,14 @@ class SpeechAct(_Frozen):
     """`invite`의 시작 시각."""
     location_path: LocationPath | None = None
     """`invite`의 장소."""
+
+    @field_validator("start_time")
+    @classmethod
+    def _naive_sim_time(cls, value: datetime.datetime | None) -> datetime.datetime | None:
+        """시뮬레이션 시계는 시간대 없는(naive) 시각이다. 시간대가 붙어 오면 떼어 맞춘다."""
+        if value is None or value.tzinfo is None:
+            return value
+        return value.replace(tzinfo=None)
 
 
 class Utterance(_Frozen):
