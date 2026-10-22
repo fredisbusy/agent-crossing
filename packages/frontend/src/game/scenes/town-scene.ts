@@ -4,7 +4,7 @@ import { DEFAULT_TICK_INTERVAL_MS } from "../../net";
 import { useWorldStore } from "../../stores";
 import { DaylightLayer } from "../daylight";
 import { buildTownMap, LocationOverlay, preloadTownMap } from "../map";
-import { BubbleTracker, MotionTracker, ResidentView, SpotMap } from "../residents";
+import { BubbleTracker, MotionTracker, ResidentView, resolveTagOffsets, SpotMap } from "../residents";
 import { attachCameraControls } from "./camera-controls";
 
 export const TOWN_SCENE_KEY = "TownScene";
@@ -111,5 +111,12 @@ export class TownScene extends Phaser.Scene {
       view.placeAtTile(position.x, position.y);
       view.update(resident, this.bubbles.textAt(resident.resident_id, this.clockMs), resident.resident_id === selected);
     }
+    // 가까운 주민의 이름표가 서로 덮지 않게 매 프레임 비킨다.
+    const boxes = this.residents.flatMap((r) => {
+      const view = this.views.get(r.resident_id);
+      return view ? [view.tagBox(r.resident_id, r.resident_id === selected)] : [];
+    });
+    const offsets = resolveTagOffsets(boxes);
+    for (const [id, offset] of offsets) this.views.get(id)?.setTagOffset(offset);
   }
 }

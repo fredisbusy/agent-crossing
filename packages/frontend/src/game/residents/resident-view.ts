@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { ResidentSnapshot } from "@agent-crossing/shared";
 import { TILE_SIZE } from "../../town-layout";
 import { isPixelKitEnabled, PIXEL_KIT_ATLAS_KEY } from "../map/pixel-kit";
-import { NameTag, SpeechBubble } from "./labels";
+import { NameTag, SpeechBubble, type TagBox, type TagOffset } from "./labels";
 import { choosePose, classifyAction, type ActionKind, type Pose, type SpotMap } from "./pose";
 import { VillagerFigure } from "./villager-figure";
 
@@ -18,7 +18,10 @@ const VILLAGER_HEIGHT = 32;
 /** 머리 위 아이콘·말풍선 꼬리 끝과 머리 꼭대기 사이(월드 px). */
 const HEAD_GAP = 2;
 /** 이름표는 발밑에서 이만큼(월드 px) 아래에 선다. */
-const TAG_GAP = 2;
+const TAG_GAP = 5;
+/** 머리 위 행동 아이콘의 화면 기준 최소 크기(px). 그림은 16px. */
+const ICON_MIN_SCREEN_PX = 20;
+const ICON_ART_PX = 16;
 /** 이름표는 모든 주민 몸 위, 말풍선은 그 위. 말풍선끼리는 나중에 뜬 것이 위(depth에 시각을 더한다). */
 const TAG_DEPTH = 100_000;
 const BUBBLE_DEPTH = 200_000;
@@ -52,6 +55,10 @@ export class ResidentView {
   private readonly overlay: Phaser.GameObjects.Container;
   private readonly ring: Phaser.GameObjects.Graphics;
   private readonly figure: VillagerFigure | null;
+  private readonly tag: NameTag;
+  private readonly footY: number;
+  private tagBedBottom: number | null = null;
+  private tagOffset: TagOffset = { dx: 0, dy: 0 };
   private readonly tagLayer: Phaser.GameObjects.Container;
   private readonly bubbleLayer: Phaser.GameObjects.Container;
   private readonly bubble: SpeechBubble;
@@ -106,8 +113,9 @@ export class ResidentView {
       this.emojiText,
     ]);
 
-    const tag = new NameTag(scene, resident.display_name, usePixelKit);
-    this.tagLayer = scene.add.container(0, footY + TAG_GAP, [tag.container]);
+    this.tag = new NameTag(scene, resident.display_name, usePixelKit);
+    this.footY = footY;
+    this.tagLayer = scene.add.container(0, footY + TAG_GAP, [this.tag.container]);
     this.bubble = new SpeechBubble(scene, usePixelKit);
     this.bubbleLayer = scene.add.container(0, this.topY - HEAD_GAP, [this.bubble.container]);
     this.overlay = scene.add.container(0, 0, [this.iconLayer, this.tagLayer, this.bubbleLayer]);
@@ -141,6 +149,28 @@ export class ResidentView {
     this.syncLabels(resident, kind, bubble);
   }
 
+  /** 이름표의 월드 좌표 사각형(겹침 회피용). 선택된 주민·아래쪽 주민이 우선. */
+  tagBox(id: string, selected: boolean): TagBox {
+    const inverse = 1 / this.scene.cameras.main.zoom;
+    return {
+      id,
+      x: this.container.x,
+      top: this.pxY + this.tagY(),
+      width: this.tag.width * inverse,
+      height: this.tag.height * inverse,
+      priority: (selected ? 1_000_000 : 0) + this.pxY,
+    };
+  }
+
+  setTagOffset(offset: TagOffset): void {
+    this.tagOffset = offset;
+    this.tagLayer.setPosition(offset.dx, this.tagY() + offset.dy);
+  }
+
+  private tagY(): number {
+    return (this.tagBedBottom ?? this.footY) + TAG_GAP;
+  }
+
   destroy(): void {
     this.container.destroy();
     this.overlay.destroy();
@@ -151,6 +181,8 @@ export class ResidentView {
     const spot = moving ? null : this.spots.spotAt(this.tile.x, this.tile.y);
     const pose = choosePose({ kind, moving, spot });
     const bedFoot = pose.bed ? pose.bed.bottomPx - this.pxY : VILLAGER_FOOT_Y;
+    // 자는 동안 이름표는 침대 그림 아래로 비켜 침대·베개를 가리지 않게 한다.
+    this.tagBedBottom = pose.bed ? bedFoot : null;
     this.figure.apply(pose, bedFoot);
     this.container.setDepth(this.pxY + this.depthBias(pose));
   }
@@ -164,6 +196,8 @@ export class ResidentView {
   private syncLabels(resident: ResidentSnapshot, kind: ActionKind | null, bubble: string | null): void {
     const inverse = 1 / this.scene.cameras.main.zoom;
     this.tagLayer.setScale(inverse);
+    this.tagLayer.setPosition(this.tagOffset.dx, this.tagY() + this.tagOffset.dy);
+    this.iconLayer.setScale(Math.max(1, ICON_MIN_SCREEN_PX / (ICON_ART_PX * this.scene.cameras.main.zoom)));
     this.bubbleLayer.setScale(inverse);
     if (bubble !== this.bubbleShown) {
       if (bubble) this.showBubble(bubble);

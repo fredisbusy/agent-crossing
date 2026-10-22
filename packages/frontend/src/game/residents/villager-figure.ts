@@ -18,6 +18,10 @@ const ACT_ANIMS: Readonly<Record<Exclude<PoseAct, "sleep">, { ms: readonly numbe
 const SLEEP_MS = [900, 900] as const;
 /** 프레임 사이 이동이 이 타일 수보다 작으면 멈춘 것으로 본다. */
 const MOVE_EPSILON = 0.002;
+/** 한 프레임에 이만큼(타일) 넘게 옮겨졌으면 걸은 게 아니라 순간이동이다(걷기 포즈로 보지 않는다). */
+const TELEPORT_TILES = 1.5;
+/** 앉으면 몸을 이만큼(월드 px) 내려 엉덩이가 의자 좌석 높이에 오게 한다. */
+const SIT_DROP = 3;
 
 const animKey = (look: string, act: PoseAct, facing: SheetFacing | null): string =>
   act === "sleep" ? `villager_${look}_sleep` : `villager_${look}_${act}_${facing ?? "down"}`;
@@ -64,7 +68,8 @@ export class VillagerFigure {
     const dx = this.last ? x - this.last.x : 0;
     const dy = this.last ? y - this.last.y : 0;
     this.last = { x, y };
-    this.moving = Math.abs(dx) > MOVE_EPSILON || Math.abs(dy) > MOVE_EPSILON;
+    const jumped = Math.abs(dx) > TELEPORT_TILES || Math.abs(dy) > TELEPORT_TILES;
+    this.moving = !jumped && (Math.abs(dx) > MOVE_EPSILON || Math.abs(dy) > MOVE_EPSILON);
     if (this.moving) this.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
     return this.moving;
   }
@@ -78,7 +83,7 @@ export class VillagerFigure {
     const sheetFacing: SheetFacing = this.facing === "left" ? "right" : this.facing;
     const key = animKey(this.look, pose.act, sheetFacing);
     this.sprite.setFlipX(pose.act !== "sleep" && this.facing === "left");
-    this.sprite.setY(pose.act === "sleep" ? sleepFootY : this.footY);
+    this.sprite.setY(pose.act === "sleep" ? sleepFootY : this.footY + (pose.act === "sit" ? SIT_DROP : 0));
     if (this.sprite.anims.currentAnim?.key !== key) this.sprite.play(key);
   }
 }
