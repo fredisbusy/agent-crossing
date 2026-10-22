@@ -57,6 +57,13 @@
     - [x] 중요 이벤트(high importance)가 retrieval 상위에 노출되는지 확인한다
     - [x] `pnpm test:backend` 또는 `uv run pytest`가 통과한다
 
+- [x] `P1` 임베딩 호출·relevance 계산을 최적화한다 (SPEC §5 공식은 그대로)
+  - DoD:
+    - [x] 같은 텍스트는 LRU 캐시로 재임베딩하지 않는다 (`EMBEDDING_CACHE_SIZE`, 주민 간 공유)
+    - [x] 여러 문장은 `embed_many` 한 번의 요청으로 묶는다
+    - [x] relevance를 기억마다 반복하지 않고 행렬 연산 한 번으로 계산한다
+    - [x] 캐시·배치·LRU 축출 단위 테스트를 추가한다
+
 ## 2) Reflection Loop (논문 핵심 2)
 
 ### 2-A. Trigger와 누적값 관리

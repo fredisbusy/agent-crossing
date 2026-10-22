@@ -94,9 +94,7 @@ class MemoryStream:
             self._calculate_recency_score(m, current_time) for m in memories
         ]
         raw_importances = [float(m.importance) for m in memories]
-        raw_relevancies = [
-            self._calculate_relevance_score(m, query_embedding) for m in memories
-        ]
+        raw_relevancies = self._calculate_relevance_scores(memories, query_embedding)
 
         min_rec, max_rec = min(raw_recencies), max(raw_recencies)
         min_imp, max_imp = min(raw_importances), max(raw_importances)
@@ -130,28 +128,32 @@ class MemoryStream:
         recency = 0.995**hour_since_last_access
         return recency
 
-    def _calculate_relevance_score(
-        self, memory: MemoryObject, query_embedding: np.ndarray
-    ) -> float:
+    def _calculate_relevance_scores(
+        self, memories: list[MemoryObject], query_embedding: np.ndarray
+    ) -> list[float]:
         """
-        Relevance score를 계산한다.
+        모든 memory의 relevance score를 한 번의 행렬 연산으로 계산한다.
         - 반환 범위: `[-1.0, 1.0]`
 
         공식:
         - `cosine_similarity(a, b) = (a · b) / (||a|| * ||b||)`
         - `relevance = cosine_similarity(query_embedding, memory.embedding)`
+        - query나 memory의 norm이 0이거나 query 차원이 틀리면 0.0
         """
         try:
             validate_embedding_dimension(
                 query_embedding, expected_dimension=EMBEDDING_DIMENSION
             )
         except ValueError:
-            return 0.0
+            return [0.0 for _ in memories]
 
-        try:
-            return cosine_similarity(query_embedding, memory.embedding)
-        except ValueError:
-            return 0.0
+        query = query_embedding.astype(np.float64)
+        matrix = np.stack([m.embedding for m in memories]).astype(np.float64)
+        norms = np.linalg.norm(matrix, axis=1) * np.linalg.norm(query)
+        dots = matrix @ query
+        safe_norms = np.where(norms == 0, 1.0, norms)
+        relevancies = np.where(norms == 0, 0.0, dots / safe_norms)
+        return [float(value) for value in relevancies]
 
     def _normalize(self, score: float, min_val: float, max_val: float) -> float:
         """
