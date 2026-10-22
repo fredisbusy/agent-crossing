@@ -25,3 +25,15 @@ def test_same_situation_gives_same_text() -> None:
 
     assert first == second
     assert first.endswith("사건: a; b.")
+
+
+def test_english_observation_uses_english_template() -> None:
+    text = build_observation_text(
+        agent_name="Isabella",
+        location="park bench",
+        observed_entities=["Klaus"],
+        observed_events=None,
+        language="en",
+    )
+
+    assert text == "Isabella is at park bench. Nearby: Klaus."
