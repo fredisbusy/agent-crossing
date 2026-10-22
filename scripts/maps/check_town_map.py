@@ -2,7 +2,8 @@
 
 사용: python3 scripts/maps/check_town_map.py [--fix-collision] [맵 경로]
 - 배치와 무관한 규칙만 본다: 레이어·타일 값, 객체 이름·크기, 장소 트리, 주민이 쓰는 장소,
-  길에서 모든 장소·의자·문 매트까지 걸어서 닿는지, collision이 ground·장식에서 나온 값과 같은지.
+  길에서 모든 장소·의자·문 매트까지 걸어서 닿는지, collision이 ground·장식에서 나온 값과 같은지,
+  건물마다 정면(`facades`)이 건물 아래 세 줄에 붙어 있는지.
 - `--fix-collision`: collision 레이어를 ground + 막는 장식으로 다시 계산해 저장한다(손으로 칠하지 않는다).
 외부 의존 없음. 문제가 있으면 목록을 찍고 1로 끝난다.
 """
@@ -16,6 +17,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from town_buildings import FRONT_ROWS  # noqa: E402
 from town_decor import DECOR_FRAMES, DecorItem, blocked_cells  # noqa: E402
 from town_furniture import FRAME_CELLS, WALKABLE_FRAMES  # noqa: E402
 
@@ -145,6 +147,38 @@ def check_locations(raw: Raw, errors: list[str]) -> dict[str, Raw]:
     return by_path
 
 
+def check_facades(raw: Raw, by_path: dict[str, Raw], errors: list[str]) -> None:
+    """`facades`(있으면): 이름 = 벽이 있는 건물, 사각형 = 건물 아래 FRONT_ROWS줄, 아래 줄에 바깥 문 하나."""
+    facades = layer(raw, "facades", "objectgroup")
+    if facades is None:
+        return
+    width = raw["width"]
+    ground = layer(raw, "ground", "tilelayer")["data"]  # type: ignore[index]
+    buildings = {
+        path.split(SEP)[1]: o
+        for path, o in by_path.items()
+        if path.count(SEP) == 1 and any(ground[y * width + x] == WALL for x, y in cells_of(o))
+    }
+    seen: set[str] = set()
+    for f in facades.get("objects", []):
+        name = f["name"]
+        building = buildings.get(name)
+        if building is None:
+            errors.append(f"정면 '{name}'(id {f['id']})에 맞는 건물(벽이 있는 장소)이 없다.")
+            continue
+        seen.add(name)
+        bx, by, bw, bh = rect_of(building)
+        if rect_of(f) != (bx, by + bh - FRONT_ROWS, bw, FRONT_ROWS):
+            errors.append(f"정면 '{name}'은 건물 사각형의 아래 {FRONT_ROWS}줄이어야 한다(건물을 옮겼으면 정면도 옮긴다).")
+            continue
+        bottom = by + bh - 1
+        doors = [x for x in range(bx, bx + bw) if ground[bottom * width + x] == DOOR]
+        if len(doors) != 1:
+            errors.append(f"정면 '{name}' 아래 줄에 바깥 문(7)이 하나여야 하는데 {len(doors)}개다.")
+    for name in sorted(set(buildings) - seen):
+        errors.append(f"건물 '{name}'에 정면(facades 객체)이 없다.")
+
+
 def reachable_from_roads(raw: Raw, collision: list[int]) -> tuple[set[Cell], int] | None:
     """첫 길 칸에서 걸어서 닿는 칸들과, 거기서 끊긴 길 칸 수. 길이 없으면 None."""
     width, height = raw["width"], raw["height"]
@@ -192,6 +226,7 @@ def check(raw: Raw) -> list[str]:
     if layer(raw, "collision", "tilelayer")["data"] != collision:  # type: ignore[index]
         errors.append("collision이 ground·장식과 맞지 않는다. --fix-collision으로 다시 계산한다.")
     check_reachability(raw, collision, by_path, errors)
+    check_facades(raw, by_path, errors)
     return errors
 
 
