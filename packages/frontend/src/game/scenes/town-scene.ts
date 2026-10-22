@@ -3,7 +3,7 @@ import type { ResidentSnapshot } from "@agent-crossing/shared";
 import { DEFAULT_TICK_INTERVAL_MS } from "../../net";
 import { useWorldStore } from "../../stores";
 import { buildTownMap, LocationOverlay, preloadTownMap } from "../map";
-import { BubbleTracker, MotionTracker, ResidentView } from "../residents";
+import { BubbleTracker, MotionTracker, ResidentView, SpotMap } from "../residents";
 import { attachCameraControls } from "./camera-controls";
 
 export const TOWN_SCENE_KEY = "TownScene";
@@ -23,6 +23,7 @@ export class TownScene extends Phaser.Scene {
   private readonly views = new Map<string, ResidentView>();
   private residents: readonly ResidentSnapshot[] = [];
   private overlay: LocationOverlay | null = null;
+  private spots = new SpotMap([], []);
   private unsubscribe: (() => void) | null = null;
 
   constructor() {
@@ -37,6 +38,7 @@ export class TownScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor("#5a8f5e");
     const town = buildTownMap(this);
     this.overlay = new LocationOverlay(this, town.areas);
+    this.spots = new SpotMap(town.furniture, town.decor);
     attachCameraControls(this, town.widthPx, town.heightPx);
 
     const initial = useWorldStore.getState();
@@ -86,7 +88,7 @@ export class TownScene extends Phaser.Scene {
     }
     for (const resident of residents) {
       if (!this.views.has(resident.resident_id)) {
-        const view = new ResidentView(this, resident, (id) => useWorldStore.getState().selectResident(id));
+        const view = new ResidentView(this, resident, (id) => useWorldStore.getState().selectResident(id), this.spots);
         this.views.set(resident.resident_id, view);
       }
     }

@@ -1,71 +1,84 @@
 import Phaser from "phaser";
 import { PIXEL_KIT_ATLAS_KEY } from "../map/pixel-kit";
+import { villagerLookFor } from "./looks";
+import type { Pose, PoseAct } from "./pose";
 
-/** stardewrogue `people.ts`의 `LOOKS` 키. 주민 id 해시로 한 벌을 고른다. */
-const VILLAGER_LOOKS = ["a", "b", "c", "d", "e"] as const;
 const FACINGS = ["down", "up", "right"] as const;
-type Facing = (typeof FACINGS)[number] | "left";
-/** stardewrogue `people.ts` META 애니 시간(초기값). */
-const IDLE_MS = [2400, 150] as const;
-const WALK_MS = 150;
-const WALK_FRAMES = 4;
+type SheetFacing = (typeof FACINGS)[number];
+type Facing = SheetFacing | "left";
+
+/** 동작별 애니 프레임 수와 프레임당 시간(ms). 출처: stardewrogue `people.ts` META. */
+const ACT_ANIMS: Readonly<Record<Exclude<PoseAct, "sleep">, { ms: readonly number[] }>> = {
+  idle: { ms: [2400, 150] },
+  walk: { ms: [150, 150, 150, 150] },
+  sit: { ms: [1000] },
+  work: { ms: [280, 280] },
+  talk: { ms: [240, 200] },
+};
+const SLEEP_MS = [900, 900] as const;
 /** 프레임 사이 이동이 이 타일 수보다 작으면 멈춘 것으로 본다. */
 const MOVE_EPSILON = 0.002;
 
-export function villagerLookFor(id: string): string {
-  let hash = 0;
-  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return VILLAGER_LOOKS[hash % VILLAGER_LOOKS.length];
-}
+const animKey = (look: string, act: PoseAct, facing: SheetFacing | null): string =>
+  act === "sleep" ? `villager_${look}_sleep` : `villager_${look}_${act}_${facing ?? "down"}`;
 
-const animKey = (look: string, act: "idle" | "walk", facing: (typeof FACINGS)[number]): string =>
-  `villager_${look}_${act}_${facing}`;
+function createAnim(scene: Phaser.Scene, key: string, ms: readonly number[]): void {
+  if (scene.anims.exists(key)) return;
+  scene.anims.create({
+    key,
+    frames: ms.map((duration, i) => ({ key: PIXEL_KIT_ATLAS_KEY, frame: `${key}_${i}`, duration })),
+    repeat: -1,
+  });
+}
 
 function ensureAnims(scene: Phaser.Scene, look: string): void {
   for (const facing of FACINGS) {
-    const idle = animKey(look, "idle", facing);
-    if (!scene.anims.exists(idle)) {
-      scene.anims.create({
-        key: idle,
-        frames: IDLE_MS.map((duration, i) => ({ key: PIXEL_KIT_ATLAS_KEY, frame: `${idle}_${i}`, duration })),
-        repeat: -1,
-      });
-    }
-    const walk = animKey(look, "walk", facing);
-    if (!scene.anims.exists(walk)) {
-      scene.anims.create({
-        key: walk,
-        frames: Array.from({ length: WALK_FRAMES }, (_, i) => ({ key: PIXEL_KIT_ATLAS_KEY, frame: `${walk}_${i}`, duration: WALK_MS })),
-        repeat: -1,
-      });
+    for (const [act, spec] of Object.entries(ACT_ANIMS)) {
+      createAnim(scene, animKey(look, act as PoseAct, facing), spec.ms);
     }
   }
+  createAnim(scene, animKey(look, "sleep", null), SLEEP_MS);
 }
 
-/** 걷는 방향에 맞춰 서기·걷기 애니를 고르는 주민 스프라이트. 발밑이 (0, `footY`)에 온다. */
+/** 포즈에 맞춰 서기·걷기·앉기·일하기·말하기·자기 애니를 고르는 주민 스프라이트. 발밑이 (0, `footY`)에 온다. */
 export class VillagerFigure {
   readonly sprite: Phaser.GameObjects.Sprite;
   private readonly look: string;
   private facing: Facing = "down";
   private last: { x: number; y: number } | null = null;
+  private moving = false;
 
-  constructor(scene: Phaser.Scene, residentId: string, footY: number) {
+  constructor(scene: Phaser.Scene, residentId: string, private readonly footY: number) {
     this.look = villagerLookFor(residentId);
     ensureAnims(scene, this.look);
     this.sprite = scene.add.sprite(0, footY, PIXEL_KIT_ATLAS_KEY, `${animKey(this.look, "idle", "down")}_0`).setOrigin(0.5, 1);
     this.sprite.play(animKey(this.look, "idle", "down"));
   }
 
-  /** 타일 좌표가 바뀔 때마다 부른다. 움직임 방향으로 몸을 돌리고, 멈추면 서기로 돌아간다. */
-  moveTo(x: number, y: number): void {
+  get isMoving(): boolean {
+    return this.moving;
+  }
+
+  /** 타일 좌표가 바뀔 때마다 부른다. 움직였는지 갱신하고 움직인 방향으로 몸을 돌린다. */
+  track(x: number, y: number): boolean {
     const dx = this.last ? x - this.last.x : 0;
     const dy = this.last ? y - this.last.y : 0;
     this.last = { x, y };
-    const moving = Math.abs(dx) > MOVE_EPSILON || Math.abs(dy) > MOVE_EPSILON;
-    if (moving) this.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
-    const sheetFacing = this.facing === "left" ? "right" : this.facing;
-    const key = animKey(this.look, moving ? "walk" : "idle", sheetFacing);
-    this.sprite.setFlipX(this.facing === "left");
+    this.moving = Math.abs(dx) > MOVE_EPSILON || Math.abs(dy) > MOVE_EPSILON;
+    if (this.moving) this.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+    return this.moving;
+  }
+
+  /**
+   * 포즈를 그린다. `sleepFootY`는 침대에서 잘 때 스프라이트 발밑(컨테이너 기준 px)이다.
+   * 의자가 방향을 정하면 몸도 그 방향으로 돌아선다.
+   */
+  apply(pose: Pose, sleepFootY: number): void {
+    if (pose.facing) this.facing = pose.facing;
+    const sheetFacing: SheetFacing = this.facing === "left" ? "right" : this.facing;
+    const key = animKey(this.look, pose.act, sheetFacing);
+    this.sprite.setFlipX(pose.act !== "sleep" && this.facing === "left");
+    this.sprite.setY(pose.act === "sleep" ? sleepFootY : this.footY);
     if (this.sprite.anims.currentAnim?.key !== key) this.sprite.play(key);
   }
 }
