@@ -1,8 +1,10 @@
-from dataclasses import dataclass
+import threading
+from contextlib import AbstractContextManager, nullcontext
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 import litellm
-from settings import EMBEDDING_DIMENSION
+from settings import EMBEDDING_DIMENSION, LLM_MAX_CONCURRENCY
 
 from .types import LlmGenerateOptions
 
@@ -50,6 +52,22 @@ class LiteLlmClient:
     """임베딩 전용 키. 없으면 `api_key`."""
     reasoning_effort: str | None = None
     """추론 모델에 보내는 추론 강도. 없으면 보내지 않는다."""
+    max_concurrency: int = LLM_MAX_CONCURRENCY
+    """동시 요청 상한. 주민 마음들이 동시에 부르므로 Ollama 같은 직렬 백엔드의 대기열을 막는다."""
+    _slots: threading.BoundedSemaphore | None = field(
+        init=False, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        slots = (
+            threading.BoundedSemaphore(self.max_concurrency)
+            if self.max_concurrency > 0
+            else None
+        )
+        object.__setattr__(self, "_slots", slots)
+
+    def _slot(self) -> AbstractContextManager[object]:
+        return self._slots if self._slots is not None else nullcontext()
 
     def generate(
         self,
@@ -98,7 +116,8 @@ class LiteLlmClient:
                 kwargs["response_format"] = {"type": "json_object"}
 
         try:
-            response = litellm.completion(**kwargs)
+            with self._slot():
+                response = litellm.completion(**kwargs)
         except Exception as exc:
             raise LiteLlmClientError(f"LiteLLM completion failed: {exc}") from exc
 
@@ -159,7 +178,8 @@ class LiteLlmClient:
             kwargs["api_key"] = api_key
 
         try:
-            response = litellm.embedding(**kwargs)
+            with self._slot():
+                response = litellm.embedding(**kwargs)
         except Exception as exc:
             raise LiteLlmClientError(f"LiteLLM embedding failed: {exc}") from exc
 

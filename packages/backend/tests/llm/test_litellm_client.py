@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import litellm
@@ -166,3 +169,31 @@ def test_generate_passes_reasoning_effort_even_for_unknown_models(monkeypatch) -
 
     assert captured["reasoning_effort"] == "none"
     assert captured["allowed_openai_params"] == ["reasoning_effort"]
+
+
+def test_max_concurrency_caps_parallel_requests(monkeypatch) -> None:
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+
+    def fake_completion(**_: Any) -> dict[str, object]:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.02)
+        with lock:
+            active -= 1
+        return {"choices": [{"message": {"content": "{}"}}]}
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LiteLlmClient(
+        default_generate_model="gemini/gemini-2.5-flash-lite",
+        default_embedding_model="gemini/gemini-embedding-001",
+        max_concurrency=2,
+    )
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        _ = list(pool.map(lambda _: client.generate(prompt="p"), range(6)))
+
+    assert peak == 2

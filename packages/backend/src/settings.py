@@ -44,6 +44,8 @@ LLM_BASE_URL: Final[str] = os.getenv("LLM_BASE_URL", _default_base_url)
 LLM_MODEL: Final[str] = os.getenv("LLM_MODEL", _default_llm_model)
 EMBEDDING_MODEL: Final[str] = os.getenv("EMBEDDING_MODEL", _default_embedding_model)
 LLM_TIMEOUT_SECONDS: Final[float] = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
+LLM_MAX_CONCURRENCY: Final[int] = int(os.getenv("LLM_MAX_CONCURRENCY", "8"))
+"""LLM·임베딩 동시 요청 상한(클라이언트 하나 기준). 0이면 제한하지 않는다."""
 GOOGLE_AI_STUDIO_API_KEY: Final[str] = os.getenv("GOOGLE_AI_STUDIO_API_KEY", "")
 LLM_API_KEY: Final[str] = os.getenv(
     "LLM_API_KEY",
