@@ -11,7 +11,8 @@ import {
 
 /** 시뮬레이션 시각이 틱마다 흐르는 분(가짜 피드 전용). */
 export const MOCK_SIM_MINUTES_PER_TICK = 1;
-export const MOCK_START_TIME_MS = Date.UTC(2026, 1, 13, 7, 0, 0);
+export const MOCK_START_HOUR = 7;
+export const MOCK_START_TIME_MS = Date.UTC(2026, 1, 13, MOCK_START_HOUR, 0, 0);
 /** 한 틱에 주민이 말할 확률. */
 export const MOCK_SPEAK_CHANCE = 0.08;
 /** 목적지에 도착한 뒤 머무는 틱 수 범위. */
@@ -81,7 +82,11 @@ export interface MockWorld {
  * 결정론적 가짜 마을. 주민은 장소를 골라 통행 격자 위 최단 경로로 한 틱에 한 칸씩 걷고,
  * 도착하면 잠시 머문다. 벽·물·가구·나무 칸에는 들어가지 않는다.
  */
-export function createMockWorld(seed: number = DEFAULT_MOCK_SEED, grid: WalkGrid = fallbackWalkGrid()): MockWorld {
+export function createMockWorld(
+  seed: number = DEFAULT_MOCK_SEED,
+  grid: WalkGrid = fallbackWalkGrid(),
+  startHour: number = MOCK_START_HOUR,
+): MockWorld {
   const rng = createRng(seed);
   const places = grid.places;
   if (places.length === 0) throw new Error("통행 격자에 목적지가 없다");
@@ -140,7 +145,7 @@ export function createMockWorld(seed: number = DEFAULT_MOCK_SEED, grid: WalkGrid
     next: () => {
       tick += 1;
       const residents = states.map((state) => advanceResident(state));
-      const simTime = new Date(MOCK_START_TIME_MS + tick * MOCK_SIM_MINUTES_PER_TICK * 60_000);
+      const simTime = new Date(MOCK_START_TIME_MS + (startHour - MOCK_START_HOUR) * 3_600_000 + tick * MOCK_SIM_MINUTES_PER_TICK * 60_000);
       return { tick, sim_time: simTime.toISOString(), residents };
     },
   };

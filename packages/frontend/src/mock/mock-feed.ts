@@ -19,8 +19,9 @@ export class MockFeed implements WorldFeed {
     private readonly seed: number = DEFAULT_MOCK_SEED,
     private readonly tickIntervalMs: number = DEFAULT_TICK_INTERVAL_MS,
     private readonly loadGrid?: WalkGridLoader,
+    private readonly startHour?: number,
   ) {
-    if (!loadGrid) this.world = createMockWorld(seed);
+    if (!loadGrid) this.world = createMockWorld(seed, undefined, startHour);
   }
 
   start(handlers: FeedHandlers): void {
@@ -32,7 +33,7 @@ export class MockFeed implements WorldFeed {
     }
     void this.loadGrid?.().then((grid) => {
       if (this.handlers === null) return;
-      this.world = createMockWorld(this.seed, grid ?? undefined);
+      this.world = createMockWorld(this.seed, grid ?? undefined, this.startHour);
       this.begin();
     });
   }

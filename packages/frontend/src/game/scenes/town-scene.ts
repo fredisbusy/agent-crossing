@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { ResidentSnapshot } from "@agent-crossing/shared";
 import { DEFAULT_TICK_INTERVAL_MS } from "../../net";
 import { useWorldStore } from "../../stores";
+import { DaylightLayer } from "../daylight";
 import { buildTownMap, LocationOverlay, preloadTownMap } from "../map";
 import { BubbleTracker, MotionTracker, ResidentView } from "../residents";
 import { attachCameraControls } from "./camera-controls";
@@ -23,6 +24,7 @@ export class TownScene extends Phaser.Scene {
   private readonly views = new Map<string, ResidentView>();
   private residents: readonly ResidentSnapshot[] = [];
   private overlay: LocationOverlay | null = null;
+  private daylight: DaylightLayer | null = null;
   private unsubscribe: (() => void) | null = null;
 
   constructor() {
@@ -37,14 +39,19 @@ export class TownScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor("#5a8f5e");
     const town = buildTownMap(this);
     this.overlay = new LocationOverlay(this, town.areas);
+    this.daylight = new DaylightLayer(this, town);
     attachCameraControls(this, town.widthPx, town.heightPx);
 
     const initial = useWorldStore.getState();
     this.overlay.setVisible(initial.debug);
     if (initial.snapshot) this.applyResidents(initial.snapshot.residents);
+    if (initial.snapshot) this.daylight.setSimTime(initial.snapshot.sim_time);
 
     this.unsubscribe = useWorldStore.subscribe((state, previous) => {
-      if (state.snapshot !== previous.snapshot && state.snapshot) this.applyResidents(state.snapshot.residents);
+      if (state.snapshot !== previous.snapshot && state.snapshot) {
+        this.applyResidents(state.snapshot.residents);
+        this.daylight?.setSimTime(state.snapshot.sim_time);
+      }
       if (state.debug !== previous.debug) this.overlay?.setVisible(state.debug);
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubscribe?.());
