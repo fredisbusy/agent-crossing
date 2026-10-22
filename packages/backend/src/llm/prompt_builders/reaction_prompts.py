@@ -198,7 +198,8 @@ def build_reaction_combined_prompt(
             f"Summary of relevant context from [{agent_identity.name}]'s memory:",
             summarize_retrieved_memories(retrieved_memories),
             render_template("reaction_guidelines.md").strip(),
-            "Few-shot calibration examples:",
+            "Utterance style examples (only for when you do decide to react; "
+            "they do not mean you should react):",
             _few_shot_reaction_examples(),
             _first_content_line(rendered),
             shape_line,

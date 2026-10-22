@@ -223,8 +223,9 @@ def parse_reaction_combined(response_text: str) -> ReactionCombined:
         parsed_json = attempt_json_repair_once(response_text)
     if parsed_json is None:
         return ReactionCombined(intent=intent)
-    has_utterance = isinstance(parsed_json.get("utterance"), str) or isinstance(
-        parsed_json.get("reaction"), str
+    has_utterance = any(
+        isinstance(value, str) and value.strip()
+        for value in (parsed_json.get("utterance"), parsed_json.get("reaction"))
     )
     if not has_utterance:
         return ReactionCombined(intent=intent)

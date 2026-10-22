@@ -181,7 +181,7 @@ def test_combined_without_utterance_key_generates_utterance_separately() -> None
     assert decision.trace.combined_fallback_reason == ""
 
 
-def test_retry_after_combined_empty_utterance_regenerates_utterance_only() -> None:
+def test_combined_blank_utterance_generates_utterance_separately() -> None:
     prompts: list[str] = []
 
     class RecordingClient(StubGenerationClient):
@@ -201,7 +201,22 @@ def test_retry_after_combined_empty_utterance_regenerates_utterance_only() -> No
 
     assert client.calls == 2
     assert decision.reaction == "좋아요, 더 들려주세요."
-    assert decision.trace.partner_retry_count == 1
+    assert decision.trace.partner_retry_count == 0
     assert "empty when should_react is false" in prompts[0]
     assert "empty when should_react is false" not in prompts[1]
     assert '"utterance": "<string>"' in prompts[1]
+
+
+def test_combined_blank_utterance_without_partner_line_still_speaks() -> None:
+    client = StubGenerationClient(
+        responses=[
+            _combined_json(should_react=True, utterance="   "),
+            _utterance_json(utterance="안녕하세요!", reason="greet"),
+        ]
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+
+    decision = runner.decide_reaction(_input())
+
+    assert client.calls == 2
+    assert decision.reaction == "안녕하세요!"
