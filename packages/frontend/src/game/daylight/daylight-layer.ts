@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { LocationArea } from "../map/locations";
 import { LIGHT_OBJECT_NAME, type MapSprite } from "../map/objects";
-import { isPixelKitEnabled, PIXEL_KIT_ATLAS_KEY } from "../map/pixel-kit";
+import { hasPixelKit, PIXEL_KIT_ATLAS_KEY } from "../map/pixel-kit";
 import { indoorAreas } from "./indoor-areas";
 import { daylightForSimTime, multiplyColorOf, type DaylightTint } from "./daylight-phase";
 
@@ -24,7 +24,7 @@ export interface DaylightInput {
   decor: readonly MapSprite[];
 }
 
-/** 맵 전체 MULTIPLY 틴트와, 픽셀 팩 모드의 가로등 빛·실내 불빛을 sim 시각으로 갱신한다. */
+/** 맵 전체 MULTIPLY 틴트와, 가로등 빛(픽셀 팩 아틀라스가 있을 때)·실내 불빛을 sim 시각으로 갱신한다. */
 export class DaylightLayer {
   private readonly tint: Phaser.GameObjects.Rectangle;
   private readonly pools: Phaser.GameObjects.Image[] = [];
@@ -48,7 +48,7 @@ export class DaylightLayer {
           .setVisible(false),
       );
     }
-    if (!isPixelKitEnabled() || !scene.textures.exists(PIXEL_KIT_ATLAS_KEY)) return;
+    if (!hasPixelKit(scene)) return;
     for (const sprite of input.decor) {
       if (sprite.frame === LIGHT_OBJECT_NAME) {
         this.pools.push(

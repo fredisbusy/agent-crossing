@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { ResidentSnapshot } from "@agent-crossing/shared";
 import { TILE_SIZE } from "../../town-layout";
-import { isPixelKitEnabled, PIXEL_KIT_ATLAS_KEY } from "../map/pixel-kit";
+import { hasPixelKit, PIXEL_KIT_ATLAS_KEY } from "../map/pixel-kit";
 import { NameTag, SpeechBubble, type TagBox, type TagOffset } from "./labels";
 import { choosePose, classifyAction, type ActionKind, type Pose, type SpotMap } from "./pose";
 import { VillagerFigure } from "./villager-figure";
@@ -46,7 +46,7 @@ function drawCircleBody(scene: Phaser.Scene, id: string): Phaser.GameObjects.Gra
 }
 
 /**
- * 주민 한 명을 그린 캐릭터(기본은 코드로 그린 원, `?art=pixel-kit`이면 픽셀 팩 주민).
+ * 주민 한 명을 그린 캐릭터(기본은 픽셀 팩 주민, 아틀라스를 못 읽었을 때만 코드로 그린 원).
  * 몸 + 선택 링 + 클릭 영역은 `container`, 이름표·행동 아이콘·말풍선은 따로 위 depth에 놓는 `overlay`에 둔다.
  * 글자는 화면 px 기준이라 매 프레임 `1/줌`으로 역보정한다.
  */
@@ -80,7 +80,7 @@ export class ResidentView {
     onSelect: (id: string) => void,
     private readonly spots: SpotMap,
   ) {
-    const usePixelKit = isPixelKitEnabled() && scene.textures.exists(PIXEL_KIT_ATLAS_KEY);
+    const usePixelKit = hasPixelKit(scene);
     this.figure = usePixelKit ? new VillagerFigure(scene, resident.resident_id, VILLAGER_FOOT_Y) : null;
     this.topY = usePixelKit ? VILLAGER_TOP_Y : -BODY_RADIUS;
     const body = this.figure?.sprite ?? drawCircleBody(scene, resident.resident_id);

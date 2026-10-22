@@ -7,9 +7,9 @@ import { drawPixelKitObjects } from "./object-layer";
 export const PIXEL_KIT_ATLAS_KEY = "pixel-kit";
 const PIXEL_KIT_GROUND_KEY = "pixel-kit-ground";
 
-/** 주소에 `?art=pixel-kit`이 있을 때만 켠다(시험 단계). */
-export function isPixelKitEnabled(): boolean {
-  return new URLSearchParams(window.location.search).get("art") === "pixel-kit";
+/** 픽셀 팩이 기본 화풍이다. 아틀라스를 못 읽었을 때만 코드로 그린 타일·원형 주민으로 대체한다. */
+export function hasPixelKit(scene: Phaser.Scene): boolean {
+  return scene.textures.exists(PIXEL_KIT_ATLAS_KEY);
 }
 
 export function preloadPixelKit(scene: Phaser.Scene): void {

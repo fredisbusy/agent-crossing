@@ -3,7 +3,7 @@ import { TILE_SIZE } from "../../town-layout";
 import { buildFallbackMap } from "./fallback-map";
 import { extractLocationAreas, type LocationArea } from "./locations";
 import { DECOR_LAYER, extractMapSprites, FURNITURE_LAYER, type MapSprite } from "./objects";
-import { drawPixelKit, isPixelKitEnabled, planPixelKit, preloadPixelKit } from "./pixel-kit";
+import { drawPixelKit, hasPixelKit, planPixelKit, preloadPixelKit } from "./pixel-kit";
 import { GROUND_LAYER, LOCATIONS_LAYER, TILESET_NAME } from "./tiled-types";
 import { paintTileset, TILESET_PIXEL_HEIGHT, TILESET_PIXEL_WIDTH } from "./tileset-art";
 
@@ -27,7 +27,7 @@ export interface TownMap {
 export function preloadTownMap(scene: Phaser.Scene): void {
   // 파일이 없어도 장면은 계속 진행하고, 이후 대체 맵을 쓴다.
   scene.load.tilemapTiledJSON(TOWN_MAP_KEY, TOWN_MAP_URL);
-  if (isPixelKitEnabled()) preloadPixelKit(scene);
+  preloadPixelKit(scene);
 }
 
 function ensureTilesetTexture(scene: Phaser.Scene): void {
@@ -49,7 +49,8 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
   const areas = extractLocationAreas(tilemap.getObjectLayer(LOCATIONS_LAYER)?.objects ?? []);
   const furniture = extractMapSprites(tilemap.getObjectLayer(FURNITURE_LAYER)?.objects ?? []);
   const decor = extractMapSprites(tilemap.getObjectLayer(DECOR_LAYER)?.objects ?? []);
-  if (isPixelKitEnabled()) {
+  // 아틀라스가 없으면 아래 코드 타일 레이어가 그대로 대체 화면이 된다.
+  if (hasPixelKit(scene)) {
     const ground = layer.layer.data.flatMap((row) => row.map((tile) => tile.index));
     const plan = planPixelKit(ground, tilemap.width, tilemap.height, { areas, furniture, decor });
     drawPixelKit(scene, plan, tilemap.widthInPixels, tilemap.heightInPixels);
