@@ -26,7 +26,7 @@ describe("renderStateToText", () => {
     expect(parsed.camera.zoom).toBe(2);
     expect(parsed.residents[0]).toHaveProperty("id");
     expect(parsed.residents[0].tile).toHaveLength(2);
-    expect(parsed.sim_time).toMatch(/^2023-02-13T/);
+    expect(parsed.sim_time).toMatch(/^2026-02-13T/);
   });
 
   it("handles a missing snapshot", () => {

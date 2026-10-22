@@ -1,15 +1,21 @@
 import type { MindKind, ResidentSnapshot, WorldSnapshot } from "@agent-crossing/shared";
+import { buildFallbackMap } from "../game/map/pure";
 import {
-  CAFE_DOOR,
-  locationPathAt,
+  findPath,
+  locationAt,
+  walkGridFromTiled,
   type TilePoint,
+  type WalkGrid,
+  type WalkPlace,
 } from "../town-layout";
 
 /** 시뮬레이션 시각이 틱마다 흐르는 분(가짜 피드 전용). */
 export const MOCK_SIM_MINUTES_PER_TICK = 1;
-export const MOCK_START_TIME_MS = Date.UTC(2023, 1, 13, 7, 0, 0);
+export const MOCK_START_TIME_MS = Date.UTC(2026, 1, 13, 7, 0, 0);
 /** 한 틱에 주민이 말할 확률. */
 export const MOCK_SPEAK_CHANCE = 0.08;
+/** 목적지에 도착한 뒤 머무는 틱 수 범위. */
+const MOCK_STAY_TICKS = { min: 5, max: 30 } as const;
 
 export const DEFAULT_MOCK_SEED = 20230213;
 
@@ -18,35 +24,21 @@ interface MockResidentSpec {
   name: string;
   mind: MindKind;
   emoji: string;
-  /** 닫힌 경로. 이어진 두 점(마지막 -> 처음 포함)은 같은 행 또는 열이다. */
-  route: readonly TilePoint[];
 }
 
 const MOCK_RESIDENTS: readonly MockResidentSpec[] = [
-  { id: "mochi", name: "Mochi", mind: "llm", emoji: "☕", route: [{ x: 3, y: 14 }, { x: 36, y: 14 }] },
-  { id: "biscuit", name: "Biscuit", mind: "schedule", emoji: "🎒", route: [{ x: 19, y: 4 }, { x: 19, y: 24 }] },
-  {
-    id: "olive",
-    name: "Olive",
-    mind: "schedule",
-    emoji: "🚶",
-    route: [{ x: 9, y: 13 }, { x: 9, y: 14 }, { x: 20, y: 14 }, { x: 20, y: 20 }, { x: 20, y: 14 }, { x: 9, y: 14 }],
-  },
-  {
-    id: "pip",
-    name: "Pip",
-    mind: "schedule",
-    emoji: "🛒",
-    route: [{ x: 27, y: 17 }, { x: 27, y: 14 }, { x: 31, y: 14 }, { x: 27, y: 14 }],
-  },
+  { id: "mochi", name: "Mochi", mind: "llm", emoji: "☕" },
+  { id: "biscuit", name: "Biscuit", mind: "schedule", emoji: "🎒" },
+  { id: "olive", name: "Olive", mind: "schedule", emoji: "🚶" },
+  { id: "pip", name: "Pip", mind: "schedule", emoji: "🛒" },
 ];
 
 const MOCK_LINES: readonly string[] = [
-  "Good morning!",
-  "Lovely weather today.",
-  "Is the cafe open yet?",
-  "Are you coming to the party?",
-  "I need to grab some bread.",
+  "좋은 아침이에요!",
+  "오늘 날씨 참 좋네요.",
+  "카페 벌써 열었어요?",
+  "파티 올 거예요?",
+  "빵 좀 사러 가야겠다.",
 ];
 
 /** 같은 시드면 같은 수열을 내는 작은 PRNG (mulberry32). */
@@ -64,12 +56,20 @@ export function createRng(seed: number): () => number {
 interface MockState {
   spec: MockResidentSpec;
   tile: TilePoint;
-  target: number;
+  path: TilePoint[];
+  destination: WalkPlace | null;
+  waitTicks: number;
 }
 
-function stepToward(from: TilePoint, to: TilePoint): TilePoint {
-  if (from.x !== to.x) return { x: from.x + Math.sign(to.x - from.x), y: from.y };
-  return { x: from.x, y: from.y + Math.sign(to.y - from.y) };
+/** 내장 대체 마을의 통행 격자. 실제 맵을 못 읽었을 때 쓴다. */
+export function fallbackWalkGrid(): WalkGrid {
+  const grid = walkGridFromTiled(buildFallbackMap());
+  if (grid === null) throw new Error("내장 대체 맵을 통행 격자로 읽지 못했다");
+  return grid;
+}
+
+function lastSegment(path: string): string {
+  return path.split(" > ").pop() ?? path;
 }
 
 export interface MockWorld {
@@ -77,28 +77,59 @@ export interface MockWorld {
   next: () => WorldSnapshot;
 }
 
-export function createMockWorld(seed: number = DEFAULT_MOCK_SEED): MockWorld {
+/**
+ * 결정론적 가짜 마을. 주민은 장소를 골라 통행 격자 위 최단 경로로 한 틱에 한 칸씩 걷고,
+ * 도착하면 잠시 머문다. 벽·물·가구·나무 칸에는 들어가지 않는다.
+ */
+export function createMockWorld(seed: number = DEFAULT_MOCK_SEED, grid: WalkGrid = fallbackWalkGrid()): MockWorld {
   const rng = createRng(seed);
-  const states: MockState[] = MOCK_RESIDENTS.map((spec) => ({ spec, tile: { ...spec.route[0] }, target: 1 }));
+  const places = grid.places;
+  if (places.length === 0) throw new Error("통행 격자에 목적지가 없다");
+  const states: MockState[] = MOCK_RESIDENTS.map((spec, index) => ({
+    spec,
+    tile: { ...places[index % places.length].tile },
+    path: [],
+    destination: null,
+    waitTicks: 0,
+  }));
   let tick = -1;
 
+  function chooseDestination(state: MockState): void {
+    const choice = places[Math.floor(rng() * places.length)];
+    const path = findPath(grid, state.tile, choice.tile);
+    if (path === null || path.length === 0) {
+      state.waitTicks = MOCK_STAY_TICKS.min;
+      return;
+    }
+    state.destination = choice;
+    state.path = path;
+  }
+
   function advanceResident(state: MockState): ResidentSnapshot {
-    const { route } = state.spec;
-    const goal = route[state.target % route.length];
-    if (state.tile.x === goal.x && state.tile.y === goal.y) {
-      state.target = (state.target + 1) % route.length;
+    const next = state.path.shift();
+    if (next) {
+      state.tile = next;
+      if (state.path.length === 0) {
+        const span = MOCK_STAY_TICKS.max - MOCK_STAY_TICKS.min;
+        state.waitTicks = MOCK_STAY_TICKS.min + Math.floor(rng() * span);
+      }
+    } else if (state.waitTicks > 0) {
+      state.waitTicks -= 1;
     } else {
-      state.tile = stepToward(state.tile, goal);
+      chooseDestination(state);
     }
     const speaks = rng() < MOCK_SPEAK_CHANCE;
     const line = MOCK_LINES[Math.floor(rng() * MOCK_LINES.length)];
-    const nearCafe = state.tile.x === CAFE_DOOR.x && state.tile.y > CAFE_DOOR.y;
+    const here = locationAt(grid, state.tile.x, state.tile.y);
+    const walking = state.path.length > 0 && state.destination !== null;
     return {
       resident_id: state.spec.id,
       display_name: state.spec.name,
       tile: { ...state.tile },
-      location_path: locationPathAt(state.tile.x, state.tile.y),
-      action_description: nearCafe ? "heading into the cafe" : "walking along the road",
+      location_path: here,
+      action_description: walking
+        ? `${lastSegment(state.destination?.location_path ?? here)} 쪽으로 걷는 중`
+        : `${lastSegment(here)}에서 쉬는 중`,
       emoji: state.spec.emoji,
       utterance_text: speaks ? line : null,
       mind_kind: state.spec.mind,
