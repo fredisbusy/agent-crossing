@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 import litellm
+import pytest
 
-from llm.clients.litellm_client import LiteLlmClient
+from llm.clients.litellm_client import LiteLlmClient, LiteLlmClientError
 from llm.clients.types import LlmGenerateOptions
 
 
@@ -109,6 +110,40 @@ def test_embed_reads_litellm_embedding_vector(monkeypatch) -> None:
     assert captured["input"] == ["hello"]
     assert captured["num_retries"] == 2
     assert captured["dimensions"] == 3
+
+
+def test_embed_many_sends_all_inputs_in_one_request(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_embedding(**kwargs: Any) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"data": [{"embedding": [0.1, 0.2]}, {"embedding": [0.3, 0.4]}]}
+
+    monkeypatch.setattr(litellm, "embedding", fake_embedding)
+    client = LiteLlmClient(
+        default_generate_model="gemini/gemini-2.5-flash-lite",
+        default_embedding_model="gemini/gemini-embedding-001",
+    )
+
+    vectors = client.embed_many(inputs=["a", "b"], expected_dimension=2)
+
+    assert vectors == [[0.1, 0.2], [0.3, 0.4]]
+    assert captured["input"] == ["a", "b"]
+
+
+def test_embed_many_rejects_mismatched_response_length(monkeypatch) -> None:
+    monkeypatch.setattr(
+        litellm,
+        "embedding",
+        lambda **_: {"data": [{"embedding": [0.1, 0.2]}]},
+    )
+    client = LiteLlmClient(
+        default_generate_model="gemini/gemini-2.5-flash-lite",
+        default_embedding_model="gemini/gemini-embedding-001",
+    )
+
+    with pytest.raises(LiteLlmClientError):
+        client.embed_many(inputs=["a", "b"], expected_dimension=2)
 
 
 def test_generate_passes_reasoning_effort_even_for_unknown_models(monkeypatch) -> None:

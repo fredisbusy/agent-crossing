@@ -1,4 +1,5 @@
 from .embedding_encoder import (
+    BatchEmbeddingEncoder,
     EmbeddingEncoder,
     EmbeddingEncodingContext,
     LlmEmbeddingEncoder,
@@ -15,6 +16,7 @@ from .importance_scorer import (
 from .clients.provider_factory import build_provider_client
 
 __all__ = [
+    "BatchEmbeddingEncoder",
     "EmbeddingEncoder",
     "EmbeddingEncodingContext",
     "ImportanceScoringContext",

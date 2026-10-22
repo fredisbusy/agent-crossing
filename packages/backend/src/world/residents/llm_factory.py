@@ -39,12 +39,13 @@ class LLMMindFactory:
         known_places: tuple[LocationPath, ...],
     ) -> None:
         self._client = client
-        self._embedding_model = embedding_model
         self._known_places = known_places
+        self._encoder = LlmEmbeddingEncoder(client=client, model=embedding_model)
+        """주민끼리 공유해 같은 관찰·대사를 한 번만 임베딩한다."""
 
     def build(self, config: ResidentConfig) -> LLMMind:
         identity = list(config.description)
-        encoder = LlmEmbeddingEncoder(client=self._client, model=self._embedding_model)
+        encoder = self._encoder
         manager = MemoryManager(
             memory_stream=MemoryStream(),
             importance_scorer=LlmImportanceScorer(client=self._client),

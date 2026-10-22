@@ -125,6 +125,20 @@ class LiteLlmClient:
     ) -> list[float]:
         _ = truncate
         _ = keep_alive
+        return self.embed_many(
+            model=model, inputs=[input], expected_dimension=expected_dimension
+        )[0]
+
+    def embed_many(
+        self,
+        *,
+        model: str | None = None,
+        inputs: list[str],
+        expected_dimension: int | None = None,
+    ) -> list[list[float]]:
+        """여러 문장을 한 번의 요청으로 임베딩한다. 결과 순서는 `inputs`와 같다."""
+        if not inputs:
+            return []
         expected_dim = (
             expected_dimension
             if expected_dimension is not None
@@ -132,7 +146,7 @@ class LiteLlmClient:
         )
         kwargs: dict[str, Any] = {
             "model": model or self.default_embedding_model,
-            "input": [input],
+            "input": inputs,
             "timeout": self.timeout_seconds,
             "num_retries": 2,
             "dimensions": expected_dim,
@@ -150,16 +164,22 @@ class LiteLlmClient:
             raise LiteLlmClientError(f"LiteLLM embedding failed: {exc}") from exc
 
         data = _read_attr_or_key(response, "data")
-        if not isinstance(data, list) or not data:
-            raise LiteLlmClientError("LiteLLM embedding response is missing data")
-
-        first_item = cast(object, data[0])
-        embedding = _read_attr_or_key(first_item, "embedding")
-        vector = _coerce_float_vector(embedding)
-        if vector is None:
-            raise LiteLlmClientError("LiteLLM embedding response has invalid vector")
-        if len(vector) != expected_dim:
+        if not isinstance(data, list) or len(data) != len(inputs):
             raise LiteLlmClientError(
-                f"Embedding dimension mismatch: expected {expected_dim}, got {len(vector)}"
+                "LiteLLM embedding response does not match the number of inputs"
             )
-        return vector
+        items = cast(list[object], data)
+        return [
+            _parse_embedding_item(item, expected_dim=expected_dim) for item in items
+        ]
+
+
+def _parse_embedding_item(item: object, *, expected_dim: int) -> list[float]:
+    vector = _coerce_float_vector(_read_attr_or_key(item, "embedding"))
+    if vector is None:
+        raise LiteLlmClientError("LiteLLM embedding response has invalid vector")
+    if len(vector) != expected_dim:
+        raise LiteLlmClientError(
+            f"Embedding dimension mismatch: expected {expected_dim}, got {len(vector)}"
+        )
+    return vector

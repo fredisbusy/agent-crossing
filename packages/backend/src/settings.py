@@ -13,6 +13,8 @@ _ROOT_ENV_PATH = Path(
 load_dotenv(_ROOT_ENV_PATH)
 
 EMBEDDING_DIMENSION: Final[int] = 1024
+EMBEDDING_CACHE_SIZE: Final[int] = int(os.getenv("EMBEDDING_CACHE_SIZE", "4096"))
+"""같은 텍스트 재임베딩을 막는 LRU 캐시 항목 수. 0이면 캐시하지 않는다."""
 
 _raw_llm_backend = os.getenv("LLM_BACKEND", "ollama")
 if _raw_llm_backend not in {"ollama", "google_ai_studio"}:

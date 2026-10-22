@@ -4,7 +4,7 @@ from typing import Protocol
 
 import numpy as np
 
-from llm.embedding_encoder import EmbeddingEncodingContext
+from llm.embedding_encoder import BatchEmbeddingEncoder, EmbeddingEncodingContext
 from utils.math import cosine_similarity
 
 SEMANTIC_HARD_BLOCK_THRESHOLD = 0.92
@@ -115,11 +115,12 @@ def embed_sentences(
     if embedding_encoder is None:
         return []
 
-    pairs: list[tuple[str, np.ndarray]] = []
-    for sentence in sentences:
-        embedding = embedding_encoder.encode(EmbeddingEncodingContext(text=sentence))
-        pairs.append((sentence, embedding))
-    return pairs
+    contexts = [EmbeddingEncodingContext(text=sentence) for sentence in sentences]
+    if isinstance(embedding_encoder, BatchEmbeddingEncoder):
+        embeddings = embedding_encoder.encode_many(contexts)
+    else:
+        embeddings = [embedding_encoder.encode(context) for context in contexts]
+    return list(zip(sentences, embeddings))
 
 
 @dataclass(frozen=True)
