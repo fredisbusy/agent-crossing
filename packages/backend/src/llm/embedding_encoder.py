@@ -1,3 +1,4 @@
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
@@ -61,6 +62,8 @@ class LlmEmbeddingEncoder:
         self.model: str = model
         self.cache_size: int = cache_size
         self._cache: OrderedDict[str, np.ndarray] = OrderedDict()
+        self._lock: threading.Lock = threading.Lock()
+        """주민 마음들이 `asyncio.to_thread`로 동시에 같은 인코더를 쓴다."""
 
     def encode(self, context: EmbeddingEncodingContext) -> np.ndarray:
         return self.encode_many([context])[0]
@@ -103,18 +106,20 @@ class LlmEmbeddingEncoder:
         return [_frozen_vector(vector) for vector in vectors]
 
     def _cached(self, text: str) -> np.ndarray | None:
-        vector = self._cache.get(text)
-        if vector is not None:
-            self._cache.move_to_end(text)
-        return vector
+        with self._lock:
+            vector = self._cache.get(text)
+            if vector is not None:
+                self._cache.move_to_end(text)
+            return vector
 
     def _store(self, text: str, vector: np.ndarray) -> None:
         if self.cache_size <= 0:
             return
-        self._cache[text] = vector
-        self._cache.move_to_end(text)
-        while len(self._cache) > self.cache_size:
-            _ = self._cache.popitem(last=False)
+        with self._lock:
+            self._cache[text] = vector
+            self._cache.move_to_end(text)
+            while len(self._cache) > self.cache_size:
+                _ = self._cache.popitem(last=False)
 
 
 def _frozen_vector(vector: list[float]) -> np.ndarray:

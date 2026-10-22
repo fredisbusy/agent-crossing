@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 from llm.embedding_encoder import EmbeddingEncodingContext, LlmEmbeddingEncoder
 from llm.guardrails.similarity import embed_sentences
@@ -108,3 +110,16 @@ def test_embed_sentences_uses_batch_encoder() -> None:
 
     assert [sentence for sentence, _ in pairs] == ["안녕", "반가워"]
     assert client.batches == [["안녕", "반가워"]]
+
+
+def test_shared_cache_survives_concurrent_threads() -> None:
+    client = BatchEmbeddingClient()
+    encoder = LlmEmbeddingEncoder(client=client, model="m", cache_size=8)
+    texts = [str(i) * (i % 20 + 1) for i in range(200)]
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        vectors = list(
+            pool.map(lambda t: encoder.encode(EmbeddingEncodingContext(text=t)), texts)
+        )
+
+    assert [int(np.argmax(v)) for v in vectors] == [len(t) for t in texts]
