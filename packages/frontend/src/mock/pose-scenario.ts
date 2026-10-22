@@ -16,18 +16,18 @@ interface PoseSpec {
  * 행동별 표현(앉기·자기·대화·아이콘)을 한 화면에서 확인하는 검증용 시나리오. 아무도 움직이지 않는다.
  */
 const POSE_SPECS: readonly PoseSpec[] = [
-  { id: "isabella", name: "Isabella", x: 9, y: 9, action: "drinking coffee at the cafe", emoji: "☕" },
-  { id: "klaus", name: "Klaus", x: 10, y: 10, action: "talking with Isabella", emoji: "💬", line: "오늘 밸런타인 파티 올 거야?" },
-  { id: "maria", name: "Maria", x: 59, y: 9, action: "sleeping", emoji: "😴" },
-  { id: "sam", name: "Sam", x: 51, y: 10, action: "cooking breakfast", emoji: "🍳" },
-  { id: "jen", name: "Jennifer", x: 46, y: 29, action: "painting at the easel", emoji: "🎨" },
-  { id: "tom", name: "Tom", x: 40, y: 13, action: "drinking beer at the pub", emoji: "🍺" },
-  { id: "eddy", name: "Eddy", x: 28, y: 12, action: "studying for class", emoji: "📚" },
-  { id: "carmen", name: "Carmen", x: 3, y: 30, action: "resting on the sofa", emoji: "🛋" },
-  { id: "john", name: "John", x: 16, y: 10, action: "shopping for groceries", emoji: "🛒" },
-  { id: "ayesha", name: "Ayesha", x: 31, y: 22, action: "thinking about the essay", emoji: "🤔" },
-  { id: "wen", name: "Wen", x: 9, y: 29, action: "sleeping", emoji: "😴" },
-  { id: "abigail", name: "Abigail", x: 3, y: 9, action: "working at the counter", emoji: "💻" },
+  { id: "isabella", name: "Isabella", x: 8, y: 6, action: "drinking coffee at the cafe", emoji: "☕" },
+  { id: "klaus", name: "Klaus", x: 9, y: 6, action: "talking with Isabella", emoji: "💬", line: "오늘 밸런타인 파티 올 거야?" },
+  { id: "maria", name: "Maria", x: 36, y: 19, action: "sleeping", emoji: "😴" },
+  { id: "sam", name: "Sam", x: 54, y: 21, action: "cooking breakfast", emoji: "🍳" },
+  { id: "jen", name: "Jennifer", x: 47, y: 23, action: "painting at the easel", emoji: "🎨" },
+  { id: "tom", name: "Tom", x: 38, y: 10, action: "drinking beer at the pub", emoji: "🍺" },
+  { id: "eddy", name: "Eddy", x: 49, y: 4, action: "studying for class", emoji: "📚" },
+  { id: "carmen", name: "Carmen", x: 2, y: 22, action: "resting on the sofa", emoji: "🛋" },
+  { id: "john", name: "John", x: 21, y: 8, action: "shopping for groceries", emoji: "🛒" },
+  { id: "ayesha", name: "Ayesha", x: 31, y: 26, action: "thinking about the essay", emoji: "🤔" },
+  { id: "wen", name: "Wen", x: 8, y: 22, action: "sleeping", emoji: "😴" },
+  { id: "abigail", name: "Abigail", x: 3, y: 5, action: "working at the counter", emoji: "💻" },
 ];
 
 export function createPosesWorld(startHour: number = MOCK_START_HOUR): MockWorld {

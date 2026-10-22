@@ -23,7 +23,7 @@ export interface ObjectPlan {
 }
 
 /** 막지 않아 주민이 밟고 지나가는 것: 바닥 캔버스에 굽는다. */
-const BAKED_PREFIXES = ["rug_", "mat_door", "flower_bed_", "lily_pad", "reeds"] as const;
+const BAKED_PREFIXES = ["rug_", "mat_door", "flower_bed_", "lily_pad", "reeds", "tilled"] as const;
 /** 분수 애니: 첫 프레임 이름 → 애니 키. */
 const ANIMATED: Readonly<Record<string, string>> = { fountain_0: "fountain" };
 /** 주민이 위에 눕거나 앉아 주민 뒤에 깔려야 하는 것(사각형 아래끝에서 뺄 px). */

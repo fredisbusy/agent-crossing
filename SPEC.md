@@ -304,6 +304,7 @@ God mode 입력:
 ## 15. 공간·렌더링 기술
 
 - 맵: Tiled JSON 하나(`packages/shared/maps/`)를 백엔드와 프런트가 함께 읽는다. 타일 레이어 + `collision` 레이어 + 장소 객체 레이어(`location_path` 속성).
+- 마을 배치(생성기 `scripts/maps/generate_town_map.py`, 건물표 `town_buildings.py`): 큰길(y15..17)과 아랫골목(y31..32)을 옆골목 둘이 잇고, 광장은 큰길 북쪽 포석 마당이다. 모든 건물은 문이 남쪽이고 아래 세 줄이 앞벽이다. 장소 객체 사각형은 건물 사각형 그대로(앞벽 포함)이며, 앞벽 사각형은 `facades` 객체 레이어(이름 = 건물 이름)로 따로 내보내 프런트가 3/4 시점 정면을 그린다.
 - 위치 경로는 §8의 `Town > Building > Room > Object` 트리이며 장소 객체 레이어에서 만든다. 주민마다 아는 장소만 담은 개인 환경 트리를 가진다(논문 4.3).
 - 경로 탐색: 충돌 그리드 위 4방향 A*(백엔드). 시뮬레이션 권한은 백엔드 단일이고, 프런트는 WebSocket 스냅샷·변경분을 보간해 그리기만 한다.
 - 프런트: Phaser 4 + React 19 + Zustand. 에셋은 코드 생성 → CC0 팩 순(`assets/LICENSES.md` 기록).

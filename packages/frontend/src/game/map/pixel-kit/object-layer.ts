@@ -2,6 +2,7 @@ import type Phaser from "phaser";
 import { BIRD_ORIGIN, birdPose, BUTTERFLY_ORIGIN, butterflyPose, type CritterPlan } from "./critters";
 import type { ObjectSprite } from "./object-plan";
 import {
+  clampSignCenter,
   ICON_TOP_OFFSET,
   layoutSign,
   PLANK_CELL,
@@ -77,7 +78,12 @@ function drawSign(scene: Phaser.Scene, sign: SignPlan, ticks: Tick[]): void {
   text.setPosition(left + layout.textX * s, frameTop + PLANK_CENTER_OFFSET * s);
   children.push(text);
   const container = scene.add.container(sign.centerX, sign.edgeY, children).setDepth(SIGN_DEPTH);
-  ticks.push(() => container.setScale(1 / scene.cameras.main.zoom));
+  ticks.push(() => {
+    const zoomScale = 1 / scene.cameras.main.zoom;
+    const scale = sign.maxScale === null ? zoomScale : Math.min(zoomScale, sign.maxScale);
+    container.setScale(scale);
+    container.x = clampSignCenter(sign.centerX, layout.width * s * scale, sign.bounds);
+  });
 }
 
 function drawCritters(scene: Phaser.Scene, critters: CritterPlan, ticks: Tick[]): void {
