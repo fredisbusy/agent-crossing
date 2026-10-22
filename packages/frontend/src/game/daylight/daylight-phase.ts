@@ -15,8 +15,8 @@ interface Keyframe {
   alpha: number;
 }
 
-export const NIGHT_COLOR = 0x1c2c5e;
-export const NIGHT_ALPHA = 0.78;
+export const NIGHT_COLOR = 0x5a6aa8;
+export const NIGHT_ALPHA = 0.72;
 export const DAWN_COLOR = 0xffc6d6;
 export const DAWN_ALPHA = 0.4;
 export const DUSK_COLOR = 0xff9a4a;
