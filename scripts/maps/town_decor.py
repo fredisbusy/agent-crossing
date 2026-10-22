@@ -13,6 +13,23 @@ DecorItem = tuple[str, Rect]
 BLOCKING_DECOR = frozenset({"fountain_0", "bench_h", "lamp_post", "signpost", "planter"})
 FOUNTAIN_CELLS = 3
 
+# 장식 프레임 이름 -> (너비, 높이) 타일 수. Tiled에서 객체를 그릴 때 이 크기를 쓴다.
+DECOR_FRAMES: dict[str, tuple[int, int]] = {
+    "fountain_0": (FOUNTAIN_CELLS, FOUNTAIN_CELLS),
+    "bench_h": (2, 1),
+    "bench_v": (1, 2),
+    "lamp_post": (1, 2),
+    "light": (1, 1),
+    "flower_bed_a": (1, 1),
+    "flower_bed_b": (1, 1),
+    "flower_bed_c": (1, 1),
+    "planter": (1, 1),
+    "signpost": (1, 2),
+    "lily_pad": (1, 1),
+    "lily_pad_b": (1, 1),
+    "reeds": (1, 1),
+}
+
 # 큰길 가로등 밑동 칸. 건물 문 앞 칸(문 x 4,19,28,43,52 / 4,19,31,40)을 피한다.
 STREET_LAMPS = ((10, 19), (22, 19), (42, 19), (60, 19))
 
