@@ -8,6 +8,7 @@
 
 import datetime
 import random
+from collections.abc import Collection
 
 from minds.social import format_day, format_time, place_name
 from world.contracts import LocationPath
@@ -30,11 +31,17 @@ _TEMPLATES: dict[tuple[str, Tone], tuple[str, ...]] = {
         "오늘 날씨가 참 좋네요.",
         "요즘 마을이 활기차 보여요.",
         "바쁘게 지내다 보니 하루가 금방 가네요.",
+        "요즘은 어떻게 지내세요?",
+        "이 근처는 언제 와도 편안하네요.",
+        "오늘은 뭐 하면서 보내실 거예요?",
     ),
     ("smalltalk", "casual"): (
         "오늘 날씨 진짜 좋다.",
         "요즘 마을이 북적북적하더라.",
         "하루가 왜 이렇게 빨리 가지?",
+        "요즘 뭐 하고 지내?",
+        "여기 오면 괜히 기분이 좋아.",
+        "오늘 뭐 할 거야?",
     ),
     ("share_fact", "polite"): (
         "{topic} 얘기 들으셨어요? {fact}",
@@ -64,10 +71,12 @@ _TEMPLATES: dict[tuple[str, Tone], tuple[str, ...]] = {
     ("accept", "polite"): (
         "좋아요, {time}에 {place}에서 뵙겠습니다.",
         "네, {event} 꼭 갈게요. {time}에 봬요.",
+        "초대해 주셔서 고마워요. {day} {time}에 갈게요.",
     ),
     ("accept", "casual"): (
         "좋아, {time}에 {place}에서 보자!",
         "응, {event} 갈게. {time}에 봐.",
+        "불러 줘서 고마워! {day} {time}에 갈게.",
     ),
     ("decline", "polite"): (
         "아쉽지만 그 시간엔 어려워요.",
@@ -101,19 +110,26 @@ def render(
     when: datetime.datetime | None = None,
     location_path: LocationPath | None = None,
     item: str = "",
+    avoid: Collection[str] = (),
 ) -> str:
-    """템플릿 하나를 rng로 골라 필드를 채운다. `key`는 화행 종류 또는 위 특수 키."""
-    options = _TEMPLATES[(key, tone)]
-    template = options[rng.randrange(len(options))]
-    return template.format(
-        topic=topic,
-        fact=fact,
-        event=event,
-        day=format_day(when, now) if when else "",
-        time=format_time(when) if when else "",
-        place=place_name(location_path) if location_path else "",
-        item=item,
-    )
+    """템플릿 하나를 rng로 골라 필드를 채운다. `key`는 화행 종류 또는 위 특수 키.
+
+    `avoid`에 있는 문장(최근에 한 말)은 다른 후보가 있으면 고르지 않는다.
+    """
+    filled = [
+        template.format(
+            topic=topic,
+            fact=fact,
+            event=event,
+            day=format_day(when, now) if when else "",
+            time=format_time(when) if when else "",
+            place=place_name(location_path) if location_path else "",
+            item=item,
+        )
+        for template in _TEMPLATES[(key, tone)]
+    ]
+    fresh = [text for text in filled if text not in avoid] or filled
+    return fresh[rng.randrange(len(fresh))]
 
 
 def all_templates() -> tuple[str, ...]:

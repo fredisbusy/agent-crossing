@@ -175,3 +175,52 @@ def test_invite_sent_with_farewell_is_still_answered() -> None:
     reply = asyncio.run(eddy.respond(_ctx("eddy"), view))
     assert reply is not None and reply.acts[0].kind == "accept"
     assert eddy.social.agenda.is_committed(PARTY)
+
+
+def _reply_to(mind: ScheduleMind, *acts: SpeechAct, speaker: str = "isabella"):
+    said = Utterance(
+        speaker_id=speaker,
+        listener_ids=(mind.resident_id,),
+        text="말",
+        acts=acts,
+        spoken_at=NOW,
+    )
+    view = ConversationView(
+        conversation_id=f"c-{len(acts)}-{acts[0].kind}",
+        participant_ids=(mind.resident_id, speaker),
+        history=(said,),
+    )
+    return asyncio.run(mind.respond(_ctx(mind.resident_id), view))
+
+
+def test_rumor_is_not_told_back_to_its_host_and_repeat_invite_is_not_reaccepted() -> (
+    None
+):
+    mei = _mind("mei")
+    first = _reply_to(mei, event_act("invite", PARTY))
+    assert first is not None and first.acts[0].kind == "accept"
+    again = _reply_to(mei, event_act("invite", PARTY), SpeechAct(kind="greet"))
+    assert again is not None and again.acts[0].kind == "smalltalk"
+    asked = _reply_to(mei, SpeechAct(kind="ask", topic=PARTY.name))
+    assert asked is not None and asked.acts[0].kind == "smalltalk"
+    assert "잘 모르" not in asked.text and "못 들었" not in asked.text
+
+
+def test_recent_lines_are_not_repeated() -> None:
+    sam = _mind("sam")
+    texts = []
+    for i in range(4):
+        said = Utterance(
+            speaker_id="maria",
+            listener_ids=("sam",),
+            text=f"그렇구나 {i}",
+            acts=(SpeechAct(kind="smalltalk"),),
+            spoken_at=NOW,
+        )
+        view = ConversationView(
+            conversation_id=f"r{i}", participant_ids=("sam", "maria"), history=(said,)
+        )
+        reply = asyncio.run(sam.respond(_ctx("sam"), view))
+        assert reply is not None
+        texts.append(reply.text)
+    assert len(set(texts)) == len(texts)

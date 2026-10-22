@@ -6,6 +6,7 @@
 
 import datetime
 import random
+from collections import deque
 
 from minds.social import (
     SocialState,
@@ -30,6 +31,8 @@ from .lines import render
 HOST_FRIEND_BONUS = 0.3
 """주최자와 친하면(우호도 `HOST_FRIEND_MIN` 이상) 소문 행사에 갈 확률에 더한다."""
 HOST_FRIEND_MIN = 10
+RECENT_LINES = 8
+"""되풀이를 피할 최근 대사 수."""
 
 
 class ReplyRules:
@@ -48,6 +51,8 @@ class ReplyRules:
         self._rng = rng
         self._considered: set[tuple[str, datetime.datetime]] = set()
         self._long_time: dict[str, bool] = {}
+        self._recent: deque[str] = deque(maxlen=RECENT_LINES)
+        """최근에 한 말. 같은 문장을 되풀이하지 않게 피한다."""
 
     def reply(
         self, ctx: MindContext, conversation: ConversationView
@@ -66,10 +71,15 @@ class ReplyRules:
             self._social.hear(last, now)
         mine = my_turns(self._me, conversation)
         act = self._choose(ctx, conversation, other, last)
+        if self._social.is_redundant(act, other, now):
+            act = SpeechAct(kind="smalltalk")
+        avoid = {*self._recent, *(u.text for u in mine)}
+        text = self._text(act, ctx, last, first=not mine, cid=cid, avoid=avoid)
+        self._recent.append(text)
         utterance = Utterance(
             speaker_id=self._me,
             listener_ids=(other,),
-            text=self._text(act, ctx, last, first=not mine, cid=cid),
+            text=text,
             acts=(act,),
             spoken_at=now,
         )
@@ -164,6 +174,7 @@ class ReplyRules:
         *,
         first: bool,
         cid: str,
+        avoid: set[str],
     ) -> str:
         key: str = act.kind
         if act.kind == "greet" and first:
@@ -188,6 +199,7 @@ class ReplyRules:
             when=act.start_time,
             location_path=act.location_path,
             item=act.item or "",
+            avoid=avoid,
         )
 
 
