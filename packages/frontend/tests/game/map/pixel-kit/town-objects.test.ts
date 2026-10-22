@@ -99,6 +99,16 @@ describe("signs", () => {
     expect(wide.middleCount).toBeGreaterThan(narrow.middleCount);
     expect(wide.textX + 90 + 2).toBeLessThanOrEqual(wide.width - 4 + 0.001);
   });
+
+  it("hangs south-row signs below the building, away from the main road", () => {
+    const signs = planSigns(areas);
+    const south = signs.filter((s) => s.below);
+    expect(south.map((s) => s.label).sort()).toEqual(
+      ["Artist's Co-living Space", "Dorm for Oak Hill College", "Isabella's Apartment", "Moore Family House"].sort(),
+    );
+    expect(south.every((s) => s.edgeY >= 32 * 16)).toBe(true);
+    expect(signs.filter((s) => !s.below).every((s) => s.edgeY === 8 * 16)).toBe(true);
+  });
 });
 
 describe("critters", () => {

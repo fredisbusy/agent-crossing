@@ -64,7 +64,8 @@ function drawSign(scene: Phaser.Scene, sign: SignPlan, ticks: Tick[]): void {
   const layout = layoutSign(text.width / SIGN_ART_SCALE);
   const s = SIGN_ART_SCALE;
   const left = -(layout.width * s) / 2;
-  const frameTop = -PLANK_CELL * s;
+  // 아래로 걸 때는 판자 그림 위끝(프레임 위에서 PLANK_TOP_OFFSET 아래)이 가장자리에 오게 내린다.
+  const frameTop = sign.below ? -PLANK_TOP_OFFSET * s : -PLANK_CELL * s;
   const piece = (frame: string, x: number, y = frameTop): Phaser.GameObjects.Image =>
     scene.add.image(x, y, ATLAS_KEY, frame).setOrigin(0, 0).setScale(s);
   const children: Phaser.GameObjects.GameObject[] = [piece("sign_plank_l", left)];
@@ -75,7 +76,7 @@ function drawSign(scene: Phaser.Scene, sign: SignPlan, ticks: Tick[]): void {
   children.push(piece(sign.icon, left + layout.iconX * s, frameTop + (PLANK_TOP_OFFSET - ICON_TOP_OFFSET + 1) * s));
   text.setPosition(left + layout.textX * s, frameTop + PLANK_CENTER_OFFSET * s);
   children.push(text);
-  const container = scene.add.container(sign.centerX, sign.bottomY, children).setDepth(SIGN_DEPTH);
+  const container = scene.add.container(sign.centerX, sign.edgeY, children).setDepth(SIGN_DEPTH);
   ticks.push(() => container.setScale(1 / scene.cameras.main.zoom));
 }
 
