@@ -47,6 +47,7 @@ class ReactionDecisionTrace:
     semantic_hard_threshold: float = 0.92
     semantic_soft_threshold: float = 0.82
     semantic_retry_trigger: str = "none"
+    combined_fallback_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,14 @@ class ReactionUtterance:
         parse_success=False,
         parse_error="uninitialized",
     )
+
+
+@dataclass(frozen=True)
+class ReactionCombined:
+    """결합 응답 파싱 결과. utterance가 None이면 발화는 2단계로 따로 생성한다."""
+
+    intent: ReactionIntent
+    utterance: ReactionUtterance | None = None
 
 
 class GenerateClient(Protocol):

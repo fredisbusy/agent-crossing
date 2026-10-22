@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from world.contracts import (
     ActionIntent,
+    EncounterChoice,
     MindContext,
     MindKind,
     Space,
@@ -186,11 +187,26 @@ class TownSimulation:
             await resident.mind.observe(ctx.observations)
         return ctx
 
+    async def _observe_then_next_action(self, resident: Resident) -> ActionIntent:
+        return await resident.mind.next_action(await self._observe_drained(resident))
+
+    async def _observe_then_respond(
+        self, speaker: Resident, conversation: TownConversation
+    ) -> Utterance | None:
+        ctx = await self._observe_drained(speaker)
+        return await speaker.mind.respond(ctx, conversation.view())
+
     # --- 조우와 대화 ----------------------------------------------------------
 
     async def _encounters(self, pairs: set[tuple[str, str]]) -> None:
+        """후보 쌍을 순서대로 훑되, 주민이 겹치지 않는 연속 묶음(wave)은 동시에 판정한다."""
         self._tracker.forget_apart(pairs)
+        wave: list[tuple[Resident, Resident]] = []
+        busy: set[str] = set()
         for pair in self._tracker.candidates(pairs):
+            if busy.intersection(pair):
+                await self._ask_wave(wave)
+                wave, busy = [], set()
             a, b = self._by_id[pair[0]], self._by_id[pair[1]]
             if not can_talk(a, b):
                 continue
@@ -200,11 +216,25 @@ class TownSimulation:
             self._tracker.mark_asked(pair, self.clock.now)
             self.mind_calls[a.config.mind] += 1
             self.mind_calls[b.config.mind] += 1
-            choice_a, choice_b = await asyncio.gather(
-                a.mind.on_encounter(self._context(a, drain=False), b.public_view()),
-                b.mind.on_encounter(self._context(b, drain=False), a.public_view()),
+            wave.append((a, b))
+            busy.update(pair)
+        await self._ask_wave(wave)
+
+    async def _ask_wave(self, wave: list[tuple[Resident, Resident]]) -> None:
+        """서로 겹치지 않는 쌍들의 조우 판정을 동시에 기다리고, 대화는 원래 순서로 시작한다."""
+        if not wave:
+            return
+        calls: list[Coroutine[Any, Any, EncounterChoice]] = []
+        for a, b in wave:
+            calls.append(
+                a.mind.on_encounter(self._context(a, drain=False), b.public_view())
             )
-            if choice_a == "converse" and choice_b == "converse":
+            calls.append(
+                b.mind.on_encounter(self._context(b, drain=False), a.public_view())
+            )
+        choices = await asyncio.gather(*calls)
+        for index, (a, b) in enumerate(wave):
+            if choices[2 * index] == "converse" and choices[2 * index + 1] == "converse":
                 self._start_conversation(a, b)
 
     def _start_conversation(self, a: Resident, b: Resident) -> None:
@@ -227,8 +257,7 @@ class TownSimulation:
         for conversation in active:
             speaker = self._by_id[conversation.next_speaker_id]
             self.mind_calls[speaker.config.mind] += 1
-            ctx = await self._observe_drained(speaker)
-            calls.append(speaker.mind.respond(ctx, conversation.view()))
+            calls.append(self._observe_then_respond(speaker, conversation))
         results = await asyncio.gather(*calls)
         for conversation, utterance in zip(active, results):
             conversation.record(utterance)
@@ -274,8 +303,7 @@ class TownSimulation:
         for resident in woken:
             resident.wake_requested = False
             self.mind_calls[resident.config.mind] += 1
-            ctx = await self._observe_drained(resident)
-            calls.append(resident.mind.next_action(ctx))
+            calls.append(self._observe_then_next_action(resident))
         intents = await asyncio.gather(*calls)
         for resident, intent in zip(woken, intents):
             failure = resident.body.set_intent(intent, self.clock.now)

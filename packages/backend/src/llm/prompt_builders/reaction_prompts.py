@@ -11,7 +11,11 @@ from .formatting import (
     build_summary_description,
     summarize_retrieved_memories,
 )
-from .shapes import REACTION_INTENT_JSON_SHAPE, REACTION_UTTERANCE_JSON_SHAPE
+from .shapes import (
+    REACTION_COMBINED_JSON_SHAPE,
+    REACTION_INTENT_JSON_SHAPE,
+    REACTION_UTTERANCE_JSON_SHAPE,
+)
 
 
 def build_reaction_prompt(
@@ -151,6 +155,56 @@ def build_reaction_utterance_prompt(
         ]
     )
 
+    return "\n".join(sections)
+
+
+def build_reaction_combined_prompt(
+    *,
+    agent_identity: AgentIdentity,
+    current_time: datetime.datetime,
+    observation_content: str,
+    dialogue_history: list[tuple[str, str]],
+    profile: AgentProfile,
+    retrieved_memories: list[MemoryObject],
+    dialogue_arc: DialogueArc | None = None,
+) -> str:
+    """의도 판단과 발화를 한 JSON으로 받는 첫 시도용 프롬프트."""
+    sections: list[str] = _build_reaction_base_sections(
+        agent_identity=agent_identity,
+        current_time=current_time,
+        summary_description=build_summary_description(agent_identity, profile),
+        agent_status=build_agent_status(profile),
+        observation_content=observation_content,
+        identity_anchor=build_reflection_anchor(profile, retrieved_memories),
+    )
+    if dialogue_history:
+        sections.append("Recent dialogue context:")
+        for index, (partner_talk, my_talk) in enumerate(dialogue_history, start=1):
+            sections.append(f"- turn {index} partner: {partner_talk or 'none'}")
+            sections.append(f"- turn {index} self: {my_talk or 'none'}")
+    if dialogue_arc is not None:
+        sections.extend(_build_dialogue_arc_section(dialogue_arc=dialogue_arc))
+
+    rendered = render_template(
+        "reaction_combined_question.md",
+        agent_name=agent_identity.name,
+        json_shape=REACTION_COMBINED_JSON_SHAPE,
+    ).strip()
+    shape_line = next(
+        line for line in rendered.splitlines() if line.startswith("Return strict JSON")
+    )
+    sections.extend(
+        [
+            f"Summary of relevant context from [{agent_identity.name}]'s memory:",
+            summarize_retrieved_memories(retrieved_memories),
+            render_template("reaction_guidelines.md").strip(),
+            "Utterance style examples (only for when you do decide to react; "
+            "they do not mean you should react):",
+            _few_shot_reaction_examples(),
+            _first_content_line(rendered),
+            shape_line,
+        ]
+    )
     return "\n".join(sections)
 
 

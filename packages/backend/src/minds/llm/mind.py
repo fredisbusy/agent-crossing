@@ -254,11 +254,14 @@ class LLMMind:
     # --- 기억 -----------------------------------------------------------------
 
     def _remember_all(self, observations: tuple[Observation, ...]) -> None:
+        items: list[tuple[str, datetime.datetime]] = []
         for obs in observations:
             spoken = obs.utterance
             if spoken is not None and spoken.speaker_id == self.persona.resident_id:
                 continue
-            self._store(obs.text, obs.observed_at)
+            items.append((obs.text, obs.observed_at))
+        for importance in self._memory.remember_many(items) if items else []:
+            self._reflection.record_observation_importance(importance)
         if observations and self._reflection.should_reflect():
             self._reflection.reflect(now=observations[-1].observed_at)
 

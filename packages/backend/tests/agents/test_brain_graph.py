@@ -374,3 +374,56 @@ def test_brain_graph_updates_plan_memory_after_partner_utterance() -> None:
     assert "Continue the open conversation with Sujin" in result.current_plan_item
     assert calls.index("get_retrieval_memories") < calls.index("create_plan")
     assert calls.index("create_plan") < calls.index("decide_reaction")
+
+
+class CapturingEncoder:
+    def __init__(self) -> None:
+        self.texts: list[str] = []
+
+    def encode(self, context: object) -> np.ndarray:
+        self.texts.append(cast(str, getattr(context, "text")))
+        return np.zeros(2, dtype=np.float32)
+
+
+def _perceive_text(now: datetime.datetime) -> str:
+    calls: list[str] = []
+    memory = StubMemoryManager(calls)
+    encoder = CapturingEncoder()
+    graph = AgentBrainGraphRunner(
+        agent_identity=AgentIdentity(id="jiho", name="Jiho", age=29, traits=["kind"]),
+        memory_manager=memory,
+        embedding_encoder=encoder,
+        reflection_graph=StubReflectionGraph(calls, should_reflect=False),
+        llm_gateway=StubLlmGateway(calls),
+        observation_writer=_ignore_observation,
+        planner=StubPlanner(calls),
+    )
+    _ = graph.run(
+        ActionLoopInput(
+            current_time=now,
+            dialogue_history=[],
+            profile=_profile(),
+            language=cast(Literal["ko", "en"], "ko"),
+            observed_entities=["Sujin", "Minho"],
+            observed_events=["Sujin이 인사했다"],
+            world_context={"location": "Town > Cafe"},
+        )
+    )
+    return encoder.texts[0]
+
+
+def test_perceive_text_is_natural_language_without_metadata() -> None:
+    text = _perceive_text(datetime.datetime(2026, 3, 3, 12, 0, 0))
+
+    assert (
+        text == "Jiho이(가) Town > Cafe에 있다. 주변: Sujin, Minho. 사건: Sujin이 인사했다."
+    )
+    for meta in ("time=", "agent=", "traits=", "current_plan=", "2026"):
+        assert meta not in text
+
+
+def test_perceive_text_is_deterministic_across_times() -> None:
+    first = _perceive_text(datetime.datetime(2026, 3, 3, 12, 0, 0))
+    second = _perceive_text(datetime.datetime(2026, 3, 3, 12, 7, 0))
+
+    assert first == second

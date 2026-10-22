@@ -4,8 +4,8 @@ from enum import Enum
 from typing import Protocol
 
 import numpy as np
-from llm import ImportanceScorer, ImportanceScoringContext, clamp_importance
-from llm.embedding_encoder import EmbeddingEncodingContext
+from llm import BatchImportanceScorer, ImportanceScorer, ImportanceScoringContext, clamp_importance
+from llm.embedding_encoder import BatchEmbeddingEncoder, EmbeddingEncodingContext
 from llm.llm_gateway import InsightWithCitation
 
 from .memory_object import MemoryObject, NodeType
@@ -143,6 +143,50 @@ class MemoryManager:
             context=context,
             importance=importance,
         )
+
+    def create_observations_from_texts(
+        self,
+        *,
+        items: list[tuple[str, datetime.datetime]],
+        context: ObservationContext,
+    ) -> list[MemoryObject]:
+        """관찰 여러 개를 임베딩 1회 + 중요도 1회 배치로 저장한다. 순서를 보존한다."""
+        if not items:
+            return []
+        encoding_contexts = [EmbeddingEncodingContext(text=text) for text, _ in items]
+        encoder = self.embedding_encoder
+        if isinstance(encoder, BatchEmbeddingEncoder):
+            embeddings = encoder.encode_many(encoding_contexts)
+        else:
+            embeddings = [encoder.encode(c) for c in encoding_contexts]
+
+        scoring_contexts = [
+            ImportanceScoringContext(
+                observation=text,
+                agent_name=context.agent_name,
+                identity_stable_set=context.identity_stable_set,
+                current_plan=context.current_plan,
+            )
+            for text, _ in items
+        ]
+        scorer = self.importance_scorer
+        if isinstance(scorer, BatchImportanceScorer):
+            importances = scorer.score_many(scoring_contexts)
+        else:
+            importances = [scorer.score(c) for c in scoring_contexts]
+
+        return [
+            self.create_observation(
+                content=text,
+                now=now,
+                embedding=embedding,
+                context=context,
+                importance=importance,
+            )
+            for (text, now), embedding, importance in zip(
+                items, embeddings, importances, strict=True
+            )
+        ]
 
     def create_reflection(
         self,

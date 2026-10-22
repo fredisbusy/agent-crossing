@@ -31,6 +31,7 @@ from ..graph_support import (
     require_state_value,
 )
 from ..memory.memory_manager import ObservationContext, PlanContext
+from .observation_text import build_observation_text
 from .types import ActionLoopInput, ActionLoopResult, DetermineContext, Observation
 
 
@@ -331,26 +332,14 @@ class AgentBrainGraphRunner:
             if input.profile.extended.current_plan_context
             else None
         )
-        context = input.world_context or {}
 
-        lines: list[str] = []
-        lines.append(f"time={input.current_time.isoformat()}")
-        lines.append(f"agent={self.agent_identity.name}")
-        lines.append(f"current_plan={current_plan or 'none'}")
-        lines.append(f"traits={', '.join(self.agent_identity.traits)}")
-        lines.append(f"location={context.get('location', 'unknown')}")
-
-        entity_text = (
-            ", ".join(input.observed_entities) if input.observed_entities else "none"
+        content = build_observation_text(
+            agent_name=self.agent_identity.name,
+            location=(input.world_context or {}).get("location"),
+            observed_entities=input.observed_entities,
+            observed_events=input.observed_events,
+            language=input.language,
         )
-        lines.append(f"entities={entity_text}")
-
-        if input.observed_events:
-            lines.append("events=" + "; ".join(input.observed_events))
-        else:
-            lines.append("events=none")
-
-        content = "\n".join(lines)
         embedding = self.embedding_encoder.encode(
             EmbeddingEncodingContext(text=content)
         )

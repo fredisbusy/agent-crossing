@@ -67,6 +67,11 @@ class NoMemory:
         del content, now, kind
         return 1
 
+    def remember_many(
+        self, items: list[tuple[str, datetime.datetime]]
+    ) -> list[int]:
+        return [1 for _ in items]
+
     def retrieve(
         self, query: str, now: datetime.datetime, top_k: int
     ) -> list[MemoryObject]:

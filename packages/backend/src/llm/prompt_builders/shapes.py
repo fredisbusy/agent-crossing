@@ -10,6 +10,13 @@ REACTION_UTTERANCE_JSON_SHAPE = (
     '"end_dialogue": <boolean>}'
 )
 
+REACTION_COMBINED_JSON_SHAPE = (
+    '{"should_react": <boolean>, "thought": "<string>", '
+    '"critique": "<string>", "reason": "<short string>", '
+    '"end_dialogue": <boolean>, '
+    '"utterance": "<string; empty when should_react is false>"}'
+)
+
 SALIENT_QUESTIONS_JSON_SHAPE = (
     '{"questions": ["<question 1>", "<question 2>", "<question 3>"]}'
 )
@@ -21,7 +28,9 @@ INSIGHTS_JSON_SHAPE = (
     "]}"
 )
 
-IMPORTANCE_JSON_SHAPE = '{"importance": <int 1-10>, "reason": "<short>"}'
+IMPORTANCE_JSON_SHAPE = '{"importance": <int 1-10>}'
+
+IMPORTANCE_BATCH_JSON_SHAPE = '{"importances": [<int 1-10>, <int 1-10>]}'
 
 DAY_PLAN_JSON_SHAPE = (
     '{"items": ['

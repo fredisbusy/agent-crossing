@@ -92,3 +92,131 @@ def test_reaction_graph_runner_retries_partner_nudge_once() -> None:
     assert result.should_react is True
     assert result.reaction == "좋아요, 더 들려주세요."
     assert result.trace.partner_retry_count == 1
+
+
+def _combined_json(*, should_react: bool, utterance: str) -> str:
+    return json.dumps(
+        {
+            "should_react": should_react,
+            "reason": "r",
+            "thought": "t",
+            "critique": "c",
+            "end_dialogue": False,
+            "utterance": utterance,
+        }
+    )
+
+
+def _history_input() -> ReactionDecisionInput:
+    base = _input()
+    return ReactionDecisionInput(
+        agent_identity=base.agent_identity,
+        current_time=base.current_time,
+        observation_content=base.observation_content,
+        dialogue_history=[("수진 씨, 오늘 테스트 어땠어요?", "none")],
+        profile=base.profile,
+        retrieved_memories=[],
+        language="ko",
+    )
+
+
+def test_combined_response_finishes_in_one_llm_call() -> None:
+    client = StubGenerationClient(
+        responses=[_combined_json(should_react=True, utterance="안녕하세요, 지호예요.")]
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+
+    decision = runner.decide_reaction(_input())
+
+    assert client.calls == 1
+    assert decision.should_react is True
+    assert decision.reaction == "안녕하세요, 지호예요."
+    assert decision.thought == "t"
+    assert decision.trace.combined_fallback_reason == ""
+
+
+def test_combined_response_no_reaction_has_empty_utterance_in_one_call() -> None:
+    client = StubGenerationClient(
+        responses=[_combined_json(should_react=False, utterance="")]
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+
+    decision = runner.decide_reaction(_input())
+
+    assert client.calls == 1
+    assert decision.should_react is False
+    assert decision.reaction == ""
+
+
+def test_combined_parse_failure_falls_back_to_two_stage() -> None:
+    client = StubGenerationClient(
+        responses=[
+            "not-json",
+            _intent_json(should_react=True, reason="react"),
+            _utterance_json(utterance="좋은 아침이에요.", reason="greet"),
+        ]
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+
+    decision = runner.decide_reaction(_input())
+
+    assert client.calls == 3
+    assert decision.reaction == "좋은 아침이에요."
+    assert decision.trace.combined_fallback_reason == "json_parse_error_or_non_object"
+
+
+def test_combined_without_utterance_key_generates_utterance_separately() -> None:
+    client = StubGenerationClient(
+        responses=[
+            _intent_json(should_react=True, reason="react"),
+            _utterance_json(utterance="네, 들려주세요.", reason="respond"),
+        ]
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+
+    decision = runner.decide_reaction(_input())
+
+    assert client.calls == 2
+    assert decision.reaction == "네, 들려주세요."
+    assert decision.trace.combined_fallback_reason == ""
+
+
+def test_combined_blank_utterance_generates_utterance_separately() -> None:
+    prompts: list[str] = []
+
+    class RecordingClient(StubGenerationClient):
+        def generate(self, **kwargs: object) -> str:
+            prompts.append(str(kwargs["prompt"]))
+            return super().generate(**kwargs)
+
+    client = RecordingClient(
+        responses=[
+            _combined_json(should_react=True, utterance=""),
+            _utterance_json(utterance="좋아요, 더 들려주세요.", reason="respond"),
+        ]
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+
+    decision = runner.decide_reaction(_history_input())
+
+    assert client.calls == 2
+    assert decision.reaction == "좋아요, 더 들려주세요."
+    assert decision.trace.partner_retry_count == 0
+    assert "empty when should_react is false" in prompts[0]
+    assert "empty when should_react is false" not in prompts[1]
+    assert '"utterance": "<string>"' in prompts[1]
+
+
+def test_combined_blank_utterance_without_partner_line_still_speaks() -> None:
+    client = StubGenerationClient(
+        responses=[
+            _combined_json(should_react=True, utterance="   "),
+            _utterance_json(utterance="안녕하세요!", reason="greet"),
+        ]
+    )
+    runner = ReactionGraphRunner(generation_client=client, embedding_encoder=None)
+
+    decision = runner.decide_reaction(_input())
+
+    assert client.calls == 2
+    assert decision.reaction == "안녕하세요!"
