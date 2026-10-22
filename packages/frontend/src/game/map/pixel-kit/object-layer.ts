@@ -1,0 +1,110 @@
+import type Phaser from "phaser";
+import { BIRD_ORIGIN, birdPose, BUTTERFLY_ORIGIN, butterflyPose, type CritterPlan } from "./critters";
+import type { ObjectSprite } from "./object-plan";
+import {
+  ICON_TOP_OFFSET,
+  layoutSign,
+  PLANK_CELL,
+  PLANK_END_WIDTH,
+  PLANK_MIDDLE_WIDTH,
+  PLANK_TOP_OFFSET,
+  type SignPlan,
+} from "./signs";
+
+const ATLAS_KEY = "pixel-kit";
+/** Phaser `Scenes.Events`와 같은 문자열(런타임 import를 피해 순수 테스트가 Phaser를 읽지 않게 한다). */
+const UPDATE_EVENT = "update";
+const SHUTDOWN_EVENT = "shutdown";
+const SIGN_FONT_SIZE = "7px";
+/** 글자를 확대해도 흐려지지 않게 하는 해상도 배율(카메라 최대 4배 확대 × 2). */
+const SIGN_TEXT_RESOLUTION = 8;
+const SIGN_TEXT_COLOR = "#fff4d6";
+/** 판자 그림 세로 가운데가 프레임 위에서 떨어진 px. */
+const PLANK_CENTER_OFFSET = PLANK_TOP_OFFSET + 6;
+/** 간판은 건물 위쪽 가장자리 바로 앞 주민보다 항상 뒤. */
+const SIGN_DEPTH_LIFT = 1;
+const FLY_DEPTH_LIFT = 64;
+const ANIM_FRAME_RATE = 6;
+const ANIM_FRAMES: Readonly<Record<string, readonly string[]>> = {
+  fountain: ["fountain_0", "fountain_1", "fountain_2"],
+};
+
+type Tick = (timeMs: number) => void;
+
+/** 애니 스프라이트는 프레임을 직접 바꾼다: Phaser 애니는 프레임을 바꿀 때마다 아틀라스 pivot으로 origin을 되돌린다. */
+function drawSprites(scene: Phaser.Scene, sprites: readonly ObjectSprite[], ticks: Tick[]): void {
+  for (const sprite of sprites) {
+    const image = scene.add.image(sprite.x, sprite.y, ATLAS_KEY, sprite.frame).setOrigin(0, 0).setDepth(sprite.depth);
+    image.setFlipY(sprite.flipY);
+    const frames = sprite.anim ? ANIM_FRAMES[sprite.anim] : undefined;
+    if (!frames) continue;
+    ticks.push((time) => {
+      image.setFrame(frames[Math.floor((time * ANIM_FRAME_RATE) / 1000) % frames.length], false, false);
+    });
+  }
+}
+
+function drawSign(scene: Phaser.Scene, sign: SignPlan): void {
+  const text = scene.add
+    .text(0, 0, sign.label, { fontSize: SIGN_FONT_SIZE, color: SIGN_TEXT_COLOR })
+    .setResolution(SIGN_TEXT_RESOLUTION)
+    .setOrigin(0, 0.5);
+  const layout = layoutSign(text.width);
+  const left = Math.round(sign.centerX - layout.width / 2);
+  const frameTop = sign.bottomY - PLANK_CELL;
+  const depth = sign.bottomY - SIGN_DEPTH_LIFT;
+  const piece = (frame: string, x: number, y = frameTop): void => {
+    scene.add.image(x, y, ATLAS_KEY, frame).setOrigin(0, 0).setDepth(depth);
+  };
+  piece("sign_plank_l", left);
+  for (let i = 0; i < layout.middleCount; i += 1) piece("sign_plank_m", left + PLANK_END_WIDTH + i * PLANK_MIDDLE_WIDTH);
+  piece("sign_plank_r", left + layout.width - PLANK_END_WIDTH);
+  piece(sign.icon, left + layout.iconX, frameTop + PLANK_TOP_OFFSET - ICON_TOP_OFFSET + 1);
+  text.setPosition(left + layout.textX, frameTop + PLANK_CENTER_OFFSET).setDepth(depth + 0.1);
+}
+
+function drawCritters(scene: Phaser.Scene, critters: CritterPlan, ticks: Tick[]): void {
+  const birds = critters.birds.map((bird) => ({
+    bird,
+    image: scene.add
+      .image(bird.x, bird.y, ATLAS_KEY, "bird_idle_0")
+      .setOrigin(BIRD_ORIGIN.x, BIRD_ORIGIN.y)
+      .setDepth(bird.y),
+  }));
+  const butterflies = critters.butterflies.map((butterfly) => ({
+    butterfly,
+    image: scene.add
+      .image(butterfly.x, butterfly.y, ATLAS_KEY, "butterfly_0")
+      .setOrigin(BUTTERFLY_ORIGIN.x, BUTTERFLY_ORIGIN.y)
+      .setDepth(butterfly.y + FLY_DEPTH_LIFT),
+  }));
+  // 장면 시간(`time`, ms)만 쓴다: 같은 시각이면 같은 모습.
+  ticks.push((time) => {
+    for (const { bird, image } of birds) {
+      const pose = birdPose(bird.seed, time);
+      image.setFrame(pose.frame, false, false).setFlipX(pose.flipX);
+    }
+    for (const { butterfly, image } of butterflies) {
+      const pose = butterflyPose(butterfly.seed, time);
+      image.setFrame(pose.frame, false, false).setPosition(butterfly.x + pose.dx, butterfly.y + pose.dy);
+      image.setFlipX(Math.sin(time * 0.0006 + butterfly.seed) > 0);
+    }
+  });
+}
+
+/** 가구·장식·간판·작은 생물을 장면에 얹는다. 바닥 캔버스는 `drawPixelKit`이 따로 굽는다. */
+export function drawPixelKitObjects(
+  scene: Phaser.Scene,
+  plan: { sprites: readonly ObjectSprite[]; signs: readonly SignPlan[]; critters: CritterPlan },
+): void {
+  const ticks: Tick[] = [];
+  drawSprites(scene, plan.sprites, ticks);
+  for (const sign of plan.signs) drawSign(scene, sign);
+  drawCritters(scene, plan.critters, ticks);
+  if (ticks.length === 0) return;
+  const onUpdate = (time: number): void => {
+    for (const tick of ticks) tick(time);
+  };
+  scene.events.on(UPDATE_EVENT, onUpdate);
+  scene.events.once(SHUTDOWN_EVENT, () => scene.events.off(UPDATE_EVENT, onUpdate));
+}
