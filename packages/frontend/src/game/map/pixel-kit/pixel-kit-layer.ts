@@ -6,6 +6,9 @@ import { drawPixelKitObjects } from "./object-layer";
 
 export const PIXEL_KIT_ATLAS_KEY = "pixel-kit";
 const PIXEL_KIT_GROUND_KEY = "pixel-kit-ground";
+const OUTSIDE_GRASS_FRAME = "grass_spring_b";
+const OUTSIDE_TINT = 0xb8c8b0;
+const OUTSIDE_DEPTH = -1;
 
 /** 픽셀 팩이 기본 화풍이다. 아틀라스를 못 읽었을 때만 코드로 그린 타일·원형 주민으로 대체한다. */
 export function hasPixelKit(scene: Phaser.Scene): boolean {
@@ -31,6 +34,12 @@ export function drawPixelKit(scene: Phaser.Scene, plan: PixelKitPlan, widthPx: n
     }
     canvas.refresh();
   }
+  // 지도보다 넓은 화면에서 생기는 위아래 띠: 같은 풀을 지도 둘레에 깔고 조금 어둡게 해 지도 밖임을 드러낸다.
+  scene.add
+    .tileSprite(-widthPx, -heightPx, widthPx * 3, heightPx * 3, PIXEL_KIT_ATLAS_KEY, OUTSIDE_GRASS_FRAME)
+    .setOrigin(0, 0)
+    .setDepth(OUTSIDE_DEPTH)
+    .setTint(OUTSIDE_TINT);
   scene.add.image(0, 0, PIXEL_KIT_GROUND_KEY).setOrigin(0, 0).setDepth(0);
   for (const prop of plan.props) {
     scene.add.image(prop.x, prop.y, PIXEL_KIT_ATLAS_KEY, prop.frame).setOrigin(0.5, 1).setDepth(prop.y);
