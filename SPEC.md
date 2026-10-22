@@ -305,6 +305,7 @@ God mode 입력:
 
 - 맵: Tiled JSON 하나(`packages/shared/maps/town.json`)를 백엔드와 프런트가 함께 읽는다. 타일 레이어 + `collision` 레이어 + 장소 객체 레이어(`location_path` 속성) + `furniture`·`decor` 객체 레이어.
 - 맵 정본은 Tiled 에디터로 고친 `town.json`이다. `ground`에는 의미 타일 8종(풀·길·마루·벽·물·가구·문·나무, 편집용 그림 `town-tiles.png`)만 칠하고, 픽셀 화풍은 프런트가 자동타일로 입힌다. `collision`은 손으로 칠하지 않고 ground + 막는 장식에서 계산한다(`check_town_map.py --fix-collision`). 고친 뒤 `pnpm check:map`(장소 트리·주민이 쓰는 장소·길에서의 도달성·객체 이름과 크기·collision 일치)이 통과해야 한다. `generate_town_map.py`는 초기 맵 생성용으로만 남긴다.
+- 마을 배치(큰길 + 골목): 큰길(y15..17)과 아랫골목(y31..32)을 옆골목 둘이 잇고, 광장은 큰길 북쪽 포석 마당이다. 모든 건물은 문이 남쪽이고 아래 세 줄이 앞벽이다. 장소 객체 사각형은 건물 사각형 그대로(앞벽 포함)이며, 앞벽 사각형은 `facades` 객체 레이어(이름 = 건물 이름)에 두고 프런트가 3/4 시점 정면을 그린다. 건물을 옮기거나 크기를 바꾸면 `facades` 사각형도 함께 옮긴다.
 - 위치 경로는 §8의 `Town > Building > Room > Object` 트리이며 장소 객체 레이어에서 만든다. 주민마다 아는 장소만 담은 개인 환경 트리를 가진다(논문 4.3).
 - 경로 탐색: 충돌 그리드 위 4방향 A*(백엔드). 시뮬레이션 권한은 백엔드 단일이고, 프런트는 WebSocket 스냅샷·변경분을 보간해 그리기만 한다.
 - 프런트: Phaser 4 + React 19 + Zustand. 에셋은 코드 생성 → CC0 팩 순(`assets/LICENSES.md` 기록).

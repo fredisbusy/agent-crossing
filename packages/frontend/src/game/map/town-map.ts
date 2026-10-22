@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { TILE_SIZE } from "../../town-layout";
-import { buildFallbackMap } from "./fallback-map";
+import { drawFacades, FACADE_LAYER, planFacades } from "./facade";
+import { buildFallbackMap, TILE } from "./fallback-map";
 import { extractLocationAreas, type LocationArea } from "./locations";
 import { DECOR_LAYER, extractMapSprites, FURNITURE_LAYER, type MapSprite } from "./objects";
 import { drawPixelKit, hasPixelKit, planPixelKit, preloadPixelKit } from "./pixel-kit";
@@ -52,8 +53,11 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
   // 아틀라스가 없으면 아래 코드 타일 레이어가 그대로 대체 화면이 된다.
   if (hasPixelKit(scene)) {
     const ground = layer.layer.data.flatMap((row) => row.map((tile) => tile.index));
-    const plan = planPixelKit(ground, tilemap.width, tilemap.height, { areas, furniture, decor });
+    const isDoor = (tx: number, ty: number): boolean => ground[ty * tilemap.width + tx] === TILE.door;
+    const facades = planFacades(extractMapSprites(tilemap.getObjectLayer(FACADE_LAYER)?.objects ?? []), isDoor);
+    const plan = planPixelKit(ground, tilemap.width, tilemap.height, { areas, furniture, decor, facades });
     drawPixelKit(scene, plan, tilemap.widthInPixels, tilemap.heightInPixels);
+    drawFacades(scene, facades);
   }
   return {
     widthPx: tilemap.widthInPixels,

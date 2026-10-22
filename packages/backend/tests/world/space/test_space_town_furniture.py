@@ -22,7 +22,8 @@ CONTRACT_FURNITURE = {
 }  # fmt: skip
 CONTRACT_DECOR = {
     "fountain_0", "bench_h", "bench_v", "lamp_post", "light", "flower_bed_a", "flower_bed_b",
-    "flower_bed_c", "planter", "signpost", "lily_pad", "lily_pad_b", "reeds",
+    "flower_bed_c", "planter", "signpost", "lily_pad", "lily_pad_b", "reeds", "fence_h", "fence_post",
+    "mailbox", "tilled", "tomato_ripe", "sunflower_ripe", "scarecrow", "beehive", "keg",
 }  # fmt: skip
 SIZES = {"furn_bed": (1, 2), "furn_bed_double": (2, 2), "rug_b": (3, 2), "fountain_0": (3, 3)}
 WALKABLE = {"rug_a", "rug_b", "mat_door", "furn_chair_down", "furn_chair_up", "furn_chair_right"}

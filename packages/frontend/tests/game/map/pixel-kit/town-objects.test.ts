@@ -8,7 +8,8 @@ import { planPixelKit } from "../../../../src/game/map/pixel-kit";
 import { birdPose, butterflyPose } from "../../../../src/game/map/pixel-kit/critters";
 import { planMapObjects } from "../../../../src/game/map/pixel-kit/object-plan";
 import { placeStyleAt } from "../../../../src/game/map/pixel-kit/place-style";
-import { layoutSign, planSigns } from "../../../../src/game/map/pixel-kit/signs";
+import { clampSignCenter, layoutSign, planSigns } from "../../../../src/game/map/pixel-kit/signs";
+import { EAVE_BOTTOM, FACADE_LAYER, planFacades } from "../../../../src/game/map/facade";
 
 interface RawLayer {
   name: string;
@@ -26,6 +27,7 @@ const furniture = extractMapSprites(layer("furniture").objects ?? []);
 const decor = extractMapSprites(layer("decor").objects ?? []);
 const ground = layer("ground").data ?? [];
 const frames = new Set(Object.keys(atlas.frames));
+const facades = planFacades(extractMapSprites(layer(FACADE_LAYER).objects ?? []), (tx, ty) => ground[ty * town.width + tx] === TILE.door);
 
 describe("place style", () => {
   const styleIn = (path: string, dx = 1, dy = 1) => {
@@ -72,7 +74,7 @@ describe("map objects", () => {
 
   it("bakes rugs and flowers, y-sorts the rest, and skips light", () => {
     const plan = planMapObjects(furniture, decor);
-    expect(plan.baked.every((b) => /^(rug_|mat_door|flower_bed_|lily_pad|reeds)/.test(b.frame))).toBe(true);
+    expect(plan.baked.every((b) => /^(rug_|mat_door|flower_bed_|lily_pad|reeds|tilled)/.test(b.frame))).toBe(true);
     expect(plan.sprites.some((s) => s.frame === "light")).toBe(false);
     const bench = decor.find((d) => d.frame === "bench_h");
     const planned = plan.sprites.find((s) => s.frame === "bench_h");
@@ -100,14 +102,24 @@ describe("signs", () => {
     expect(wide.textX + 90 + 2).toBeLessThanOrEqual(wide.width - 4 + 0.001);
   });
 
-  it("hangs south-row signs below the building, away from the main road", () => {
-    const signs = planSigns(areas);
-    const south = signs.filter((s) => s.below);
-    expect(south.map((s) => s.label).sort()).toEqual(
-      ["Artist's Co-living Space", "Dorm for Oak Hill College", "Isabella's Apartment", "Moore Family House"].sort(),
-    );
-    expect(south.every((s) => s.edgeY >= 32 * 16)).toBe(true);
-    expect(signs.filter((s) => !s.below).every((s) => s.edgeY === 8 * 16)).toBe(true);
+  it("stands every sign on its building's eave, inside the front", () => {
+    const signs = planSigns(areas, facades);
+    expect(signs).toHaveLength(9);
+    for (const sign of signs) {
+      const facade = facades.find((f) => f.name === sign.label);
+      if (!facade) throw new Error(sign.label);
+      expect(sign.below).toBe(false);
+      expect(sign.edgeY).toBe(facade.y + EAVE_BOTTOM);
+      expect(sign.bounds).toEqual([facade.x, facade.x + facade.columns * 16]);
+    }
+  });
+
+  it("keeps a sign inside its front when it fits, and centers it when it does not", () => {
+    expect(clampSignCenter(10, 40, [0, 176])).toBe(20);
+    expect(clampSignCenter(170, 40, [0, 176])).toBe(156);
+    expect(clampSignCenter(90, 40, [0, 176])).toBe(90);
+    expect(clampSignCenter(10, 200, [0, 176])).toBe(88);
+    expect(clampSignCenter(10, 40, null)).toBe(10);
   });
 });
 

@@ -10,7 +10,14 @@ Rect = tuple[int, int, int, int]  # 타일 단위 x, y, w, h
 DecorItem = tuple[str, Rect]
 
 # 이 이름의 객체는 collision에 막는다. 막는 칸은 기본적으로 사각형의 아래 한 줄(밑동)이다.
-BLOCKING_DECOR = frozenset({"fountain_0", "bench_h", "lamp_post", "signpost", "planter"})
+BLOCKING_DECOR = frozenset(
+    {
+        "fountain_0", "bench_h", "lamp_post", "signpost", "planter", "fence_h", "fence_post", "mailbox",
+        "tomato_ripe", "sunflower_ripe", "scarecrow", "beehive", "keg",
+    }
+)  # fmt: skip
+# 키 큰(1x2) 장식은 밑동 한 줄만 막는다.
+TALL_DECOR = frozenset({"lamp_post", "signpost", "mailbox", "sunflower_ripe", "scarecrow", "beehive", "keg"})
 FOUNTAIN_CELLS = 3
 
 # 장식 프레임 이름 -> (너비, 높이) 타일 수. Tiled에서 객체를 그릴 때 이 크기를 쓴다.
@@ -28,10 +35,20 @@ DECOR_FRAMES: dict[str, tuple[int, int]] = {
     "lily_pad": (1, 1),
     "lily_pad_b": (1, 1),
     "reeds": (1, 1),
+    "fence_h": (1, 1),
+    "fence_post": (1, 1),
+    "mailbox": (1, 2),
+    "tilled": (1, 1),
+    "tomato_ripe": (1, 1),
+    "sunflower_ripe": (1, 2),
+    "scarecrow": (1, 2),
+    "beehive": (1, 2),
+    "keg": (1, 2),
 }
 
-# 큰길 가로등 밑동 칸. 건물 문 앞 칸(문 x 4,19,28,43,52 / 4,19,31,40)을 피한다.
-STREET_LAMPS = ((10, 19), (22, 19), (42, 19), (60, 19))
+# 가로등 밑동 칸. 큰길(y15) 북쪽 가장자리와 아랫골목(y31). 문 x(9,23,40,52 / 4,19,31,43,56)와
+# 우편함 x(6,21,33,58)를 피한다.
+STREET_LAMPS = ((3, 15), (17, 15), (28, 15), (36, 15), (47, 15), (58, 15), (13, 31), (39, 31), (63, 31))
 
 
 def lamp(x: int, base_y: int) -> list[DecorItem]:
@@ -40,10 +57,10 @@ def lamp(x: int, base_y: int) -> list[DecorItem]:
 
 
 def square_decor() -> list[DecorItem]:
-    """Town Square(27,18 10x4): 가운데 분수, 둘레 벤치와 가로등. 맨 아래 줄(y21)은 걷는 길로 둔다."""
-    items: list[DecorItem] = [("fountain_0", (30, 18, FOUNTAIN_CELLS, FOUNTAIN_CELLS))]
-    items += [("bench_h", (28, 19, 2, 1)), ("bench_h", (34, 19, 2, 1))]
-    for x, base_y in ((27, 19), (36, 19), (27, 21), (36, 21)):
+    """Town Square 포석 마당(29,8 7x7, 큰길 북쪽): 가운데 분수, 양옆 벤치, 위 모서리 가로등."""
+    items: list[DecorItem] = [("fountain_0", (31, 9, FOUNTAIN_CELLS, FOUNTAIN_CELLS))]
+    items += [("bench_h", (29, 12, 2, 1)), ("bench_h", (34, 12, 2, 1))]
+    for x, base_y in ((29, 9), (35, 9)):
         items += lamp(x, base_y)
     for x, base_y in STREET_LAMPS:
         items += lamp(x, base_y)
@@ -102,6 +119,6 @@ def blocked_cells(item: DecorItem) -> list[tuple[int, int]]:
     name, (x, y, w, h) = item
     if name not in BLOCKING_DECOR:
         return []
-    if name in ("lamp_post", "signpost"):
+    if name in TALL_DECOR:
         return [(x, y + h - 1)]
     return [(xx, yy) for xx in range(x, x + w) for yy in range(y, y + h)]

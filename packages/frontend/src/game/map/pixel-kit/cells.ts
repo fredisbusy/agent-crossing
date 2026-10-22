@@ -1,3 +1,4 @@
+import type { FacadePlan } from "../facade";
 import { TILE } from "../fallback-map";
 import { TILE_SIZE } from "../../../town-layout";
 import type { LocationArea } from "../locations";
@@ -36,6 +37,8 @@ export interface PixelKitContext {
   areas: readonly LocationArea[];
   furniture: readonly MapSprite[];
   decor: readonly MapSprite[];
+  /** 건물 정면. 간판을 정면에 건다(없으면 건물 위 가장자리). */
+  facades?: readonly FacadePlan[];
 }
 
 const EMPTY_CONTEXT: PixelKitContext = { areas: [], furniture: [], decor: [] };
@@ -154,7 +157,7 @@ export function planPixelKit(
     ground: [],
     props: [],
     sprites: objects.sprites,
-    signs: planSigns(areas),
+    signs: planSigns(areas, context.facades),
     critters: planCritters(ground, width, areas, context.furniture, context.decor),
   };
   const draw = (frame: string, x: number, y: number): void => {
