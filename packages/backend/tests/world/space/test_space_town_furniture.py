@@ -15,7 +15,8 @@ ROAD_GID = 2
 DOOR_GID = 7
 FURNITURE_GID = 6
 REACHABLE_RATIO = 0.9
-ROAD_START = (0, 19)
+ROAD_START = (0, 17)
+MAIN_ROAD_ROWS = range(16, 19)
 
 CONTRACT_FURNITURE = {
     "furn_shelf", "furn_counter", "furn_cabinet", "furn_plant", "furn_bed", "furn_bed_double",
@@ -27,7 +28,8 @@ CONTRACT_FURNITURE = {
 }  # fmt: skip
 CONTRACT_DECOR = {
     "fountain_0", "bench_h", "bench_v", "lamp_post", "light", "flower_bed_a", "flower_bed_b",
-    "flower_bed_c", "planter", "signpost", "lily_pad", "lily_pad_b", "reeds",
+    "flower_bed_c", "planter", "signpost", "lily_pad", "lily_pad_b", "reeds", "fence_h", "fence_post",
+    "mailbox", "tilled", "tomato_ripe", "sunflower_ripe", "scarecrow", "beehive", "keg",
 }  # fmt: skip
 SIZES = {"furn_bed": (1, 2), "furn_bed_double": (2, 2), "rug_b": (3, 2), "fountain_0": (3, 3)}
 WALKABLE = {"rug_a", "rug_b", "mat_door", "furn_chair_down", "furn_chair_up", "furn_chair_right"}
@@ -149,4 +151,4 @@ def test_blocking_decor_is_collision_only(raw: dict[str, Any], town: TownSpace) 
 
 def test_decor_does_not_cut_the_road(town: TownSpace) -> None:
     reached = _reachable(town, ROAD_START)
-    assert all(any((x, y) in reached for y in range(18, 22)) for x in range(64))
+    assert all(any((x, y) in reached for y in MAIN_ROAD_ROWS) for x in range(64))

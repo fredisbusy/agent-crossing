@@ -6,17 +6,14 @@
 
 import json
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from town_buildings import BUILDINGS, Building  # noqa: E402
 from town_decor import DecorItem, blocked_cells, park_decor, pond_decor, square_decor  # noqa: E402
-from town_furniture import (  # noqa: E402
-    FRAME_CELLS,
-    ROOM_FURNITURE,
-    WALKABLE_FRAMES,
-)
+from town_furniture import FRAME_CELLS, ROOM_FURNITURE, WALKABLE_FRAMES  # noqa: E402
+from town_yards import TERRACE, TERRACE_FURNITURE, TREES, yard_decor  # noqa: E402
 
 WIDTH = 64
 HEIGHT = 40
@@ -25,48 +22,17 @@ GRASS, ROAD, FLOOR, WALL, WATER, FURNITURE, DOOR, TREE = range(1, 9)
 BLOCKING = {WALL, WATER, FURNITURE, TREE}
 TOWN = "Smallville"
 SEP = " > "
-BUILDING_W = 11
-BUILDING_H = 10
-NORTH_Y = 8
-SOUTH_Y = 22
-ROAD_Y0, ROAD_Y1 = 18, 21
-BUILDING_XS = (2, 14, 26, 38, 50)
-CONNECTOR_X = 37
-
-Rect = tuple[int, int, int, int]  # x, y, w, h (타일; 건물 로컬 또는 월드)
-
-
-@dataclass(frozen=True)
-class Layout:
-    """건물 내부 배치. 로컬 좌표는 바깥 문이 아래(ly=BUILDING_H-1)에 있는 기준."""
-
-    walls: tuple[Rect, ...]
-    doors: tuple[tuple[int, int], ...]
-    rooms: tuple[Rect, ...]  # 방 이름 순서와 대응
-
-
-SINGLE = Layout((), ((5, 9),), ((1, 1, 9, 8),))
-TWO = Layout(((5, 1, 1, 8),), ((5, 7), (2, 9)), ((1, 1, 4, 8), (6, 1, 4, 8)))
-THREE = Layout(
-    ((5, 1, 1, 4), (1, 5, 9, 1)),
-    ((2, 5), (8, 5), (5, 9)),
-    ((1, 1, 4, 4), (6, 1, 4, 4), (1, 6, 9, 3)),
-)
-
-# (건물 이름, 배치, 방 이름들)
-NORTH = (
-    ("Hobbs Cafe", TWO, ("Counter", "Seating")),
-    ("The Willows Market", SINGLE, ("Store",)),
-    ("Oak Hill College", TWO, ("Classroom", "Library")),
-    ("The Rose and Crown Pub", SINGLE, ("Bar",)),
-    ("Lin Family House", TWO, ("Kitchen", "Bedroom")),
-)
-SOUTH = (
-    ("Moore Family House", TWO, ("Living Room", "Bedroom")),
-    ("Dorm for Oak Hill College", THREE, ("Klaus's Room", "Maria's Room", "Common Room")),
-    ("Isabella's Apartment", SINGLE, ("Bedroom",)),
-    ("Artist's Co-living Space", TWO, ("Common Room", "Studio")),
-)
+Rect = tuple[int, int, int, int]  # x, y, w, h (월드 타일)
+MAIN_ROAD: Rect = (0, 16, WIDTH, 3)
+LOWER_LANE: Rect = (0, 31, WIDTH, 2)
+SIDE_LANES: tuple[Rect, ...] = ((25, 19, 2, 12), (51, 19, 2, 12))
+# 북쪽 건물 앞마당을 큰길까지 잇는 한 칸 길(카페·대학 문 아래).
+FRONT_PATHS: tuple[Rect, ...] = ((9, 15, 1, 1), (52, 14, 1, 2))
+SQUARE: Rect = (29, 9, 7, 10)
+SQUARE_PLAZA: Rect = (29, 9, 7, 7)
+POND: Rect = (24, 35, 5, 3)
+PARK: Rect = (0, 33, WIDTH, 7)
+GARDEN: Rect = (6, 35, 11, 3)
 
 
 class Canvas:
@@ -75,6 +41,7 @@ class Canvas:
         self.regions: list[tuple[str, Rect]] = []
         self.furniture: list[tuple[str, Rect]] = []
         self.decor: list[DecorItem] = []
+        self.facades: list[tuple[str, Rect]] = []
         self.extra_block: set[tuple[int, int]] = set()
 
     def put(self, x: int, y: int, gid: int) -> None:
@@ -97,71 +64,44 @@ def place_furniture(canvas: Canvas, frame: str, rect: Rect) -> None:
         canvas.fill(rect, FURNITURE)
 
 
-def place_building(
-    canvas: Canvas,
-    x: int,
-    y: int,
-    flip: bool,
-    name: str,
-    layout: Layout,
-    rooms: tuple[str, ...],
-) -> None:
-    """flip이면 세로로 뒤집어 문이 위쪽 벽에 오게 한다."""
-
-    def world(lx: int, ly: int) -> tuple[int, int]:
-        return x + lx, y + (BUILDING_H - 1 - ly if flip else ly)
-
-    def world_rect(rect: Rect) -> Rect:
-        lx, ly, w, h = rect
-        wx, wy = world(lx, ly)
-        return (wx, wy - (h - 1) if flip else wy, w, h)
-
-    canvas.fill((x, y, BUILDING_W, BUILDING_H), WALL)
-    canvas.fill(world_rect((1, 1, BUILDING_W - 2, BUILDING_H - 2)), FLOOR)
-    for wall in layout.walls:
-        canvas.fill(world_rect(wall), WALL)
-    for lx, ly in layout.doors:
-        canvas.put(*world(lx, ly), DOOR)
-    for lx, ly in layout.doors:
-        if ly == BUILDING_H - 1:  # 바깥 문: 안쪽 칸에 문 매트
-            place_furniture(canvas, "mat_door", world_rect((lx, ly - 1, 1, 1)))
-    building_path = TOWN + SEP + name
-    canvas.region(building_path, (x, y, BUILDING_W, BUILDING_H))
-    for room_name, room in zip(rooms, layout.rooms, strict=True):
-        rx, ry, _, _ = world_rect(room)
-        for frame, lx, ly in ROOM_FURNITURE[(name, room_name)]:
-            fw, fh = FRAME_CELLS[frame]
-            place_furniture(canvas, frame, world_rect((lx, ly, fw, fh)))
-        canvas.region(building_path + SEP + room_name, world_rect(room))
-
-
-def scatter_trees(canvas: Canvas) -> None:
-    for i in range(48):
-        x = (i * 37 + 11) % WIDTH
-        y = (i * 17 + 5) % 7 + 1 if i % 2 == 0 else 34 + (i * 5) % 5
-        if CONNECTOR_X - 1 <= x <= CONNECTOR_X + 1:
-            continue
-        if 6 <= x <= 16 and 35 <= y <= 37:  # Garden은 비워 둔다
-            continue
-        if 24 <= x <= 28 and 35 <= y <= 37:  # 연못 자리
-            continue
-        if canvas.ground[y * WIDTH + x] == GRASS:
-            canvas.put(x, y, TREE)
+def place_building(canvas: Canvas, building: Building) -> None:
+    """벽(위·옆 한 칸, 앞 두 칸)과 바닥, 칸막이, 문, 방별 가구를 놓는다."""
+    x, y, w, h = building.rect
+    fx, fy, _, fh = building.front
+    canvas.fill(building.rect, WALL)
+    canvas.fill((x + 1, y + 1, w - 2, fy - y - 1), FLOOR)
+    for wall in building.walls:
+        canvas.fill(wall, WALL)
+    for door in building.inner_doors:
+        canvas.put(*door, DOOR)
+    canvas.fill((building.door_x, fy, 1, fh), DOOR)
+    place_furniture(canvas, "mat_door", (building.door_x, fy - 1, 1, 1))
+    path = TOWN + SEP + building.name
+    canvas.region(path, building.rect)
+    canvas.facades.append((building.name, building.front))
+    for room_name, room in building.rooms:
+        rx, ry, _, _ = room
+        for frame, ox, oy in ROOM_FURNITURE[(building.name, room_name)]:
+            cw, ch = FRAME_CELLS[frame]
+            place_furniture(canvas, frame, (rx + ox, ry + oy, cw, ch))
+        canvas.region(path + SEP + room_name, room)
 
 
 def build() -> Canvas:
     canvas = Canvas()
-    canvas.fill((0, ROAD_Y0, WIDTH, ROAD_Y1 - ROAD_Y0 + 1), ROAD)
-    canvas.fill((CONNECTOR_X, SOUTH_Y, 1, 12), ROAD)
-    scatter_trees(canvas)
-    for x, (name, layout, rooms) in zip(BUILDING_XS, NORTH, strict=False):
-        place_building(canvas, x, NORTH_Y, False, name, layout, rooms)
-    for x, (name, layout, rooms) in zip(BUILDING_XS, SOUTH, strict=False):
-        place_building(canvas, x, SOUTH_Y, True, name, layout, rooms)
-    canvas.fill((24, 35, 5, 3), WATER)
-    canvas.region(TOWN + SEP + "Town Square", (27, ROAD_Y0, 10, ROAD_Y1 - ROAD_Y0 + 1))
-    canvas.region(TOWN + SEP + "Johnson Park", (2, 33, 47, 6))
-    canvas.region(TOWN + SEP + "Johnson Park" + SEP + "Garden", (6, 35, 11, 3))
+    for road in (MAIN_ROAD, LOWER_LANE, *SIDE_LANES, *FRONT_PATHS, SQUARE_PLAZA):
+        canvas.fill(road, ROAD)
+    for tx, ty in TREES:
+        canvas.put(tx, ty, TREE)
+    for building in BUILDINGS:
+        place_building(canvas, building)
+    canvas.fill(TERRACE, FLOOR)
+    for frame, rect in TERRACE_FURNITURE:
+        place_furniture(canvas, frame, rect)
+    canvas.fill(POND, WATER)
+    canvas.region(TOWN + SEP + "Town Square", SQUARE)
+    canvas.region(TOWN + SEP + "Johnson Park", PARK)
+    canvas.region(TOWN + SEP + "Johnson Park" + SEP + "Garden", GARDEN)
     add_decor(canvas)
     return canvas
 
@@ -174,7 +114,7 @@ def add_decor(canvas: Canvas) -> None:
             for xx in range(x, x + w)
         )
 
-    canvas.decor = square_decor() + park_decor(is_free_grass) + pond_decor()
+    canvas.decor = square_decor() + park_decor(is_free_grass) + pond_decor() + yard_decor()
     for item in canvas.decor:
         canvas.extra_block.update(blocked_cells(item))
 
@@ -249,6 +189,8 @@ def to_tiled(canvas: Canvas) -> dict[str, object]:
     locations = object_group(3, "locations", objects)
     furniture_objects = rect_objects(canvas.furniture, len(objects) + 1)
     decor_objects = rect_objects(canvas.decor, len(objects) + len(furniture_objects) + 1)
+    facade_objects = rect_objects(canvas.facades, len(objects) + len(furniture_objects) + len(decor_objects) + 1)
+    next_id = len(objects) + len(furniture_objects) + len(decor_objects) + len(facade_objects) + 1
     tileset = {
         "columns": 8,
         "firstgid": 1,
@@ -272,9 +214,10 @@ def to_tiled(canvas: Canvas) -> dict[str, object]:
             locations,
             object_group(4, "furniture", furniture_objects),
             object_group(5, "decor", decor_objects),
+            object_group(6, "facades", facade_objects),
         ],
-        "nextlayerid": 6,
-        "nextobjectid": len(objects) + len(furniture_objects) + len(decor_objects) + 1,
+        "nextlayerid": 7,
+        "nextobjectid": next_id,
         "orientation": "orthogonal",
         "renderorder": "right-down",
         "tiledversion": "1.10.2",

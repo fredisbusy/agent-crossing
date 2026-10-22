@@ -99,7 +99,7 @@ def test_find_path_edge_cases(town: TownSpace) -> None:
     start = town.tile_of("Smallville > Town Square")
     assert start is not None
     assert town.find_path(start, start) == ()
-    assert town.find_path(start, TilePosition(x=2, y=8)) is None  # 건물 벽
+    assert town.find_path(start, TilePosition(x=1, y=8)) is None  # 건물 벽
 
 
 def test_tree_contains_all_paths(town: TownSpace) -> None:
