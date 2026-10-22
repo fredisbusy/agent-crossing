@@ -15,8 +15,8 @@ ROAD_GID = 2
 DOOR_GID = 7
 FURNITURE_GID = 6
 REACHABLE_RATIO = 0.9
-ROAD_START = (0, 17)
-MAIN_ROAD_ROWS = range(16, 19)
+ROAD_START = (0, 16)
+MAIN_ROAD_ROWS = range(15, 18)
 
 CONTRACT_FURNITURE = {
     "furn_shelf", "furn_counter", "furn_cabinet", "furn_plant", "furn_bed", "furn_bed_double",

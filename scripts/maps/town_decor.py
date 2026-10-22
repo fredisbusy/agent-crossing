@@ -20,9 +20,9 @@ BLOCKING_DECOR = frozenset(
 TALL_DECOR = frozenset({"lamp_post", "signpost", "mailbox", "sunflower_ripe", "scarecrow", "beehive", "keg"})
 FOUNTAIN_CELLS = 3
 
-# 가로등 밑동 칸. 큰길(y16) 북쪽 가장자리와 아랫골목(y31). 문 x(9,23,40,52 / 4,19,31,43,56)와
+# 가로등 밑동 칸. 큰길(y15) 북쪽 가장자리와 아랫골목(y31). 문 x(9,23,40,52 / 4,19,31,43,56)와
 # 우편함 x(6,21,33,58)를 피한다.
-STREET_LAMPS = ((3, 16), (17, 16), (28, 16), (36, 16), (47, 16), (58, 16), (13, 31), (39, 31), (63, 31))
+STREET_LAMPS = ((3, 15), (17, 15), (28, 15), (36, 15), (47, 15), (58, 15), (13, 31), (39, 31), (63, 31))
 
 
 def lamp(x: int, base_y: int) -> list[DecorItem]:
@@ -31,10 +31,10 @@ def lamp(x: int, base_y: int) -> list[DecorItem]:
 
 
 def square_decor() -> list[DecorItem]:
-    """Town Square 포석 마당(29,9 7x7, 큰길 북쪽): 가운데 분수, 양옆 벤치, 위 모서리 가로등."""
-    items: list[DecorItem] = [("fountain_0", (31, 10, FOUNTAIN_CELLS, FOUNTAIN_CELLS))]
-    items += [("bench_h", (29, 13, 2, 1)), ("bench_h", (34, 13, 2, 1))]
-    for x, base_y in ((29, 10), (35, 10)):
+    """Town Square 포석 마당(29,8 7x7, 큰길 북쪽): 가운데 분수, 양옆 벤치, 위 모서리 가로등."""
+    items: list[DecorItem] = [("fountain_0", (31, 9, FOUNTAIN_CELLS, FOUNTAIN_CELLS))]
+    items += [("bench_h", (29, 12, 2, 1)), ("bench_h", (34, 12, 2, 1))]
+    for x, base_y in ((29, 9), (35, 9)):
         items += lamp(x, base_y)
     for x, base_y in STREET_LAMPS:
         items += lamp(x, base_y)
