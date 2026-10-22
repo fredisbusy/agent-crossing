@@ -16,7 +16,7 @@ const LAMP_ON_DARKNESS = 0.15;
 const LIGHT_POOL_MAX_ALPHA = 0.85;
 /** 실내는 밤에 따뜻한 색을 더해 주민이 보이게 한다. */
 const INDOOR_GLOW_COLOR = 0xffb866;
-const INDOOR_GLOW_MAX_ALPHA = 0.3;
+const INDOOR_GLOW_MAX_ALPHA = 0.4;
 export interface DaylightInput {
   widthPx: number;
   heightPx: number;

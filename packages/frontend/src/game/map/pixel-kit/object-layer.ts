@@ -23,8 +23,8 @@ const SIGN_ART_SCALE = 2;
 /** 화면 1:1로 놓으므로 2배 그려 선형 축소한다(`Phaser.Textures.FilterMode.LINEAR` = 0). */
 const SIGN_TEXT_RESOLUTION = 2;
 const SIGN_TEXT_FILTER_LINEAR = 0;
-/** 간판은 나무·가구·주민(깊이=y, 지도 높이 안)보다 위, 틴트(90000)보다 아래. */
-const SIGN_DEPTH = 50_000;
+/** 간판은 나무·가구·주민과 밤 틴트(90000)보다 위(밤에도 읽히게), 디버그(100000)보다 아래. */
+const SIGN_DEPTH = 90_500;
 const SIGN_TEXT_COLOR = "#fff4d6";
 /** 판자 그림 세로 가운데가 프레임 위에서 떨어진 px. */
 const PLANK_CENTER_OFFSET = PLANK_TOP_OFFSET + 6;
