@@ -72,8 +72,12 @@ def artist_yard() -> list[DecorItem]:
 
 
 def fronts() -> list[DecorItem]:
-    """문앞: 집은 우편함, 가게는 화분·꽃, 술집은 술통, 대학 앞 잔디길은 꽃밭."""
-    items: list[DecorItem] = [("mailbox", (x, 30, 1, 2)) for x in (6, 21, 33, 58)]
+    """문앞: 집마다 다르게(무어·린 우편함, 이사벨라 화분 한 쌍, 기숙사 벤치, 예술가 해바라기), 가게는 화분·꽃,
+    술집은 술통, 대학 앞 잔디길은 꽃밭. 아랫골목 소품은 골목 위 줄(y31)만 막아 아래 줄은 늘 지나간다."""
+    items: list[DecorItem] = [("mailbox", (6, 30, 1, 2)), ("mailbox", (58, 30, 1, 2)), ("flower_bed_b", (54, 31, 1, 1))]
+    items += [("planter", (18, 31, 1, 1)), ("planter", (20, 31, 1, 1))]
+    items += [("bench_h", (33, 31, 2, 1))]
+    items += [("sunflower_ripe", (41, 30, 1, 2)), ("flower_bed_c", (45, 31, 1, 1))]
     items += [("flower_bed_a", (8, 14, 1, 1)), ("flower_bed_c", (10, 14, 1, 1))]
     items += [("planter", (21, 15, 1, 1)), ("planter", (25, 15, 1, 1))]
     items.append(("keg", (46, 13, 1, 2)))
