@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 from agents.reaction.contracts import (
+    ReactionCombined,
     ReactionDecision,
     ReactionDecisionTrace,
     ReactionIntent,
@@ -203,4 +204,30 @@ def parse_reaction_utterance(response_text: str) -> ReactionUtterance:
             parse_success=True,
             parse_error="repaired_once" if repaired_once else "",
         ),
+    )
+
+
+def parse_reaction_combined(response_text: str) -> ReactionCombined:
+    """의도+발화 결합 응답을 파싱한다.
+
+    intent 파싱이 실패하면 trace.parse_success=False인 intent를 돌려주고,
+    호출자가 2단계 경로로 폴백한다. should_react=true인데 utterance 키가
+    문자열로 없으면 utterance=None으로 두어 발화만 따로 생성하게 한다.
+    """
+    intent = parse_reaction_intent(response_text)
+    if not intent.trace.parse_success or not intent.should_react:
+        return ReactionCombined(intent=intent)
+
+    parsed_json = parse_json_object(response_text)
+    if parsed_json is None:
+        parsed_json = attempt_json_repair_once(response_text)
+    if parsed_json is None:
+        return ReactionCombined(intent=intent)
+    has_utterance = isinstance(parsed_json.get("utterance"), str) or isinstance(
+        parsed_json.get("reaction"), str
+    )
+    if not has_utterance:
+        return ReactionCombined(intent=intent)
+    return ReactionCombined(
+        intent=intent, utterance=parse_reaction_utterance(response_text)
     )
