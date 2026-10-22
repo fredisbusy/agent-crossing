@@ -15,14 +15,19 @@ const ATLAS_KEY = "pixel-kit";
 /** Phaser `Scenes.Events`와 같은 문자열(런타임 import를 피해 순수 테스트가 Phaser를 읽지 않게 한다). */
 const UPDATE_EVENT = "update";
 const SHUTDOWN_EVENT = "shutdown";
-const SIGN_FONT_SIZE = "7px";
-/** 글자를 확대해도 흐려지지 않게 하는 해상도 배율(카메라 최대 4배 확대 × 2). */
-const SIGN_TEXT_RESOLUTION = 8;
+/** 화면 기준 글자 크기(px). 주민 이름표(`residents/labels/style.ts`)와 같은 11px. */
+const SIGN_FONT_PX = 11;
+const SIGN_FONT = '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", system-ui, sans-serif';
+/** 판자 그림 1px = 화면 2px (이름표와 같은 배율). */
+const SIGN_ART_SCALE = 2;
+/** 화면 1:1로 놓으므로 2배 그려 선형 축소한다(`Phaser.Textures.FilterMode.LINEAR` = 0). */
+const SIGN_TEXT_RESOLUTION = 2;
+const SIGN_TEXT_FILTER_LINEAR = 0;
+/** 간판은 나무·가구·주민(깊이=y, 지도 높이 안)보다 위, 틴트(90000)보다 아래. */
+const SIGN_DEPTH = 50_000;
 const SIGN_TEXT_COLOR = "#fff4d6";
 /** 판자 그림 세로 가운데가 프레임 위에서 떨어진 px. */
 const PLANK_CENTER_OFFSET = PLANK_TOP_OFFSET + 6;
-/** 간판은 건물 위쪽 가장자리 바로 앞 주민보다 항상 뒤. */
-const SIGN_DEPTH_LIFT = 1;
 const FLY_DEPTH_LIFT = 64;
 const ANIM_FRAME_RATE = 6;
 const ANIM_FRAMES: Readonly<Record<string, readonly string[]>> = {
@@ -44,23 +49,35 @@ function drawSprites(scene: Phaser.Scene, sprites: readonly ObjectSprite[], tick
   }
 }
 
-function drawSign(scene: Phaser.Scene, sign: SignPlan): void {
+/** 판자+아이콘+글자를 한 덩어리로 묶어 화면 크기를 고정한다(컨테이너를 1/줌으로 스케일). */
+function drawSign(scene: Phaser.Scene, sign: SignPlan, ticks: Tick[]): void {
   const text = scene.add
-    .text(0, 0, sign.label, { fontSize: SIGN_FONT_SIZE, color: SIGN_TEXT_COLOR })
-    .setResolution(SIGN_TEXT_RESOLUTION)
+    .text(0, 0, sign.label, {
+      fontFamily: SIGN_FONT,
+      fontSize: `${SIGN_FONT_PX}px`,
+      fontStyle: "bold",
+      color: SIGN_TEXT_COLOR,
+      resolution: SIGN_TEXT_RESOLUTION,
+    })
     .setOrigin(0, 0.5);
-  const layout = layoutSign(text.width);
-  const left = Math.round(sign.centerX - layout.width / 2);
-  const frameTop = sign.bottomY - PLANK_CELL;
-  const depth = sign.bottomY - SIGN_DEPTH_LIFT;
-  const piece = (frame: string, x: number, y = frameTop): void => {
-    scene.add.image(x, y, ATLAS_KEY, frame).setOrigin(0, 0).setDepth(depth);
-  };
-  piece("sign_plank_l", left);
-  for (let i = 0; i < layout.middleCount; i += 1) piece("sign_plank_m", left + PLANK_END_WIDTH + i * PLANK_MIDDLE_WIDTH);
-  piece("sign_plank_r", left + layout.width - PLANK_END_WIDTH);
-  piece(sign.icon, left + layout.iconX, frameTop + PLANK_TOP_OFFSET - ICON_TOP_OFFSET + 1);
-  text.setPosition(left + layout.textX, frameTop + PLANK_CENTER_OFFSET).setDepth(depth + 0.1);
+  text.texture.setFilter(SIGN_TEXT_FILTER_LINEAR);
+  // 판자 그림은 화면에서 SIGN_ART_SCALE배로 보이므로 글자 폭을 그림 px로 환산해 3-patch를 늘린다.
+  const layout = layoutSign(text.width / SIGN_ART_SCALE);
+  const s = SIGN_ART_SCALE;
+  const left = -(layout.width * s) / 2;
+  const frameTop = -PLANK_CELL * s;
+  const piece = (frame: string, x: number, y = frameTop): Phaser.GameObjects.Image =>
+    scene.add.image(x, y, ATLAS_KEY, frame).setOrigin(0, 0).setScale(s);
+  const children: Phaser.GameObjects.GameObject[] = [piece("sign_plank_l", left)];
+  for (let i = 0; i < layout.middleCount; i += 1) {
+    children.push(piece("sign_plank_m", left + (PLANK_END_WIDTH + i * PLANK_MIDDLE_WIDTH) * s));
+  }
+  children.push(piece("sign_plank_r", left + (layout.width - PLANK_END_WIDTH) * s));
+  children.push(piece(sign.icon, left + layout.iconX * s, frameTop + (PLANK_TOP_OFFSET - ICON_TOP_OFFSET + 1) * s));
+  text.setPosition(left + layout.textX * s, frameTop + PLANK_CENTER_OFFSET * s);
+  children.push(text);
+  const container = scene.add.container(sign.centerX, sign.bottomY, children).setDepth(SIGN_DEPTH);
+  ticks.push(() => container.setScale(1 / scene.cameras.main.zoom));
 }
 
 function drawCritters(scene: Phaser.Scene, critters: CritterPlan, ticks: Tick[]): void {
@@ -99,7 +116,7 @@ export function drawPixelKitObjects(
 ): void {
   const ticks: Tick[] = [];
   drawSprites(scene, plan.sprites, ticks);
-  for (const sign of plan.signs) drawSign(scene, sign);
+  for (const sign of plan.signs) drawSign(scene, sign, ticks);
   drawCritters(scene, plan.critters, ticks);
   if (ticks.length === 0) return;
   const onUpdate = (time: number): void => {
