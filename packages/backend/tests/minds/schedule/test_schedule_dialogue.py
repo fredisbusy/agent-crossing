@@ -10,6 +10,7 @@ from world.contracts import (
     MindContext,
     Observation,
     ResidentPublicView,
+    SocialEvent,
     SpeechAct,
     TilePosition,
     Utterance,
@@ -99,7 +100,7 @@ def test_greet_is_answered_with_greet() -> None:
     assert reply is not None and reply.acts[0].kind == "greet"
 
 
-def test_invite_accept_adds_override_and_moves_there() -> None:
+def test_invite_accept_adds_commitment_and_moves_there() -> None:
     mind = _mind()
     reply = _respond(mind, _said("초대", _invite()))
     assert reply is not None and reply.acts[0].kind == "accept"
@@ -108,18 +109,26 @@ def test_invite_accept_adds_override_and_moves_there() -> None:
     ctx = _ctx(PARTY_START - datetime.timedelta(minutes=20))
     action = asyncio.run(mind.next_action(ctx))
     assert action.kind == "move" and action.location_path == SQUARE
-    assert mind.friendship.score("klaus") == 3  # 대화 +2, 수락 +1
+    assert mind.social.friendship.score("klaus") == 3  # 대화 +2, 수락 +1
 
 
 def test_invite_declined_on_conflict_or_low_friendship() -> None:
     mind = _mind()
-    mind.timetable.add_override("다른 약속", PARTY_START, CAFE)
+    mind.social.agenda.commit(
+        SocialEvent(
+            name="다른 약속",
+            start_time=PARTY_START,
+            end_time=PARTY_START + datetime.timedelta(hours=1),
+            location_path=CAFE,
+        ),
+        "guest",
+    )
     reply = _respond(mind, _said("초대", _invite()))
     assert reply is not None and reply.acts[0].kind == "decline"
     picky = _mind(min_friendship=10)
     reply = _respond(picky, _said("초대", _invite()))
     assert reply is not None and reply.acts[0].kind == "decline"
-    assert picky.timetable.overrides == []
+    assert picky.social.agenda.commitments == []
 
 
 def test_share_fact_is_stored_then_answered_with_smalltalk() -> None:
@@ -127,11 +136,11 @@ def test_share_fact_is_stored_then_answered_with_smalltalk() -> None:
     fact = SpeechAct(kind="share_fact", topic="파티", fact="토요일에 열린대요")
     reply = _respond(mind, _said("들었어?", fact))
     assert reply is not None and reply.acts[0].kind == "smalltalk"
-    stored = mind.facts.get("파티")
+    stored = mind.social.facts.get("파티")
     assert stored is not None and stored.source_resident_id == "klaus"
     newer = SpeechAct(kind="share_fact", topic="파티", fact="일요일로 바뀌었대요")
     _respond(mind, _said("바뀜", newer), cid="c2")
-    updated = mind.facts.get("파티")
+    updated = mind.social.facts.get("파티")
     assert updated is not None and updated.fact == "일요일로 바뀌었대요"
 
 
@@ -141,7 +150,7 @@ def test_ask_answers_known_fact_else_smalltalk() -> None:
     unknown = _respond(mind, _said("파티?", ask))
     assert unknown is not None and unknown.acts[0].kind == "smalltalk"
     assert "파티" in unknown.text
-    mind.facts.learn("파티", "토요일", "maria", MONDAY)
+    mind.social.facts.learn("파티", "토요일", "maria", MONDAY)
     known = _respond(mind, _said("파티?", ask), cid="c2")
     assert known is not None and known.acts[0].kind == "share_fact"
     assert known.acts[0].fact == "토요일" and "토요일" in known.text
@@ -167,7 +176,7 @@ def test_max_turns_forces_farewell() -> None:
 def test_unshared_fact_is_shared_once_per_listener_deterministically() -> None:
     def run(seed: int) -> list[str]:
         mind = _mind(seed=seed)
-        mind.facts.learn("파티", "토요일", "maria", MONDAY)
+        mind.social.facts.learn("파티", "토요일", "maria", MONDAY)
         talk = _said("그렇죠", SpeechAct(kind="smalltalk"))
         kinds = []
         for i in range(3):
@@ -188,7 +197,7 @@ def test_encounter_prefers_conversation_when_fact_pending_and_respects_cooldown(
         resident_id="klaus", display_name="Klaus", location_path=CAFE
     )
     assert asyncio.run(mind.on_encounter(_ctx(), other)) == "pass_by"
-    mind.facts.learn("파티", "토요일", "maria", MONDAY)
+    mind.social.facts.learn("파티", "토요일", "maria", MONDAY)
     assert asyncio.run(mind.on_encounter(_ctx(), other)) == "converse"
     _respond(mind, cid="c1")  # 대화 기록 -> 쿨다운 시작
     soon = MONDAY + datetime.timedelta(hours=2, minutes=59)
@@ -215,7 +224,7 @@ def test_observe_stores_overheard_share_fact() -> None:
         utterance=utterance,
     )
     asyncio.run(mind.observe((obs,)))
-    stored = mind.facts.get("시장")
+    stored = mind.social.facts.get("시장")
     assert (
         stored is not None
         and stored.fact == "내일 쉰대요"

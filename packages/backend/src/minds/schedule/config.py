@@ -5,11 +5,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from minds.social import SlotAction
 from world.contracts import LocationPath
 
 _HHMM = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
-EntryAction = Literal["idle", "use_object", "sleep"]
+EntryAction = SlotAction
 Tone = Literal["polite", "casual"]
 
 
@@ -62,6 +63,8 @@ class ScheduleConfig(BaseModel):
     share_probability: float = Field(default=0.5, ge=0.0, le=1.0)
     """전할 사실이 있을 때 `share_fact`를 섞는 확률."""
     min_friendship_to_accept_invite: int = 0
+    event_interest: float = Field(default=0.5, ge=0.0, le=1.0)
+    """소문으로 들은 공개 행사에 가겠다고 할 확률. 주최자와 친하면 더 오른다."""
     max_turns: int = Field(default=4, ge=1)
     """한 대화에서 내가 말하는 최대 횟수. 마지막 말은 `farewell`."""
     tone: Tone = "polite"

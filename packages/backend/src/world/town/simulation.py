@@ -1,6 +1,7 @@
 """마을 틱 루프 (SPEC §14): 이동 → 지각 → 조우·대화 → 마음 깨우기 → 의도 적용."""
 
 import asyncio
+import datetime
 import json
 import random
 from collections import Counter
@@ -18,6 +19,7 @@ from world.contracts import (
 )
 from world.residents import Resident
 
+from .calendar import TownCalendar, holiday_observation
 from .clock import SimClock
 from .conversation import DEFAULT_MAX_TURNS, TownConversation
 from .encounters import EncounterTracker, can_talk
@@ -46,6 +48,7 @@ class TownSimulation:
         mode: SimulationMode = "faithful",
         perception_radius: int = DEFAULT_PERCEPTION_RADIUS,
         max_turns: int = DEFAULT_MAX_TURNS,
+        calendar: TownCalendar | None = None,
     ) -> None:
         self.space = space
         self.residents = list(residents)
@@ -64,10 +67,13 @@ class TownSimulation:
         self._near: dict[str, list[str]] = {}
         self._seen: dict[str, dict[str, tuple[str, str | None]]] = {}
         self._spoken: dict[str, tuple[int, str]] = {}
+        self._calendar = calendar if calendar is not None else TownCalendar()
+        self._announced_day: datetime.date | None = None
 
     async def tick(self) -> None:
         self.clock.advance(1)
         self.tick_count += 1
+        self._announce_day()
         for resident in self.residents:
             resident.body.step()
         pairs = near_pairs(self.residents, self._radius)
@@ -121,6 +127,22 @@ class TownSimulation:
             separators=(",", ":"),
         )
 
+    # --- 달력 ---------------------------------------------------------------
+
+    def _announce_day(self) -> None:
+        """날이 바뀌면 그날의 기념일을 모든 주민에게 같은 관찰로 알린다."""
+        today = self.clock.now.date()
+        if today == self._announced_day:
+            return
+        self._announced_day = today
+        for holiday in self._calendar.holidays_on(today):
+            for resident in self.residents:
+                resident.pending.append(
+                    holiday_observation(
+                        holiday, self.clock.now, resident.body.state.location_path
+                    )
+                )
+
     # --- 지각 ---------------------------------------------------------------
 
     def _perceive(self, pairs: set[tuple[str, str]]) -> None:
@@ -155,6 +177,7 @@ class TownSimulation:
                 for i in sorted(self._near.get(resident.resident_id, []))
             ),
             observations=observations,
+            holidays=self._calendar.holidays_on(self.clock.now.date()),
         )
 
     async def _observe_drained(self, resident: Resident) -> MindContext:

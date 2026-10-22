@@ -65,22 +65,3 @@ def test_weekday_boundary_uses_next_days_entry_for_end() -> None:
     slot = table.slot_at(friday_evening)
     assert slot.location_path == CAFE
     assert slot.end == friday_evening.replace(hour=22)
-
-
-def test_override_wins_from_thirty_minutes_before() -> None:
-    table = _table()
-    start = at(MONDAY, 15)
-    table.add_override("파티", start, SQUARE)
-    assert table.slot_at(at(MONDAY, 14, 29)).location_path == CAFE
-    assert table.slot_at(at(MONDAY, 14, 29)).end == at(MONDAY, 14, 30)
-    slot = table.slot_at(at(MONDAY, 14, 30))
-    assert slot.is_override and slot.location_path == SQUARE
-    assert slot.end == at(MONDAY, 16)
-    assert table.slot_at(at(MONDAY, 16)).location_path == CAFE
-
-
-def test_conflicts_detects_overlap() -> None:
-    table = _table()
-    table.add_override("파티", at(MONDAY, 15), SQUARE)
-    assert table.conflicts(at(MONDAY, 15, 30))
-    assert not table.conflicts(at(MONDAY, 16))

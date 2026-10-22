@@ -6,10 +6,19 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from world.contracts import LocationPath, MindKind, ResidentId
+from world.contracts import LocationPath, MindKind, ResidentId, SocialEvent
 
 DEFAULT_RESIDENTS_DIR = Path(__file__).resolve().parents[3] / "residents"
 """`packages/backend/residents/`."""
+
+
+class SeedFact(BaseModel):
+    """시작할 때 아는 사실."""
+
+    model_config = ConfigDict(frozen=True)
+
+    topic: str
+    fact: str
 
 
 class ResidentConfig(BaseModel):
@@ -32,6 +41,12 @@ class ResidentConfig(BaseModel):
     placeholders: dict[str, str] = Field(default_factory=dict)
     """원형의 `{home}`·`{bedroom}` 같은 자리표시자 치환값."""
     seed_memories: list[str] = Field(default_factory=list)
+    """LLM 마음의 시작 기억 문장. 행사·사실은 아래 구조 필드로 두 마음이 함께 쓴다."""
+    hosting: list[SocialEvent] = Field(default_factory=list)
+    """이 주민이 여는 행사."""
+    seed_facts: list[SeedFact] = Field(default_factory=list)
+    friendships: dict[ResidentId, int] = Field(default_factory=dict)
+    """시작 우호도(0~100)."""
 
 
 def load_resident_configs(directory: Path | None = None) -> list[ResidentConfig]:
