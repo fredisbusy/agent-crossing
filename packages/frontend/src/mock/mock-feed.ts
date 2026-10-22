@@ -1,5 +1,6 @@
 import { DEFAULT_TICK_INTERVAL_MS, type FeedHandlers, type WorldFeed } from "../net";
 import type { WalkGrid } from "../town-layout";
+import { createPosesWorld } from "./pose-scenario";
 import { createMockWorld, DEFAULT_MOCK_SEED, type MockWorld } from "./mock-world";
 
 /** 통행 격자를 비동기로 읽는 함수. null이면 내장 대체 마을을 쓴다. */
@@ -20,8 +21,10 @@ export class MockFeed implements WorldFeed {
     private readonly tickIntervalMs: number = DEFAULT_TICK_INTERVAL_MS,
     private readonly loadGrid?: WalkGridLoader,
     private readonly startHour?: number,
+    scenario?: string,
   ) {
-    if (!loadGrid) this.world = createMockWorld(seed, undefined, startHour);
+    if (scenario === "poses") this.world = createPosesWorld(startHour);
+    else if (!loadGrid) this.world = createMockWorld(seed, undefined, startHour);
   }
 
   start(handlers: FeedHandlers): void {

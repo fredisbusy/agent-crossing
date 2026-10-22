@@ -11,7 +11,7 @@ function mockStartHour(params: URLSearchParams): number | undefined {
 export function createFeed(search: string): WorldFeed {
   const params = new URLSearchParams(search);
   return params.get("mock") === "1"
-    ? new MockFeed(DEFAULT_MOCK_SEED, DEFAULT_TICK_INTERVAL_MS, loadTownWalkGrid, mockStartHour(params))
+    ? new MockFeed(DEFAULT_MOCK_SEED, DEFAULT_TICK_INTERVAL_MS, loadTownWalkGrid, mockStartHour(params), params.get("scenario") ?? undefined)
     : new WorldSocket();
 }
 

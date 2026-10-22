@@ -12,6 +12,9 @@ const TEXT_PAD_X = 4;
  */
 export class NameTag {
   readonly container: Phaser.GameObjects.Container;
+  /** 화면 px 크기. */
+  readonly width: number;
+  readonly height: number;
 
   constructor(scene: Phaser.Scene, name: string, usePixelKit: boolean) {
     const text = scene.add
@@ -25,6 +28,8 @@ export class NameTag {
       .setOrigin(0.5, 0.5);
     smoothTextTexture(text);
     const height = TAG_ART_HEIGHT * ART_SCALE;
+    this.height = height;
+    this.width = Math.ceil((text.width + TEXT_PAD_X * 2) / ART_SCALE) * ART_SCALE;
     const children: Phaser.GameObjects.GameObject[] = [];
     const key = usePixelKit && scene.textures.exists(PIXEL_KIT_ATLAS_KEY) ? this.bake(scene, text.width) : null;
     if (key) {
