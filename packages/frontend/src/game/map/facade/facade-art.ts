@@ -5,8 +5,8 @@ import type { FacadeStyle } from "./facade-style";
 /** 그리기에 쓰는 캔버스 2D 일부(테스트에서 가짜로 바꾼다). */
 export type Painter = Pick<CanvasRenderingContext2D, "fillStyle" | "fillRect">;
 
-// 정면 세로 구역(px, 위에서부터). 처마 → 위층(간판 자리) → 아래층(창·문) → 주춧돌.
-const EAVE_BOTTOM = 8;
+// 정면 세로 구역(px, 위에서부터). 처마(간판 자리) → 벽(창·문) → 주춧돌.
+export const EAVE_BOTTOM = 14;
 const WALL_TOP = EAVE_BOTTOM;
 const FLOOR_LINE = 22;
 const FOUNDATION_TOP = 44;
@@ -27,6 +27,7 @@ const LEAF = "#4f8a3c";
 const PETALS = ["#e86a8a", "#f2c94c", "#e2533e"] as const;
 const LANTERN_GLOW = "#ffd56a";
 const LANTERN_CAP = "#3a2a1e";
+const OUTLINE = "#3b2a20";
 
 /** `#rrggbb`를 amount(-1..1)만큼 어둡게(음수)·밝게(양수). */
 export function shade(hex: string, amount: number): string {
@@ -44,16 +45,21 @@ function rect(ctx: Painter, color: string, x: number, y: number, w: number, h: n
   ctx.fillRect(x, y, w, h);
 }
 
+const SHINGLE_ROW = 3;
+
 function paintRoofEdge(ctx: Painter, width: number, roof: string): void {
-  rect(ctx, roof, 0, 0, width, EAVE_BOTTOM);
+  const fascia = EAVE_BOTTOM - 2;
+  rect(ctx, roof, 0, 0, width, fascia);
   rect(ctx, shade(roof, 0.25), 0, 0, width, 1);
-  rect(ctx, shade(roof, -0.35), 0, EAVE_BOTTOM - 2, width, 2);
-  // 기와 이음매: 세 줄을 엇갈려 찍는다.
-  for (let x = 0; x < width; x += 4) {
-    rect(ctx, shade(roof, -0.2), x, 1, 1, 2);
-    rect(ctx, shade(roof, -0.2), x + 2, 3, 1, 2);
-    rect(ctx, shade(roof, 0.12), x + 1, 5, 2, 1);
+  // 기와: 줄마다 아랫단 그늘과 엇갈린 이음매.
+  for (let y = SHINGLE_ROW; y < fascia; y += SHINGLE_ROW) {
+    rect(ctx, shade(roof, -0.18), 0, y - 1, width, 1);
+    const offset = (y / SHINGLE_ROW) % 2 === 0 ? 0 : 2;
+    for (let x = offset; x < width; x += 4) rect(ctx, shade(roof, -0.28), x, y - SHINGLE_ROW + 1, 1, SHINGLE_ROW - 1);
   }
+  // 처마 끝 널판과 그 아래 짙은 그늘(3/4 시점 돌출감).
+  rect(ctx, shade(roof, -0.45), 0, fascia, width, 2);
+  rect(ctx, shade(roof, 0.15), 0, fascia, width, 1);
 }
 
 function paintMaterial(ctx: Painter, width: number, style: FacadeStyle): void {
@@ -73,14 +79,12 @@ function paintMaterial(ctx: Painter, width: number, style: FacadeStyle): void {
   }
   if (style.material === "plaster") {
     for (let x = 3; x < width; x += 7) rect(ctx, shade(style.wall, -0.08), x, WALL_TOP + ((x * 5) % height), 1, 1);
-    rect(ctx, style.trim, 0, WALL_TOP + 1, width, 2);
+    for (let x = 1; x < width; x += 5) rect(ctx, shade(style.wall, 0.08), x, WALL_TOP + ((x * 7) % height), 2, 1);
     rect(ctx, style.trim, 0, FLOOR_LINE, width, 2);
-  } else {
-    // 층 사이 띠.
-    rect(ctx, shade(style.wall, -0.3), 0, FLOOR_LINE, width, 1);
   }
-  // 처마 그늘과 모서리 기둥.
-  rect(ctx, shade(style.wall, -0.35), 0, WALL_TOP, width, 1);
+  // 처마 그늘 두 줄과 모서리 기둥.
+  rect(ctx, shade(style.wall, -0.45), 0, WALL_TOP, width, 1);
+  rect(ctx, shade(style.wall, -0.25), 0, WALL_TOP + 1, width, 1);
   rect(ctx, style.trim, 0, WALL_TOP, 2, height);
   rect(ctx, style.trim, width - 2, WALL_TOP, 2, height);
 }
@@ -123,12 +127,7 @@ function paintHouseWindow(ctx: Painter, ox: number, style: FacadeStyle, seed: nu
   if (style.flowerBox) paintFlowerBox(ctx, ox + 3, 39, 10, seed);
 }
 
-/** 위층 작은 창(양끝 칸). 간판은 가운데에 걸리므로 가리지 않는다. */
-function paintUpperWindow(ctx: Painter, ox: number, style: FacadeStyle): void {
-  const cool = style.kind === "civic";
-  paintGlass(ctx, ox + 5, 12, 6, 7, cool, style.trim);
-  rect(ctx, style.trim, ox + 4, 20, 8, 1);
-}
+
 
 function paintShopWindow(ctx: Painter, ox: number, style: FacadeStyle): void {
   paintGlass(ctx, ox + 2, 29, 12, 11, false, style.trim);
@@ -217,9 +216,9 @@ export function paintFacade(ctx: Painter, plan: FacadePlan): void {
     if (style.kind === "pub") paintPubWindow(ctx, ox, style);
     if (style.kind === "civic") paintCivicWindow(ctx, ox, style);
   }
-  if (style.kind !== "shop") {
-    for (const c of [1, plan.columns - 2]) if (!plan.doorColumns.includes(c)) paintUpperWindow(ctx, c * COLUMN, style);
-  }
   for (const c of plan.doorColumns) paintDoor(ctx, c * COLUMN, style);
   paintRoofEdge(ctx, width, style.roof);
+  // 팩 그림처럼 바깥 1px 짙은 테두리(옆선).
+  rect(ctx, OUTLINE, 0, 0, 1, FACADE_HEIGHT);
+  rect(ctx, OUTLINE, width - 1, 0, 1, FACADE_HEIGHT);
 }

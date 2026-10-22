@@ -1,5 +1,5 @@
 import { TILE_SIZE } from "../../../town-layout";
-import { FACADE_HEIGHT, type FacadePlan } from "../facade";
+import { EAVE_BOTTOM, type FacadePlan } from "../facade";
 import type { LocationArea } from "../locations";
 import { BUILDING_STYLES, buildingNameOf } from "./place-style";
 
@@ -11,10 +11,10 @@ export interface SignPlan {
   centerX: number;
   /** 간판을 거는 y. `below`가 거짓이면 판자 아래끝, 참이면 판자 위끝이 여기 온다. */
   edgeY: number;
-  /** 정면에 거는 간판은 처마 바로 아래에서 아래로 늘어진다(위층 벽 자리). */
+  /** 참이면 edgeY에서 아래로, 거짓이면 위로 늘어진다. 정면 간판은 처마 끝에 얹어 위로 선다. */
   below: boolean;
   /**
-   * 화면 크기 고정(1/줌) 배율의 상한. 정면 간판은 멀리 볼 때 정면(48px)을 넘어 길 위 주민을 가리지 않게 막는다.
+   * 화면 크기 고정(1/줌) 배율의 상한. 정면 간판이 멀리 볼 때 처마를 넘어 실내 앞줄을 크게 가리지 않게 막는다.
    * null이면 상한 없음.
    */
   maxScale: number | null;
@@ -22,10 +22,11 @@ export interface SignPlan {
   bounds: readonly [number, number] | null;
 }
 
-/** 정면 간판 판자 위끝: 처마(8px) 바로 아래. */
-const FACADE_SIGN_TOP = 9;
-/** 판자 그림 높이(12px) × 화면 배율 2 × 상한 = 정면에서 처마 아래 남는 높이. */
-const FACADE_SIGN_MAX_SCALE = (FACADE_HEIGHT - FACADE_SIGN_TOP) / (12 * 2);
+/**
+ * 정면 간판은 처마 끝(널판 아래끝)에 판자 아래끝을 맞춘다. 벽·창·문은 가리지 않고 지붕 띠와 실내 앞줄 몇 px만 덮는다.
+ * 기본 줌(지도가 화면을 덮는 1.1~1.4)에서 판자는 17~22px이라 상한(판자 24px)에 닿지 않는다.
+ */
+const FACADE_SIGN_MAX_SCALE = 1;
 
 /** 판자 조각 프레임은 16×16 칸에 그림이 아래 왼쪽으로 붙어 있다(atlas.tp.json anchor). */
 export const PLANK_CELL = TILE_SIZE;
@@ -82,7 +83,7 @@ export function planSigns(areas: readonly LocationArea[], facades: readonly Faca
     const facade = facades.find((f) => f.name === name);
     signs.push(
       facade
-        ? { label: name, icon, centerX: facade.signCenterX, edgeY: facade.y + FACADE_SIGN_TOP, below: true, maxScale: FACADE_SIGN_MAX_SCALE, bounds: [facade.x, facade.x + facade.columns * TILE_SIZE] }
+        ? { label: name, icon, centerX: facade.signCenterX, edgeY: facade.y + EAVE_BOTTOM, below: false, maxScale: FACADE_SIGN_MAX_SCALE, bounds: [facade.x, facade.x + facade.columns * TILE_SIZE] }
         : { label: name, icon, centerX: area.x + area.width / 2, edgeY: area.y, below: false, maxScale: null, bounds: null },
     );
   }

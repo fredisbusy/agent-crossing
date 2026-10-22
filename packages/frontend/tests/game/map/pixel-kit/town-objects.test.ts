@@ -9,7 +9,7 @@ import { birdPose, butterflyPose } from "../../../../src/game/map/pixel-kit/crit
 import { planMapObjects } from "../../../../src/game/map/pixel-kit/object-plan";
 import { placeStyleAt } from "../../../../src/game/map/pixel-kit/place-style";
 import { clampSignCenter, layoutSign, planSigns } from "../../../../src/game/map/pixel-kit/signs";
-import { FACADE_LAYER, planFacades } from "../../../../src/game/map/facade";
+import { EAVE_BOTTOM, FACADE_LAYER, planFacades } from "../../../../src/game/map/facade";
 
 interface RawLayer {
   name: string;
@@ -102,14 +102,14 @@ describe("signs", () => {
     expect(wide.textX + 90 + 2).toBeLessThanOrEqual(wide.width - 4 + 0.001);
   });
 
-  it("hangs every sign on its building front, under the eave and inside the front", () => {
+  it("stands every sign on its building's eave, inside the front", () => {
     const signs = planSigns(areas, facades);
     expect(signs).toHaveLength(9);
     for (const sign of signs) {
       const facade = facades.find((f) => f.name === sign.label);
       if (!facade) throw new Error(sign.label);
-      expect(sign.below).toBe(true);
-      expect(sign.edgeY).toBeGreaterThan(facade.y);
+      expect(sign.below).toBe(false);
+      expect(sign.edgeY).toBe(facade.y + EAVE_BOTTOM);
       expect(sign.bounds).toEqual([facade.x, facade.x + facade.columns * 16]);
     }
   });
