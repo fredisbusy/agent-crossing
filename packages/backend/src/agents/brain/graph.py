@@ -337,8 +337,8 @@ class AgentBrainGraphRunner:
         content = build_observation_text(
             agent_name=self.agent_identity.name,
             location=context.get("location"),
-            observed_entities=input.observed_entities,
-            observed_events=input.observed_events,
+            observed_entities=input.observed_entities or [],
+            observed_events=input.observed_events or [],
         )
         embedding = self.embedding_encoder.encode(
             EmbeddingEncodingContext(text=content)
