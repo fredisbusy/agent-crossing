@@ -269,6 +269,13 @@
     - [x] 건물 정면(3/4 시점 앞벽 세 줄)을 코드로 그린다: 처마·벽 재질·창 종류·문·가게 차양, 간판은 정면에 건다 (`map/facade/`)
     - [ ] 밤에 정면 창에 불을 켠다(낮밤 레이어와 연결)
 
+- [ ] `P2` 맵 정본을 Tiled 파일로 바꾸고 에디터로 고칠 수 있게 한다 (SPEC §15)
+  - DoD:
+    - [x] 편집용 의미 타일 PNG(`packages/shared/maps/town-tiles.png`)와 편집 안내(`maps/README.md`)
+    - [x] `pnpm check:map`: 장소 트리·주민이 쓰는 장소·길에서의 도달성·객체 이름과 크기·collision 일치 검사, `--fix-collision`
+    - [x] 생성기는 초기 맵 생성용으로 남기고 기존 맵을 `--force` 없이 덮어쓰지 않는다
+    - [ ] Tiled에서 마을 배치를 다시 그린다(건물 크기·모양 다양화, 골목·마당)
+
 - [ ] `P2` A\* pathfinding을 적용한다
   - Depends on: Tiled map + collision 연결
   - DoD:

@@ -1,7 +1,9 @@
-"""마을 맵(Tiled 1.10 JSON) 결정론적 생성기 (SPEC §15).
+"""마을 맵(Tiled 1.10 JSON) 초기 생성기 (SPEC §15).
 
-사용: python3 scripts/maps/generate_town_map.py [출력 경로]
-기본 출력은 packages/shared/maps/town.json. 외부 의존 없음.
+맵의 정본은 Tiled에서 고친 `packages/shared/maps/town.json`이다. 이 스크립트는 처음 맵을 만들 때만 쓰고,
+다시 돌리면 손으로 고친 내용이 사라지므로 기존 파일은 `--force` 없이 덮어쓰지 않는다.
+사용: python3 scripts/maps/generate_town_map.py [--force] [출력 경로]
+외부 의존 없음.
 """
 
 import json
@@ -238,7 +240,10 @@ def render(tiled: dict[str, object]) -> str:
 
 def main() -> None:
     default = Path(__file__).resolve().parents[2] / "packages/shared/maps/town.json"
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else default
+    args = [a for a in sys.argv[1:] if a != "--force"]
+    out = Path(args[0]) if args else default
+    if out.exists() and "--force" not in sys.argv:
+        sys.exit(f"{out}가 이미 있다. 정본은 Tiled로 고친 파일이라 덮어쓰지 않는다(--force로 강제).")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(to_tiled(build())), encoding="utf-8")
 

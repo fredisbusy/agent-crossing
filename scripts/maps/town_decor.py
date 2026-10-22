@@ -20,6 +20,32 @@ BLOCKING_DECOR = frozenset(
 TALL_DECOR = frozenset({"lamp_post", "signpost", "mailbox", "sunflower_ripe", "scarecrow", "beehive", "keg"})
 FOUNTAIN_CELLS = 3
 
+# 장식 프레임 이름 -> (너비, 높이) 타일 수. Tiled에서 객체를 그릴 때 이 크기를 쓴다.
+DECOR_FRAMES: dict[str, tuple[int, int]] = {
+    "fountain_0": (FOUNTAIN_CELLS, FOUNTAIN_CELLS),
+    "bench_h": (2, 1),
+    "bench_v": (1, 2),
+    "lamp_post": (1, 2),
+    "light": (1, 1),
+    "flower_bed_a": (1, 1),
+    "flower_bed_b": (1, 1),
+    "flower_bed_c": (1, 1),
+    "planter": (1, 1),
+    "signpost": (1, 2),
+    "lily_pad": (1, 1),
+    "lily_pad_b": (1, 1),
+    "reeds": (1, 1),
+    "fence_h": (1, 1),
+    "fence_post": (1, 1),
+    "mailbox": (1, 2),
+    "tilled": (1, 1),
+    "tomato_ripe": (1, 1),
+    "sunflower_ripe": (1, 2),
+    "scarecrow": (1, 2),
+    "beehive": (1, 2),
+    "keg": (1, 2),
+}
+
 # 가로등 밑동 칸. 큰길(y15) 북쪽 가장자리와 아랫골목(y31). 문 x(9,23,40,52 / 4,19,31,43,56)와
 # 우편함 x(6,21,33,58)를 피한다.
 STREET_LAMPS = ((3, 15), (17, 15), (28, 15), (36, 15), (47, 15), (58, 15), (13, 31), (39, 31), (63, 31))

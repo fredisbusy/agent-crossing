@@ -28,3 +28,21 @@ def test_build_provider_client_supports_google_model_names() -> None:
     assert isinstance(client, LiteLlmClient)
     assert client.base_url == "https://generativelanguage.googleapis.com"
     assert client.api_key == "test-key"
+
+
+def test_embedding_endpoint_can_differ_from_generation_endpoint() -> None:
+    client = build_provider_client(
+        timeout_seconds=4.0,
+        generation_model="openai/gpt-5.6-luna",
+        embedding_model="gemini/gemini-embedding-001",
+        base_url="https://api.byfred.io/v1",
+        api_key="gen-key",
+        embedding_base_url="https://generativelanguage.googleapis.com/v1beta",
+        embedding_api_key="embed-key",
+        reasoning_effort="none",
+    )
+
+    assert isinstance(client, LiteLlmClient)
+    assert client.embedding_base_url == "https://generativelanguage.googleapis.com/v1beta"
+    assert client.embedding_api_key == "embed-key"
+    assert client.reasoning_effort == "none"

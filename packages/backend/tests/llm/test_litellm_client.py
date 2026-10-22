@@ -109,3 +109,25 @@ def test_embed_reads_litellm_embedding_vector(monkeypatch) -> None:
     assert captured["input"] == ["hello"]
     assert captured["num_retries"] == 2
     assert captured["dimensions"] == 3
+
+
+def test_generate_passes_reasoning_effort_even_for_unknown_models(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"choices": [{"message": {"content": "{}"}}]}
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LiteLlmClient(
+        base_url="https://api.byfred.io/v1",
+        api_key="test-key",
+        default_generate_model="openai/gpt-6-luna",
+        default_embedding_model="gemini/gemini-embedding-001",
+        reasoning_effort="none",
+    )
+
+    client.generate(prompt="Return JSON", format_json=True)
+
+    assert captured["reasoning_effort"] == "none"
+    assert captured["allowed_openai_params"] == ["reasoning_effort"]

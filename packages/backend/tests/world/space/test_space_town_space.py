@@ -112,16 +112,16 @@ def test_tree_contains_all_paths(town: TownSpace) -> None:
     )
 
 
-def test_committed_map_matches_generator() -> None:
+def test_committed_map_passes_checker() -> None:
+    """정본은 Tiled로 고친 town.json이다. 배치와 무관한 규칙은 check_town_map.py가 본다."""
     import importlib.util
+    import json
     from pathlib import Path
 
-    script = Path(__file__).resolve().parents[5] / "scripts" / "maps" / "generate_town_map.py"
-    spec = importlib.util.spec_from_file_location("generate_town_map", script)
+    script = Path(__file__).resolve().parents[5] / "scripts" / "maps" / "check_town_map.py"
+    spec = importlib.util.spec_from_file_location("check_town_map", script)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    committed = (script.parents[2] / "packages" / "shared" / "maps" / "town.json").read_text(
-        encoding="utf-8"
-    )
-    assert module.render(module.to_tiled(module.build())) == committed
+    raw = json.loads(module.DEFAULT_MAP.read_text(encoding="utf-8"))
+    assert module.check(raw) == []
