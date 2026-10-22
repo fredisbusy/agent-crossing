@@ -42,10 +42,18 @@ describe("MotionTracker", () => {
   it("restarts from the currently drawn position when interrupted", () => {
     const tracker = new MotionTracker();
     tracker.observe([resident("a", 0, 0)], 0, 1000);
-    tracker.observe([resident("a", 2, 0)], 0, 1000);
-    tracker.observe([resident("a", 2, 1)], 500, 1000);
-    expect(tracker.positionAt("a", 500)).toEqual({ x: 1, y: 0 });
-    expect(tracker.positionAt("a", 1500)).toEqual({ x: 2, y: 1 });
+    tracker.observe([resident("a", 1, 0)], 0, 1000);
+    tracker.observe([resident("a", 1, 1)], 500, 1000);
+    expect(tracker.positionAt("a", 500)).toEqual({ x: 0.5, y: 0 });
+    expect(tracker.positionAt("a", 1500)).toEqual({ x: 1, y: 1 });
+  });
+
+  it("teleports instead of sliding when a snapshot jumps more than one tile", () => {
+    const tracker = new MotionTracker();
+    tracker.observe([resident("a", 0, 0)], 0, 1000);
+    tracker.observe([resident("a", 3, 2)], 0, 1000);
+    expect(tracker.positionAt("a", 0)).toEqual({ x: 3, y: 2 });
+    expect(tracker.positionAt("a", 500)).toEqual({ x: 3, y: 2 });
   });
 
   it("forgets residents that disappear", () => {
