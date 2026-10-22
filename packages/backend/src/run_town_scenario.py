@@ -11,10 +11,13 @@ from collections.abc import Sequence
 
 from llm.clients.provider_factory import build_provider_client
 from settings import (
+    EMBEDDING_API_KEY,
+    EMBEDDING_BASE_URL,
     EMBEDDING_MODEL,
     LLM_API_KEY,
     LLM_BASE_URL,
     LLM_MODEL,
+    LLM_REASONING_EFFORT,
     LLM_TIMEOUT_SECONDS,
 )
 from world.contracts import Space
@@ -55,6 +58,9 @@ def _llm_factory(
         embedding_model=EMBEDDING_MODEL,
         base_url=LLM_BASE_URL,
         api_key=LLM_API_KEY or None,
+        embedding_base_url=EMBEDDING_BASE_URL,
+        embedding_api_key=EMBEDDING_API_KEY or None,
+        reasoning_effort=LLM_REASONING_EFFORT,
     )
     return LLMMindFactory(
         client=client,

@@ -32,10 +32,16 @@ def build_provider_client(
     embedding_model: str,
     base_url: str | None = None,
     api_key: str | None = None,
+    embedding_base_url: str | None = None,
+    embedding_api_key: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> ProviderClient:
     return LiteLlmClient(
         base_url=base_url,
         api_key=api_key,
+        embedding_base_url=embedding_base_url,
+        embedding_api_key=embedding_api_key,
+        reasoning_effort=reasoning_effort,
         timeout_seconds=timeout_seconds,
         default_generate_model=generation_model,
         default_embedding_model=embedding_model,

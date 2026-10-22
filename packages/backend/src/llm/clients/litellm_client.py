@@ -44,6 +44,12 @@ class LiteLlmClient:
     base_url: str | None = None
     api_key: str | None = None
     timeout_seconds: float = 10.0
+    embedding_base_url: str | None = None
+    """임베딩 전용 엔드포인트. 없으면 `base_url`."""
+    embedding_api_key: str | None = None
+    """임베딩 전용 키. 없으면 `api_key`."""
+    reasoning_effort: str | None = None
+    """추론 모델에 보내는 추론 강도. 없으면 보내지 않는다."""
 
     def generate(
         self,
@@ -74,6 +80,8 @@ class LiteLlmClient:
             kwargs["api_base"] = self.base_url
         if self.api_key:
             kwargs["api_key"] = self.api_key
+        if self.reasoning_effort:
+            kwargs["reasoning_effort"] = self.reasoning_effort
         if selected_model.startswith(("ollama/", "ollama_chat/")):
             if final_options.repeat_penalty is not None:
                 kwargs["repeat_penalty"] = final_options.repeat_penalty
@@ -127,10 +135,12 @@ class LiteLlmClient:
             "num_retries": 2,
             "dimensions": expected_dim,
         }
-        if self.base_url:
-            kwargs["api_base"] = self.base_url
-        if self.api_key:
-            kwargs["api_key"] = self.api_key
+        base_url = self.embedding_base_url or self.base_url
+        api_key = self.embedding_api_key or self.api_key
+        if base_url:
+            kwargs["api_base"] = base_url
+        if api_key:
+            kwargs["api_key"] = api_key
 
         try:
             response = litellm.embedding(**kwargs)

@@ -12,6 +12,7 @@ from llm.governance import (
 )
 from llm.clients.provider_factory import build_provider_client
 from agents.world_factory import init_agents
+from settings import EMBEDDING_API_KEY, EMBEDDING_BASE_URL, LLM_REASONING_EFFORT
 
 from .engine import SimulationEngine, SimulationEngineConfig, SimulationStepResult
 from .session import DialogueMode, WorldConversationSession
@@ -157,6 +158,9 @@ def build_world_runtime(*, config: WorldRuntimeConfig) -> WorldRuntime:
         embedding_model=config.embedding_model,
         base_url=config.base_url,
         api_key=config.api_key,
+        embedding_base_url=EMBEDDING_BASE_URL,
+        embedding_api_key=EMBEDDING_API_KEY or None,
+        reasoning_effort=LLM_REASONING_EFFORT,
     )
     agents = init_agents(
         persona_dir=config.persona_dir,
