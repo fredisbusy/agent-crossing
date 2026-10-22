@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import atlasImageUrl from "../../../assets/pixel-kit/atlas.png?url";
 import atlasDataUrl from "../../../assets/pixel-kit/atlas.tp.json?url";
 import type { PixelKitPlan } from "./cells";
+import { drawPixelKitObjects } from "./object-layer";
 
 export const PIXEL_KIT_ATLAS_KEY = "pixel-kit";
 const PIXEL_KIT_GROUND_KEY = "pixel-kit-ground";
@@ -15,7 +16,7 @@ export function preloadPixelKit(scene: Phaser.Scene): void {
   scene.load.atlas(PIXEL_KIT_ATLAS_KEY, atlasImageUrl, atlasDataUrl);
 }
 
-/** 바닥은 캔버스 한 장에 구워 타일 레이어 바로 위에, 나무는 y로 주민과 앞뒤를 맞춰 따로 놓는다. */
+/** 바닥·깔개는 캔버스 한 장에 구워 타일 레이어 바로 위에, 나무·가구·장식·간판·생물은 y로 주민과 앞뒤를 맞춰 따로 놓는다. */
 export function drawPixelKit(scene: Phaser.Scene, plan: PixelKitPlan, widthPx: number, heightPx: number): boolean {
   if (!scene.textures.exists(PIXEL_KIT_ATLAS_KEY)) return false;
   if (!scene.textures.exists(PIXEL_KIT_GROUND_KEY)) {
@@ -34,5 +35,6 @@ export function drawPixelKit(scene: Phaser.Scene, plan: PixelKitPlan, widthPx: n
   for (const prop of plan.props) {
     scene.add.image(prop.x, prop.y, PIXEL_KIT_ATLAS_KEY, prop.frame).setOrigin(0.5, 1).setDepth(prop.y);
   }
+  drawPixelKitObjects(scene, plan);
   return true;
 }

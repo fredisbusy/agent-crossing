@@ -45,18 +45,21 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
   if (!tileset) return null;
   const layer = tilemap.createLayer(GROUND_LAYER, tileset, 0, 0);
   if (!layer) return null;
+  // `collision` 레이어는 백엔드 경로 탐색 전용이라 그리지 않는다.
+  const areas = extractLocationAreas(tilemap.getObjectLayer(LOCATIONS_LAYER)?.objects ?? []);
+  const furniture = extractMapSprites(tilemap.getObjectLayer(FURNITURE_LAYER)?.objects ?? []);
+  const decor = extractMapSprites(tilemap.getObjectLayer(DECOR_LAYER)?.objects ?? []);
   if (isPixelKitEnabled()) {
     const ground = layer.layer.data.flatMap((row) => row.map((tile) => tile.index));
-    drawPixelKit(scene, planPixelKit(ground, tilemap.width, tilemap.height), tilemap.widthInPixels, tilemap.heightInPixels);
+    const plan = planPixelKit(ground, tilemap.width, tilemap.height, { areas, furniture, decor });
+    drawPixelKit(scene, plan, tilemap.widthInPixels, tilemap.heightInPixels);
   }
-  // `collision` 레이어는 백엔드 경로 탐색 전용이라 그리지 않는다.
-  const objects = tilemap.getObjectLayer(LOCATIONS_LAYER)?.objects ?? [];
   return {
     widthPx: tilemap.widthInPixels,
     heightPx: tilemap.heightInPixels,
-    areas: extractLocationAreas(objects),
-    furniture: extractMapSprites(tilemap.getObjectLayer(FURNITURE_LAYER)?.objects ?? []),
-    decor: extractMapSprites(tilemap.getObjectLayer(DECOR_LAYER)?.objects ?? []),
+    areas,
+    furniture,
+    decor,
     usedFallback,
   };
 }

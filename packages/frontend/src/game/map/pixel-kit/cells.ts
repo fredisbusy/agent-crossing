@@ -1,5 +1,12 @@
 import { TILE } from "../fallback-map";
 import { TILE_SIZE } from "../../../town-layout";
+import type { LocationArea } from "../locations";
+import type { MapSprite } from "../objects";
+import { type CritterPlan, planCritters } from "./critters";
+import { cellHash, variantHash } from "./hash";
+import { type ObjectSprite, planMapObjects } from "./object-plan";
+import { isInSquare, placeStyleAt } from "./place-style";
+import { planSigns, type SignPlan } from "./signs";
 
 /** 아틀라스 프레임 하나를 놓는 명령. `x`·`y`는 프레임 왼쪽 위 픽셀. */
 export interface PixelKitDraw {
@@ -18,7 +25,20 @@ export interface PixelKitProp {
 export interface PixelKitPlan {
   ground: PixelKitDraw[];
   props: PixelKitProp[];
+  /** 가구·장식(막는 것). 사각형 왼쪽 위에 origin (0,0)으로 놓는다. */
+  sprites: ObjectSprite[];
+  signs: SignPlan[];
+  critters: CritterPlan;
 }
+
+/** 맵 객체 레이어에서 읽은 장소·가구·장식. 없으면 장소별 스타일 없이 옛 모양으로 그린다. */
+export interface PixelKitContext {
+  areas: readonly LocationArea[];
+  furniture: readonly MapSprite[];
+  decor: readonly MapSprite[];
+}
+
+const EMPTY_CONTEXT: PixelKitContext = { areas: [], furniture: [], decor: [] };
 
 interface VariantSpec {
   names: readonly string[];
@@ -30,11 +50,10 @@ const GRASS_VARIANTS: VariantSpec = {
   names: ["grass_spring_b", "grass_spring_d", "grass_spring_c", "grass_spring"],
   weights: [22, 22, 8, 48],
 };
-/** 실내 마루 변종(stardewrogue `town.ts`의 `FLOOR_NAMES`). */
-const FLOOR_VARIANTS: VariantSpec = {
-  names: ["floor_wood", "floor_wood_b", "floor_wood_c", "floor_wood_d"],
-  weights: [40, 25, 20, 15],
-};
+/** 실내 바닥 4변종 가중치(stardewrogue `town.ts`의 `FLOOR_NAMES`). 이름은 접두사 + ``/`_b`/`_c`/`_d`. */
+const FLOOR_SUFFIXES = ["", "_b", "_c", "_d"] as const;
+const FLOOR_WEIGHTS = [40, 25, 20, 15] as const;
+const COBBLE_VARIANTS: VariantSpec = { names: ["cobble", "cobble_b", "cobble_c", "cobble_d"], weights: FLOOR_WEIGHTS };
 
 /** stardewrogue `dirt_m<mask>` 자동타일 변종 수(기본 + `_v1`..`_v4`). */
 const DIRT_VARIANT_COUNT = 5;
@@ -53,16 +72,10 @@ const MASK_E = 2;
 const MASK_S = 4;
 const MASK_W = 8;
 
-/** stardewrogue `src/gfx/autotile.ts`의 `cellHash`와 같은 값(0..99). */
-export function cellHash(x: number, y: number): number {
-  return (((x * 73856093) ^ (y * 19349663)) >>> 0) % 100;
-}
+export { cellHash, variantHash };
 
-/** stardewrogue `src/gfx/autotile.ts`의 `variantHash`와 같은 값. */
-export function variantHash(x: number, y: number): number {
-  let h = Math.imul((x * 73856093) ^ (y * 19349663), 0x5bd1e995) >>> 0;
-  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0;
-  return h;
+export function floorFrame(prefix: string, x: number, y: number): string {
+  return pickWeighted({ names: FLOOR_SUFFIXES.map((s) => `${prefix}${s}`), weights: FLOOR_WEIGHTS }, x, y);
 }
 
 function pickWeighted(spec: VariantSpec, x: number, y: number): string {
@@ -102,7 +115,16 @@ export function dirtFrame(mask: number, x: number, y: number): string {
  * Tiled `ground` 레이어(gid 배열)를 stardewrogue 팩 프레임으로 바꾸는 계획.
  * 바닥(풀·길·마루·벽·문·물·가구)은 `ground`, 나무는 주민과 앞뒤를 맞출 `props`로 나눈다.
  */
-export function planPixelKit(ground: readonly number[], width: number, height: number): PixelKitPlan {
+export function planPixelKit(
+  ground: readonly number[],
+  width: number,
+  height: number,
+  context: PixelKitContext = EMPTY_CONTEXT,
+): PixelKitPlan {
+  const { areas } = context;
+  // 가구 객체가 있으면 그 그림이 가구 칸을 대신한다(없으면 옛 무작위 가구).
+  const hasFurnitureObjects = context.furniture.length > 0;
+  const styleOf = (x: number, y: number) => placeStyleAt(areas, (x + 0.5) * TILE_SIZE, (y + 0.5) * TILE_SIZE);
   const at = (x: number, y: number): number | null =>
     x < 0 || y < 0 || x >= width || y >= height ? null : (ground[y * width + x] ?? null);
   const is = (x: number, y: number, ...gids: number[]): boolean => {
@@ -127,7 +149,14 @@ export function planPixelKit(ground: readonly number[], width: number, height: n
     return n;
   };
 
-  const plan: PixelKitPlan = { ground: [], props: [] };
+  const objects = planMapObjects(context.furniture, context.decor);
+  const plan: PixelKitPlan = {
+    ground: [],
+    props: [],
+    sprites: objects.sprites,
+    signs: planSigns(areas),
+    critters: planCritters(ground, width, areas, context.furniture, context.decor),
+  };
   const draw = (frame: string, x: number, y: number): void => {
     plan.ground.push({ frame, x: x * TILE_SIZE, y: y * TILE_SIZE });
   };
@@ -135,15 +164,18 @@ export function planPixelKit(ground: readonly number[], width: number, height: n
     for (let x = 0; x < width; x += 1) {
       const gid = at(x, y);
       if (gid === TILE.grass || gid === TILE.road || gid === TILE.tree || gid === TILE.water) draw(grassFrame(x, y), x, y);
-      if (gid === TILE.floor || gid === TILE.furniture) draw(pickWeighted(FLOOR_VARIANTS, x, y), x, y);
-      if (gid === TILE.road) draw(dirtFrame(neighborMask(isRoad, x, y), x, y), x, y);
+      if (gid === TILE.floor || gid === TILE.furniture) draw(floorFrame(styleOf(x, y).floor, x, y), x, y);
+      if (gid === TILE.road) {
+        const inSquare = isInSquare(areas, (x + 0.5) * TILE_SIZE, (y + 0.5) * TILE_SIZE);
+        draw(inSquare ? pickWeighted(COBBLE_VARIANTS, x, y) : dirtFrame(neighborMask(isRoad, x, y), x, y), x, y);
+      }
       if (gid === TILE.water) {
         const mask = neighborMask((nx, ny) => is(nx, ny, TILE.water), x, y);
         draw(autotileFrame("water", mask, WATER_VARIANT_COUNT, x, y), x, y);
       }
-      if (gid === TILE.wall) draw(`wall_m${neighborMask(isWallLike, x, y)}`, x, y);
+      if (gid === TILE.wall) draw(`${styleOf(x, y).wall}_m${neighborMask(isWallLike, x, y)}`, x, y);
       if (gid === TILE.door) draw(isWallLike(x - 1, y) || isWallLike(x + 1, y) ? "door_h" : "door_v", x, y);
-      if (gid === TILE.furniture) {
+      if (gid === TILE.furniture && !hasFurnitureObjects) {
         const run = furnitureRun(x, y);
         if (run % 2 === 0) {
           const pair = is(x + 1, y, TILE.furniture);
@@ -161,5 +193,6 @@ export function planPixelKit(ground: readonly number[], width: number, height: n
       }
     }
   }
+  for (const baked of objects.baked) plan.ground.push({ frame: baked.frame, x: baked.x, y: baked.y });
   return plan;
 }
