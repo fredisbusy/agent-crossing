@@ -312,3 +312,73 @@ def test_reflection_can_reference_prior_reflection_memory() -> None:
 #     )
 
 #     assert reflection_service.recorded_importance == [8]
+
+
+class BatchStubScorer:
+    def __init__(self, values: list[int]):
+        self.values = values
+        self.batch_calls = 0
+        self.single_calls = 0
+
+    def score(self, context: ImportanceScoringContext) -> int:
+        _ = context
+        self.single_calls += 1
+        return 1
+
+    def score_many(self, contexts: list[ImportanceScoringContext]) -> list[int]:
+        self.batch_calls += 1
+        return self.values[: len(contexts)]
+
+
+class BatchStubEncoder(StubEmbeddingEncoder):
+    def __init__(self) -> None:
+        self.batch_calls = 0
+        self.single_calls = 0
+
+    def encode(self, context: EmbeddingEncodingContext) -> np.ndarray:
+        self.single_calls += 1
+        return super().encode(context)
+
+    def encode_many(self, contexts: list[EmbeddingEncodingContext]) -> list[np.ndarray]:
+        self.batch_calls += 1
+        return [np.zeros(EMBEDDING_DIMENSION) for _ in contexts]
+
+
+def _ctx() -> ObservationContext:
+    return ObservationContext(agent_name="Sujin Lee", identity_stable_set=[])
+
+
+def test_create_observations_from_texts_uses_batch_paths_in_order() -> None:
+    scorer = BatchStubScorer([4, 9, 6])
+    encoder = BatchStubEncoder()
+    stream = MemoryStream()
+    service = MemoryManager(
+        memory_stream=stream, importance_scorer=scorer, embedding_encoder=encoder
+    )
+    base = datetime.datetime(2026, 2, 13, 12, 0, 0)
+    items = [(f"관찰 {i}", base + datetime.timedelta(minutes=i)) for i in range(3)]
+
+    memories = service.create_observations_from_texts(items=items, context=_ctx())
+
+    assert [m.content for m in memories] == ["관찰 0", "관찰 1", "관찰 2"]
+    assert [m.importance for m in memories] == [4, 9, 6]
+    assert len(stream.memories) == 3
+    assert (scorer.batch_calls, scorer.single_calls) == (1, 0)
+    assert (encoder.batch_calls, encoder.single_calls) == (1, 0)
+
+
+def test_create_observations_from_texts_falls_back_to_single_calls() -> None:
+    scorer = StubScorer(score_value=5)
+    service = MemoryManager(
+        memory_stream=MemoryStream(),
+        importance_scorer=scorer,
+        embedding_encoder=StubEmbeddingEncoder(),
+    )
+    now = datetime.datetime(2026, 2, 13, 12, 0, 0)
+
+    memories = service.create_observations_from_texts(
+        items=[("a", now), ("b", now)], context=_ctx()
+    )
+
+    assert [m.importance for m in memories] == [5, 5]
+    assert service.create_observations_from_texts(items=[], context=_ctx()) == []

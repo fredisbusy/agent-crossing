@@ -50,6 +50,12 @@ class MemoryStore(Protocol):
         """기억을 저장하고 매긴 중요도를 돌려 준다. kind: observation | plan."""
         ...
 
+    def remember_many(
+        self, items: list[tuple[str, datetime.datetime]]
+    ) -> list[int]:
+        """관찰 여러 개를 한 번에 저장하고 중요도를 입력 순서대로 돌려 준다."""
+        ...
+
     def retrieve(
         self, query: str, now: datetime.datetime, top_k: int
     ) -> list[MemoryObject]: ...
