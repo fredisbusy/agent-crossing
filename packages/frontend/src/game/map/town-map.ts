@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { TILE_SIZE } from "../../town-layout";
-import { drawFacades, FACADE_LAYER, planFacades } from "./facade";
+import { drawFacades, FACADE_LAYER, type FacadePlan, planFacades } from "./facade";
 import { buildFallbackMap, TILE } from "./fallback-map";
 import { extractLocationAreas, type LocationArea } from "./locations";
 import { DECOR_LAYER, extractMapSprites, FURNITURE_LAYER, type MapSprite } from "./objects";
@@ -22,6 +22,8 @@ export interface TownMap {
   furniture: MapSprite[];
   /** 실외 장식과 가로등 빛 위치(`light`). 대체 맵이면 빈 목록. */
   decor: MapSprite[];
+  /** 건물 정면(밤 창불 자리). 픽셀 팩이 없거나 대체 맵이면 빈 목록. */
+  facades: FacadePlan[];
   usedFallback: boolean;
 }
 
@@ -51,10 +53,11 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
   const furniture = extractMapSprites(tilemap.getObjectLayer(FURNITURE_LAYER)?.objects ?? []);
   const decor = extractMapSprites(tilemap.getObjectLayer(DECOR_LAYER)?.objects ?? []);
   // 아틀라스가 없으면 아래 코드 타일 레이어가 그대로 대체 화면이 된다.
+  let facades: FacadePlan[] = [];
   if (hasPixelKit(scene)) {
     const ground = layer.layer.data.flatMap((row) => row.map((tile) => tile.index));
     const isDoor = (tx: number, ty: number): boolean => ground[ty * tilemap.width + tx] === TILE.door;
-    const facades = planFacades(extractMapSprites(tilemap.getObjectLayer(FACADE_LAYER)?.objects ?? []), isDoor);
+    facades = planFacades(extractMapSprites(tilemap.getObjectLayer(FACADE_LAYER)?.objects ?? []), isDoor);
     const plan = planPixelKit(ground, tilemap.width, tilemap.height, { areas, furniture, decor, facades });
     drawPixelKit(scene, plan, tilemap.widthInPixels, tilemap.heightInPixels);
     drawFacades(scene, facades);
@@ -65,6 +68,7 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
     areas,
     furniture,
     decor,
+    facades,
     usedFallback,
   };
 }

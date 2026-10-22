@@ -1,5 +1,6 @@
 import { TILE_SIZE } from "../../../town-layout";
 import { FACADE_HEIGHT, type FacadePlan } from "./facade-plan";
+import { DOOR_TOP, doorGlass, facadeSeed, type GlassRect, hasWindow, WINDOW_GLASS } from "./facade-glass";
 import type { FacadeStyle } from "./facade-style";
 
 /** 그리기에 쓰는 캔버스 2D 일부(테스트에서 가짜로 바꾼다). */
@@ -99,7 +100,9 @@ function paintFoundation(ctx: Painter, width: number): void {
   rect(ctx, shade(STONE_DARK, -0.3), 0, FACADE_HEIGHT - 1, width, 1);
 }
 
-function paintGlass(ctx: Painter, x: number, y: number, w: number, h: number, cool: boolean, trim: string): void {
+function paintGlass(ctx: Painter, ox: number, glass: GlassRect, cool: boolean, trim: string): void {
+  const { y, w, h } = glass;
+  const x = ox + glass.x;
   rect(ctx, trim, x - 1, y - 1, w + 2, h + 2);
   rect(ctx, cool ? GLASS_COOL : GLASS_WARM, x, y, w, h);
   rect(ctx, cool ? GLASS_COOL_LIGHT : GLASS_WARM_LIGHT, x, y, Math.ceil(w / 2) - 1, 2);
@@ -117,7 +120,7 @@ function paintFlowerBox(ctx: Painter, x: number, y: number, w: number, seed: num
 }
 
 function paintHouseWindow(ctx: Painter, ox: number, style: FacadeStyle, seed: number): void {
-  paintGlass(ctx, ox + 4, 28, 8, 10, false, style.trim);
+  paintGlass(ctx, ox, WINDOW_GLASS.house, false, style.trim);
   if (style.shutter) {
     for (const sx of [ox + 1, ox + 13]) {
       rect(ctx, style.shutter, sx, 27, 2, 12);
@@ -130,7 +133,7 @@ function paintHouseWindow(ctx: Painter, ox: number, style: FacadeStyle, seed: nu
 
 
 function paintShopWindow(ctx: Painter, ox: number, style: FacadeStyle): void {
-  paintGlass(ctx, ox + 2, 29, 12, 11, false, style.trim);
+  paintGlass(ctx, ox, WINDOW_GLASS.shop, false, style.trim);
   rect(ctx, style.trim, ox + 1, 41, 14, 1);
   if (!style.awning) return;
   const [a, b] = style.awning;
@@ -144,12 +147,12 @@ function paintShopWindow(ctx: Painter, ox: number, style: FacadeStyle): void {
 }
 
 function paintPubWindow(ctx: Painter, ox: number, style: FacadeStyle): void {
-  paintGlass(ctx, ox + 4, 29, 8, 8, false, style.trim);
+  paintGlass(ctx, ox, WINDOW_GLASS.pub, false, style.trim);
   rect(ctx, style.trim, ox + 3, 38, 10, 1);
 }
 
 function paintCivicWindow(ctx: Painter, ox: number, style: FacadeStyle): void {
-  paintGlass(ctx, ox + 4, 26, 8, 14, true, style.trim);
+  paintGlass(ctx, ox, WINDOW_GLASS.civic, true, style.trim);
   // 아치: 위 모서리를 벽색으로 깎는다.
   rect(ctx, style.wall, ox + 3, 25, 2, 2);
   rect(ctx, style.wall, ox + 11, 25, 2, 2);
@@ -163,19 +166,14 @@ function paintLantern(ctx: Painter, x: number): void {
   rect(ctx, LANTERN_CAP, x + 1, 30, 1, 1);
 }
 
-const DOOR_TOP = 25;
-
 function paintDoor(ctx: Painter, ox: number, style: FacadeStyle): void {
   rect(ctx, style.trim, ox + 2, DOOR_TOP - 2, 12, FOUNDATION_TOP - DOOR_TOP + 2);
   rect(ctx, DOOR_WOOD, ox + 4, DOOR_TOP, 8, FOUNDATION_TOP - DOOR_TOP);
   for (let x = ox + 6; x < ox + 12; x += 3) {
     rect(ctx, shade(DOOR_WOOD, -0.25), x, DOOR_TOP, 1, FOUNDATION_TOP - DOOR_TOP);
   }
-  if (style.kind === "shop" || style.kind === "civic") {
-    rect(ctx, style.kind === "civic" ? GLASS_COOL : GLASS_WARM, ox + 5, DOOR_TOP + 2, 6, 7);
-  } else {
-    rect(ctx, GLASS_WARM, ox + 6, DOOR_TOP + 2, 4, 3);
-  }
+  const glass = doorGlass(style.kind);
+  rect(ctx, style.kind === "civic" ? GLASS_COOL : GLASS_WARM, ox + glass.x, glass.y, glass.w, glass.h);
   rect(ctx, KNOB, ox + 10, DOOR_TOP + 10, 1, 1);
   // 문 위 작은 처마, 문 앞 디딤돌.
   rect(ctx, style.roof, ox + 1, DOOR_TOP - 5, 14, 2);
@@ -185,20 +183,6 @@ function paintDoor(ctx: Painter, ox: number, style: FacadeStyle): void {
     paintLantern(ctx, ox);
     paintLantern(ctx, ox + 13);
   }
-}
-
-/** 칸 c에 창을 낼지. 집·술집은 한 칸 걸러, 가게·학교는 모든 벽 칸. */
-export function hasWindow(plan: FacadePlan, c: number, seed: number): boolean {
-  if (c <= 0 || c >= plan.columns - 1 || plan.doorColumns.includes(c)) return false;
-  if (plan.style.kind === "shop" || plan.style.kind === "civic") return true;
-  return (c + seed) % 2 === 1;
-}
-
-/** 건물 이름에서 뽑는 결정론적 작은 수(창 엇갈림·꽃 색). */
-export function facadeSeed(name: string): number {
-  let h = 0;
-  for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) % 997;
-  return h;
 }
 
 /** 정면 하나를 (0,0)부터 columns×16 × 32 px로 그린다. */

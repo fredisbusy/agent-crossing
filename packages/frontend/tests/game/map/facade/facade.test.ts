@@ -5,6 +5,9 @@ import {
   FACADE_HEIGHT,
   FACADE_LAYER,
   FACADE_STYLES,
+  EAVE_BOTTOM,
+  facadeGlassRects,
+  facadeSeed as facadeSeedOf_,
   type FacadePlan,
   hasWindow,
   paintFacade,
@@ -26,6 +29,8 @@ const layer = (name: string): RawLayer => town.layers.find((l) => l.name === nam
 const ground = layer("ground").data ?? [];
 const isDoor = (tx: number, ty: number): boolean => ground[ty * town.width + tx] === TILE.door;
 const plans = planFacades(extractMapSprites(layer(FACADE_LAYER).objects ?? []), isDoor);
+
+const facadeSeedOf = (plan: FacadePlan): number => facadeSeedOf_(plan.name);
 
 /** fillRect 호출을 모으는 가짜 캔버스. */
 function recorder(): Painter & { rects: { color: string; x: number; y: number; w: number; h: number }[] } {
@@ -103,5 +108,32 @@ describe("facade art", () => {
     expect(ctx.rects.some((r) => r.color === awningColor)).toBe(true);
     const house = plans.find((p) => p.style.kind === "house") as FacadePlan;
     expect(house.style.awning).toBeNull();
+  });
+});
+
+describe("facade glass (night window lights)", () => {
+  it("lights every window and the door, inside the front, below the eave", () => {
+    for (const plan of plans) {
+      const rects = facadeGlassRects(plan);
+      const windows = Array.from({ length: plan.columns }, (_, c) => c).filter((c) => hasWindow(plan, c, facadeSeedOf(plan)));
+      expect(rects).toHaveLength(windows.length + plan.doorColumns.length);
+      for (const r of rects) {
+        expect(r.x).toBeGreaterThanOrEqual(plan.x);
+        expect(r.x + r.w).toBeLessThanOrEqual(plan.x + plan.columns * 16);
+        expect(r.y).toBeGreaterThanOrEqual(plan.y + EAVE_BOTTOM);
+        expect(r.y + r.h).toBeLessThanOrEqual(plan.y + FACADE_HEIGHT);
+      }
+    }
+  });
+
+  it("matches the glass the art paints", () => {
+    const cafe = plans.find((p) => p.name === "Hobbs Cafe") as FacadePlan;
+    const ctx = recorder();
+    paintFacade(ctx, cafe);
+    const painted = ctx.rects.filter((r) => r.color === "#f6d77a");
+    for (const glass of facadeGlassRects(cafe)) {
+      const local = { x: glass.x - cafe.x, y: glass.y - cafe.y, w: glass.w, h: glass.h };
+      expect(painted).toContainEqual({ color: "#f6d77a", ...local });
+    }
   });
 });
