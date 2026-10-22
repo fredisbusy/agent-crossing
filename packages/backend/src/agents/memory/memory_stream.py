@@ -1,11 +1,33 @@
 import datetime
+from dataclasses import dataclass
 from typing import List, Optional
 
 import numpy as np
 from settings import EMBEDDING_DIMENSION
-from utils.math import cosine_similarity, validate_embedding_dimension
+from utils.math import validate_embedding_dimension
 
 from .memory_object import MemoryObject, NodeType
+
+
+_MICROSECOND = datetime.timedelta(microseconds=1)
+_INITIAL_CAPACITY = 64
+_ALPHA = _BETA = _GAMMA = 1.0  # SPEC §5.1 기본 weight
+
+
+def _to_micros(moment: datetime.datetime) -> int:
+    """datetime을 epoch 기준 정수 마이크로초로 바꾼다(정밀도 손실 없음)."""
+    epoch = datetime.datetime(1970, 1, 1, tzinfo=moment.tzinfo)
+    return (moment - epoch) // _MICROSECOND
+
+
+@dataclass
+class _Matrix:
+    """기억 임베딩 행렬과 행별 norm, created_at(마이크로초)의 증분 버퍼."""
+
+    embeddings: np.ndarray
+    norms: np.ndarray
+    created: np.ndarray
+    size: int
 
 
 class MemoryStream:
@@ -15,6 +37,8 @@ class MemoryStream:
 
     def __init__(self):
         self.memories: list[MemoryObject] = []
+        self._cache: _Matrix | None = None
+        self._cache_last: MemoryObject | None = None
 
     def add_memory(
         self,
@@ -39,7 +63,11 @@ class MemoryStream:
             importance=importance,
             embedding=embedding,
         )
+        matrix = self._synced_matrix()
         self.memories.append(new_memory)
+        if matrix is not None:
+            self._append_row(matrix, new_memory)
+            self._cache_last = new_memory
 
     def retrieve(
         self,
@@ -52,22 +80,66 @@ class MemoryStream:
         query_embedding 기준으로 memory를 점수화해 상위 top_k에 해당하는 메모리를 반환한다.
 
         - 결과는 score 내림차순, 동점 시 최신 created_at 우선으로 정렬
+          (score·created_at까지 같으면 먼저 저장된 기억이 앞)
         - 반환된 memory의 last_accessed_at은 current_time으로 갱신
         """
+        if not self.memories:
+            return []
 
-        scores = self._calculate_retrieval_scores(
-            self.memories, query_embedding, current_time
-        )
+        matrix = self._synced_matrix()
+        if matrix is None:
+            return []
+        scores = self._score_array(self.memories, matrix, query_embedding, current_time)
+        # lexsort는 마지막 키가 주키: score 내림차순, created_at 내림차순, 저장 순서
+        order = np.lexsort((-matrix.created[: matrix.size], -scores))
+        top_memories = [self.memories[i] for i in order[:top_k]]
 
-        sorted_scores = sorted(
-            scores, key=lambda x: (x[1], x[0].created_at), reverse=True
-        )
-        top_memories = sorted_scores[:top_k]
-
-        for memory, _ in top_memories:
+        for memory in top_memories:
             memory.last_accessed_at = current_time
 
-        return [memory for memory, _ in top_memories]
+        return top_memories
+
+    def _synced_matrix(self) -> _Matrix | None:
+        """self.memories와 일치하는 캐시를 돌려준다. 어긋났으면 재구성한다."""
+        memories = self.memories
+        cache = self._cache
+        if (
+            cache is not None
+            and cache.size == len(memories)
+            and (not memories or memories[-1] is self._cache_last)
+        ):
+            return cache
+        cache = self._build_matrix(memories)
+        self._cache = cache
+        self._cache_last = memories[-1] if memories else None
+        return cache
+
+    def _build_matrix(self, memories: list[MemoryObject]) -> _Matrix | None:
+        if not memories:
+            return None
+        embeddings = np.stack([m.embedding for m in memories]).astype(np.float64)
+        capacity = max(_INITIAL_CAPACITY, len(memories))
+        buffer = np.zeros((capacity, embeddings.shape[1]), dtype=np.float64)
+        buffer[: len(memories)] = embeddings
+        norms = np.zeros(capacity, dtype=np.float64)
+        norms[: len(memories)] = np.linalg.norm(embeddings, axis=1)
+        created = np.zeros(capacity, dtype=np.int64)
+        created[: len(memories)] = [_to_micros(m.created_at) for m in memories]
+        return _Matrix(buffer, norms, created, len(memories))
+
+    def _append_row(self, matrix: _Matrix, memory: MemoryObject) -> None:
+        if matrix.size == matrix.embeddings.shape[0]:
+            capacity = matrix.size * 2
+            grown = np.zeros((capacity, matrix.embeddings.shape[1]), dtype=np.float64)
+            grown[: matrix.size] = matrix.embeddings
+            matrix.embeddings = grown
+            matrix.norms = np.resize(matrix.norms, capacity)
+            matrix.created = np.resize(matrix.created, capacity)
+        row = memory.embedding.astype(np.float64)
+        matrix.embeddings[matrix.size] = row
+        matrix.norms[matrix.size] = np.linalg.norm(row)
+        matrix.created[matrix.size] = _to_micros(memory.created_at)
+        matrix.size += 1
 
     def _calculate_retrieval_scores(
         self,
@@ -88,32 +160,37 @@ class MemoryStream:
         if not memories:
             return []
 
-        alpha = beta = gamma = 1.0  # 기본 weight는 1.0
+        if memories is self.memories:
+            matrix = self._synced_matrix()
+        else:
+            matrix = self._build_matrix(memories)
+        if matrix is None:
+            return []
+        scores = self._score_array(memories, matrix, query_embedding, current_time)
+        return list(zip(memories, scores.tolist()))
 
-        raw_recencies = [
-            self._calculate_recency_score(m, current_time) for m in memories
-        ]
-        raw_importances = [float(m.importance) for m in memories]
-        raw_relevancies = self._calculate_relevance_scores(memories, query_embedding)
+    def _score_array(
+        self,
+        memories: list[MemoryObject],
+        matrix: _Matrix,
+        query_embedding: np.ndarray,
+        current_time: datetime.datetime,
+    ) -> np.ndarray:
+        """모든 memory의 합산 retrieval score를 numpy 벡터 연산으로 계산한다."""
+        recency = self._recency_scores(memories, current_time)
+        importance = np.fromiter(
+            (m.importance for m in memories), dtype=np.float64, count=len(memories)
+        )
+        relevance = self._relevance_array(matrix, query_embedding)
+        return (
+            _ALPHA * self._normalize_array(recency)
+            + _BETA * self._normalize_array(importance)
+            + _GAMMA * self._normalize_array(relevance)
+        )
 
-        min_rec, max_rec = min(raw_recencies), max(raw_recencies)
-        min_imp, max_imp = min(raw_importances), max(raw_importances)
-        min_rel, max_rel = min(raw_relevancies), max(raw_relevancies)
-
-        results: list[tuple[MemoryObject, float]] = []
-        for i, memory in enumerate(memories):
-            norm_rec = self._normalize(raw_recencies[i], min_rec, max_rec)
-            norm_imp = self._normalize(raw_importances[i], min_imp, max_imp)
-            norm_rel = self._normalize(raw_relevancies[i], min_rel, max_rel)
-
-            score = alpha * norm_rec + beta * norm_imp + gamma * norm_rel
-            results.append((memory, score))
-
-        return results
-
-    def _calculate_recency_score(
-        self, memory: MemoryObject, current_time: datetime.datetime
-    ) -> float:
+    def _recency_scores(
+        self, memories: list[MemoryObject], current_time: datetime.datetime
+    ) -> np.ndarray:
         """
         Recency score를 계산한다.
         - 반환 범위: `[0.0, 1.0]`
@@ -122,15 +199,16 @@ class MemoryStream:
         - `hours_since_last_access = (current_time - memory.last_accessed_at).total_seconds() / 3600`
         - `recency = 0.995 ** hours_since_last_access`
         """
-        hour_since_last_access = (
-            current_time - memory.last_accessed_at
-        ).total_seconds() / (60 * 60)
-        recency = 0.995**hour_since_last_access
-        return recency
+        hours = np.fromiter(
+            ((current_time - m.last_accessed_at) / _MICROSECOND for m in memories),
+            dtype=np.float64,
+            count=len(memories),
+        ) / (1_000_000 * 60 * 60)
+        return np.power(0.995, hours)
 
-    def _calculate_relevance_scores(
-        self, memories: list[MemoryObject], query_embedding: np.ndarray
-    ) -> list[float]:
+    def _relevance_array(
+        self, matrix: _Matrix, query_embedding: np.ndarray
+    ) -> np.ndarray:
         """
         모든 memory의 relevance score를 한 번의 행렬 연산으로 계산한다.
         - 반환 범위: `[-1.0, 1.0]`
@@ -140,29 +218,29 @@ class MemoryStream:
         - `relevance = cosine_similarity(query_embedding, memory.embedding)`
         - query나 memory의 norm이 0이거나 query 차원이 틀리면 0.0
         """
+        size = matrix.size
         try:
             validate_embedding_dimension(
                 query_embedding, expected_dimension=EMBEDDING_DIMENSION
             )
         except ValueError:
-            return [0.0 for _ in memories]
+            return np.zeros(size, dtype=np.float64)
 
         query = query_embedding.astype(np.float64)
-        matrix = np.stack([m.embedding for m in memories]).astype(np.float64)
-        norms = np.linalg.norm(matrix, axis=1) * np.linalg.norm(query)
-        dots = matrix @ query
-        safe_norms = np.where(norms == 0, 1.0, norms)
-        relevancies = np.where(norms == 0, 0.0, dots / safe_norms)
-        return [float(value) for value in relevancies]
+        norms = matrix.norms[:size] * np.linalg.norm(query)
+        dots = matrix.embeddings[:size] @ query
+        zero = norms == 0
+        return np.where(zero, 0.0, dots / np.where(zero, 1.0, norms))
 
-    def _normalize(self, score: float, min_val: float, max_val: float) -> float:
+    def _normalize_array(self, values: np.ndarray) -> np.ndarray:
         """
         Min-Max 정규화를 수행한다.
         - 반환 범위: `[0.0, 1.0]`
-        min_val == max_val인 경우, 모든 score가 동일하므로 0.5로 반환한다.
+        max == min인 경우, 모든 score가 동일하므로 0.5로 반환한다.
 
         공식: - `norm_x = (x - min_x) / (max_x - min_x)`
         """
+        min_val, max_val = values.min(), values.max()
         if max_val == min_val:
-            return 0.5
-        return (score - min_val) / (max_val - min_val)
+            return np.full(values.shape, 0.5, dtype=np.float64)
+        return (values - min_val) / (max_val - min_val)
