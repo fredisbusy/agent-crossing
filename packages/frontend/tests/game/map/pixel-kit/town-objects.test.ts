@@ -80,11 +80,11 @@ describe("map objects", () => {
     expect(plan.sprites.find((s) => s.frame === "fountain_0")?.anim).toBe("fountain");
   });
 
-  it("flips beds only in the south buildings", () => {
+  it("keeps beds at their map rectangle so sleepers line up", () => {
     const plan = planMapObjects(furniture, decor);
     const beds = plan.sprites.filter((s) => s.frame.startsWith("furn_bed"));
-    expect(beds.some((b) => b.flipY)).toBe(true);
-    expect(beds.filter((b) => b.y < 22 * 16).every((b) => !b.flipY)).toBe(true);
+    const rects = furniture.filter((f) => f.frame.startsWith("furn_bed"));
+    expect(beds.map((b) => [b.x, b.y])).toEqual(rects.map((r) => [r.x, r.y]));
   });
 });
 

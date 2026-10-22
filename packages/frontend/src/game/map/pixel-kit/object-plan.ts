@@ -1,4 +1,3 @@
-import { TILE_SIZE } from "../../../town-layout";
 import { LIGHT_OBJECT_NAME, type MapSprite } from "../objects";
 
 /** 아틀라스 프레임 하나를 놓는 명령. `x`·`y`는 프레임 왼쪽 위 픽셀. */
@@ -14,7 +13,6 @@ export interface ObjectSprite {
   x: number;
   y: number;
   depth: number;
-  flipY: boolean;
   /** 있으면 이 애니 키(`fountain`)를 재생한다. */
   anim: string | null;
 }
@@ -30,12 +28,7 @@ const BAKED_PREFIXES = ["rug_", "mat_door", "flower_bed_", "lily_pad", "reeds"] 
 const ANIMATED: Readonly<Record<string, string>> = { fountain_0: "fountain" };
 /** 주민이 위에 눕거나 앉아 주민 뒤에 깔려야 하는 것(사각형 아래끝에서 뺄 px). */
 const SEAT_DEPTH_LIFT = 1;
-/**
- * 남쪽 건물(y >= 22칸)은 생성기가 세로로 뒤집어 벽이 아래쪽이다.
- * 머리 쪽이 벽을 향하는 침대는 이 줄 아래에서 flipY로 뒤집는다.
- */
-const SOUTH_BUILDING_MIN_Y = 22 * TILE_SIZE;
-const FLIP_IN_SOUTH: ReadonlySet<string> = new Set(["furn_bed", "furn_bed_double"]);
+/** 침대는 남쪽 건물에서도 뒤집지 않는다: 자는 주민 스프라이트가 언제나 머리가 위다. */
 const FLAT_FRAMES: ReadonlySet<string> = new Set(["furn_bed", "furn_bed_double"]);
 
 export function isBaked(frame: string): boolean {
@@ -64,7 +57,6 @@ export function planMapObjects(furniture: readonly MapSprite[], decor: readonly 
       x: sprite.x,
       y: sprite.y,
       depth: objectDepth(sprite),
-      flipY: sprite.y >= SOUTH_BUILDING_MIN_Y && FLIP_IN_SOUTH.has(sprite.frame),
       anim: ANIMATED[sprite.frame] ?? null,
     });
   }

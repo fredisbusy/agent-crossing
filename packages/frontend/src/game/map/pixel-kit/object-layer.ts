@@ -40,7 +40,6 @@ type Tick = (timeMs: number) => void;
 function drawSprites(scene: Phaser.Scene, sprites: readonly ObjectSprite[], ticks: Tick[]): void {
   for (const sprite of sprites) {
     const image = scene.add.image(sprite.x, sprite.y, ATLAS_KEY, sprite.frame).setOrigin(0, 0).setDepth(sprite.depth);
-    image.setFlipY(sprite.flipY);
     const frames = sprite.anim ? ANIM_FRAMES[sprite.anim] : undefined;
     if (!frames) continue;
     ticks.push((time) => {
