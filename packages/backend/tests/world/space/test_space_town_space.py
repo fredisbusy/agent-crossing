@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 from world.contracts import Space, TilePosition
 from world.space import TownSpace, load_town_space
@@ -112,10 +114,8 @@ def test_tree_contains_all_paths(town: TownSpace) -> None:
     )
 
 
-def test_committed_map_passes_checker() -> None:
-    """정본은 Tiled로 고친 town.json이다. 배치와 무관한 규칙은 check_town_map.py가 본다."""
+def _checker() -> Any:
     import importlib.util
-    import json
     from pathlib import Path
 
     script = Path(__file__).resolve().parents[5] / "scripts" / "maps" / "check_town_map.py"
@@ -123,5 +123,33 @@ def test_committed_map_passes_checker() -> None:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def test_committed_map_passes_checker() -> None:
+    """정본은 Tiled로 고친 town.json이다. 배치와 무관한 규칙은 check_town_map.py가 본다."""
+    import json
+
+    module = _checker()
     raw = json.loads(module.DEFAULT_MAP.read_text(encoding="utf-8"))
+    assert module.check(raw) == []
+
+
+def test_fix_turns_rectangles_into_picture_tiles_and_names_new_tiles() -> None:
+    """Tiled에서 이름 없이 찍은 타일 객체와 옛 사각형 객체를 --fix가 같은 꼴로 맞춘다."""
+    import copy
+    import json
+
+    module = _checker()
+    raw = json.loads(module.DEFAULT_MAP.read_text(encoding="utf-8"))
+    decor = next(g for g in raw["layers"] if g["name"] == "decor")["objects"]
+    placed = copy.deepcopy(decor[0])
+    rect = {k: v for k, v in decor[1].items() if k != "gid"}
+    rect["y"] = top = decor[1]["y"] - decor[1]["height"]
+    decor[0] = {**placed, "name": ""}
+    decor[1] = rect
+    assert module.check(raw) != []
+    module.fix(raw)
+    assert decor[0] == placed
+    assert decor[1]["y"] - decor[1]["height"] == top and decor[1]["gid"]
     assert module.check(raw) == []

@@ -51,10 +51,15 @@ def _ground(raw: dict[str, Any]) -> list[int]:
 
 
 
+def _top(obj: dict[str, Any]) -> int:
+    """객체 윗변 y(px). 그림 타일 객체(gid)는 Tiled 규칙상 y가 아랫변이다."""
+    return int(obj["y"]) - int(obj["height"]) if obj.get("gid") else int(obj["y"])
+
+
 def _cells(obj: dict[str, Any]) -> list[tuple[int, int]]:
     return [
         (x, y)
-        for y in range(obj["y"] // TILE, (obj["y"] + obj["height"]) // TILE)
+        for y in range(_top(obj) // TILE, (_top(obj) + obj["height"]) // TILE)
         for x in range(obj["x"] // TILE, (obj["x"] + obj["width"]) // TILE)
     ]
 
@@ -91,10 +96,10 @@ def test_blocking_decor_is_collision_only(raw: dict[str, Any], town: TownSpace) 
     ground = _ground(raw)
     decor = _objects(raw, "decor")
     fountain = next(o for o in decor if o["name"] == "fountain_0")
-    fx, fy = fountain["x"] // TILE, fountain["y"] // TILE
+    fx, fy = fountain["x"] // TILE, _top(fountain) // TILE
     assert not town.grid.is_walkable(fx + 1, fy + 1)
     assert ground[(fy + 1) * raw["width"] + fx + 1] == ROAD_GID
     lamps = [o for o in decor if o["name"] == "lamp_post"]
     assert len(lamps) >= 8
-    assert all(not town.grid.is_walkable(o["x"] // TILE, o["y"] // TILE + 1) for o in lamps)
+    assert all(not town.grid.is_walkable(o["x"] // TILE, _top(o) // TILE + 1) for o in lamps)
     assert len([o for o in decor if o["name"] == "light"]) == len(lamps)

@@ -1,10 +1,12 @@
 """마을 맵(Tiled 1.10 JSON) 검증기 (SPEC §15). 맵의 정본은 Tiled에서 직접 고친 town.json이다.
 
-사용: python3 scripts/maps/check_town_map.py [--fix-collision] [맵 경로]
+사용: python3 scripts/maps/check_town_map.py [--fix] [맵 경로]
 - 배치와 무관한 규칙만 본다: 레이어·타일 값, 객체 이름·크기, 장소 트리, 주민이 쓰는 장소,
   길에서 모든 장소·의자·문 매트까지 걸어서 닿는지, collision이 ground·장식에서 나온 값과 같은지,
   건물마다 정면(`facades`)이 건물 아래 세 줄에 붙어 있는지.
-- `--fix-collision`: collision 레이어를 ground + 막는 장식으로 다시 계산해 저장한다(손으로 칠하지 않는다).
+- `--fix`(옛 이름 `--fix-collision`): 저장 전 정리. 가구·장식 그림 타일셋을 넣고, 사각형 가구·장식을
+  그림 타일 객체로 바꾸고, Tiled에서 새로 놓아 이름이 빈 타일 객체에 프레임 이름을 채우고,
+  collision 레이어를 ground + 막는 장식으로 다시 계산한다(손으로 칠하지 않는다).
 외부 의존 없음. 문제가 있으면 목록을 찍고 1로 끝난다.
 """
 
@@ -20,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from town_buildings import FRONT_ROWS  # noqa: E402
 from town_decor import DECOR_FRAMES, DecorItem, blocked_cells  # noqa: E402
 from town_furniture import FRAME_CELLS, WALKABLE_FRAMES  # noqa: E402
+from town_object_tiles import NAME as OBJECT_TILESET, frame_of_gid, tileset_json, to_tile_object, top_of  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MAP = ROOT / "packages/shared/maps/town.json"
@@ -42,12 +45,12 @@ def layer(raw: Raw, name: str, kind: str) -> Raw | None:
 
 
 def cells_of(obj: Raw) -> list[Cell]:
-    x0, y0 = obj["x"] // TILE, obj["y"] // TILE
+    x0, y0 = obj["x"] // TILE, top_of(obj) // TILE
     return [(x, y) for y in range(y0, y0 + obj["height"] // TILE) for x in range(x0, x0 + obj["width"] // TILE)]
 
 
 def rect_of(obj: Raw) -> tuple[int, int, int, int]:
-    return obj["x"] // TILE, obj["y"] // TILE, obj["width"] // TILE, obj["height"] // TILE
+    return obj["x"] // TILE, top_of(obj) // TILE, obj["width"] // TILE, obj["height"] // TILE
 
 
 def path_of(obj: Raw) -> str | None:
@@ -91,6 +94,18 @@ def check_structure(raw: Raw, errors: list[str]) -> bool:
         if any(o[k] % TILE for k in ("x", "y", "width", "height")) or not o["width"] or not o["height"]:
             errors.append(f"객체 '{o['name']}'(id {o['id']})가 칸에 맞지 않는다(스냅 켜고 다시 그리기).")
     return not errors
+
+
+def check_object_tiles(raw: Raw, errors: list[str]) -> None:
+    """가구·장식은 그림 타일 객체여야 Tiled에서 보인다. gid가 가리키는 그림과 이름이 같아야 한다."""
+    if not any(t.get("name") == OBJECT_TILESET for t in raw.get("tilesets", [])):
+        errors.append(f"타일셋 '{OBJECT_TILESET}'이 없다. --fix로 넣는다.")
+    for name in ("furniture", "decor"):
+        for o in layer(raw, name, "objectgroup")["objects"]:  # type: ignore[index]
+            if not o.get("gid"):
+                errors.append(f"'{o['name']}'(id {o['id']})가 그림 없는 사각형이다. --fix로 그림 타일 객체로 바꾼다.")
+            elif frame_of_gid(int(o["gid"])) != o.get("name"):
+                errors.append(f"객체 id {o['id']}의 이름 '{o.get('name')}'이 그림({frame_of_gid(int(o['gid']))})과 다르다.")
 
 
 def check_objects(raw: Raw, errors: list[str]) -> None:
@@ -221,6 +236,7 @@ def check(raw: Raw) -> list[str]:
     if not check_structure(raw, errors):
         return errors
     check_objects(raw, errors)
+    check_object_tiles(raw, errors)
     by_path = check_locations(raw, errors)
     collision = derive_collision(raw)
     if layer(raw, "collision", "tilelayer")["data"] != collision:  # type: ignore[index]
@@ -236,15 +252,29 @@ def render(raw: Raw) -> str:
     return "{\n" + ",\n".join(lines) + "\n}\n"
 
 
+FIX_FLAGS = ("--fix", "--fix-collision")
+
+
+def fix(raw: Raw) -> None:
+    """그림 타일셋 넣기 → 가구·장식을 그림 타일 객체로 → 빈 이름 채우기 → collision 다시 계산."""
+    tilesets = [t for t in raw.get("tilesets", []) if t.get("name") != OBJECT_TILESET]
+    raw["tilesets"] = tilesets + [tileset_json()]
+    for name in ("furniture", "decor"):
+        for o in layer(raw, name, "objectgroup")["objects"]:  # type: ignore[index]
+            to_tile_object(o)
+    layer(raw, "collision", "tilelayer")["data"] = derive_collision(raw)  # type: ignore[index]
+
+
 def main(argv: list[str]) -> int:
-    fix = "--fix-collision" in argv
-    rest = [a for a in argv if a != "--fix-collision"]
+    fixing = any(a in FIX_FLAGS for a in argv)
+    rest = [a for a in argv if a not in FIX_FLAGS]
     path = Path(rest[0]) if rest else DEFAULT_MAP
     raw = json.loads(path.read_text(encoding="utf-8"))
-    if fix and layer(raw, "collision", "tilelayer") and layer(raw, "decor", "objectgroup"):
-        layer(raw, "collision", "tilelayer")["data"] = derive_collision(raw)  # type: ignore[index]
+    if fixing and all(layer(raw, n, k) for n, k in (("collision", "tilelayer"), ("furniture", "objectgroup"),
+                                                     ("decor", "objectgroup"))):  # fmt: skip
+        fix(raw)
         path.write_text(render(raw), encoding="utf-8")
-        print(f"collision을 다시 계산해 저장했다: {path}")
+        print(f"그림 타일 객체·collision을 정리해 저장했다: {path}")
     errors = check(raw)
     for error in errors:
         print(f"- {error}")
