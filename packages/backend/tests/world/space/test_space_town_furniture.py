@@ -1,21 +1,16 @@
-"""town.json의 furniture·decor 객체와 방 안 통행 가능성 검사 (SPEC §15)."""
+"""town.json의 furniture·decor 객체 검사 (SPEC §15). 통행 가능성은 check_town_map.py가 본다."""
 
 import json
-from collections import deque
 from pathlib import Path
 from typing import Any
 
 import pytest
-from world.contracts import TilePosition
 from world.space import TownSpace, load_town_space
 
 TOWN_JSON = Path(__file__).resolve().parents[4] / "shared" / "maps" / "town.json"
 TILE = 16
 ROAD_GID = 2
-DOOR_GID = 7
 FURNITURE_GID = 6
-REACHABLE_RATIO = 0.9
-ROAD_START = (0, 19)
 
 CONTRACT_FURNITURE = {
     "furn_shelf", "furn_counter", "furn_cabinet", "furn_plant", "furn_bed", "furn_bed_double",
@@ -47,24 +42,12 @@ def _objects(raw: dict[str, Any], layer: str) -> list[dict[str, Any]]:
     return next(g["objects"] for g in raw["layers"] if g["name"] == layer)
 
 
-def _path_of(obj: dict[str, Any]) -> str:
-    return str(obj["properties"][0]["value"])
 
 
 def _ground(raw: dict[str, Any]) -> list[int]:
     return next(g["data"] for g in raw["layers"] if g["name"] == "ground")
 
 
-def _reachable(town: TownSpace, start: tuple[int, int]) -> set[tuple[int, int]]:
-    seen = {start}
-    queue = deque([start])
-    while queue:
-        x, y = queue.popleft()
-        for n in town.grid.neighbors(TilePosition(x=x, y=y)):
-            if (n.x, n.y) not in seen:
-                seen.add((n.x, n.y))
-                queue.append((n.x, n.y))
-    return seen
 
 
 def _cells(obj: dict[str, Any]) -> list[tuple[int, int]]:
@@ -101,37 +84,6 @@ def test_blocking_furniture_blocks_and_soft_furniture_does_not(
                 assert town.grid.is_walkable(x, y), o
 
 
-def test_rooms_are_reachable_from_building_doors(raw: dict[str, Any], town: TownSpace) -> None:
-    ground = _ground(raw)
-    locations = _objects(raw, "locations")
-    buildings = [
-        o for o in locations
-        if _path_of(o).count(" > ") == 1 and o["name"] not in ("Town Square", "Johnson Park")
-    ]  # fmt: skip
-    assert len(buildings) == 9
-    for b in buildings:
-        by = b["y"] // TILE
-        bh = b["height"] // TILE
-        doors = [
-            (x, y)
-            for x, y in _cells(b)
-            if ground[y * raw["width"] + x] == DOOR_GID and y in (by, by + bh - 1)
-        ]
-        assert len(doors) == 1, b["name"]
-        reached = _reachable(town, doors[0])
-        rooms = [o for o in locations if _path_of(o).startswith(_path_of(b) + " > ")]
-        assert rooms
-        for room in rooms:
-            free = [c for c in _cells(room) if town.grid.is_walkable(*c)]
-            ratio = len([c for c in free if c in reached]) / len(free)
-            assert ratio >= REACHABLE_RATIO, (_path_of(room), ratio)
-
-
-def test_chairs_and_door_mats_are_reachable(raw: dict[str, Any], town: TownSpace) -> None:
-    reached = _reachable(town, ROAD_START)
-    for o in _objects(raw, "furniture"):
-        if o["name"].startswith("furn_chair") or o["name"] == "mat_door":
-            assert (o["x"] // TILE, o["y"] // TILE) in reached, o
 
 
 def test_blocking_decor_is_collision_only(raw: dict[str, Any], town: TownSpace) -> None:
@@ -145,8 +97,3 @@ def test_blocking_decor_is_collision_only(raw: dict[str, Any], town: TownSpace) 
     assert len(lamps) >= 8
     assert all(not town.grid.is_walkable(o["x"] // TILE, o["y"] // TILE + 1) for o in lamps)
     assert len([o for o in decor if o["name"] == "light"]) == len(lamps)
-
-
-def test_decor_does_not_cut_the_road(town: TownSpace) -> None:
-    reached = _reachable(town, ROAD_START)
-    assert all(any((x, y) in reached for y in range(18, 22)) for x in range(64))
