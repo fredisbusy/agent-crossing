@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from llm.clients.types import LlmGenerateOptions
 
 from llm import (
@@ -137,7 +139,7 @@ def test_score_many_client_error_falls_back() -> None:
 
 def test_score_many_single_item_uses_single_path_and_small_budget() -> None:
     client = RecordingClient(json.dumps({"importance": 7}))
-    scorer = LlmImportanceScorer(client=client)
+    scorer = LlmImportanceScorer(client=client, reasoning_enabled=False)
 
     assert scorer.score_many(_contexts(1)) == [7]
     assert client.num_predicts == [16]
@@ -145,9 +147,43 @@ def test_score_many_single_item_uses_single_path_and_small_budget() -> None:
 
 
 def test_score_many_num_predict_grows_with_batch_size() -> None:
-    client = RecordingClient(json.dumps({"importances": [1] * 8}))
-    scorer = LlmImportanceScorer(client=client)
-    scorer.score_many(_contexts(2))
-    scorer.score_many(_contexts(8))
+    small = RecordingClient(json.dumps({"importances": [1] * 2}))
+    large = RecordingClient(json.dumps({"importances": [1] * 8}))
+    LlmImportanceScorer(client=small, reasoning_enabled=False).score_many(_contexts(2))
+    LlmImportanceScorer(client=large, reasoning_enabled=False).score_many(_contexts(8))
 
-    assert client.num_predicts[0] < client.num_predicts[1]
+    assert small.num_predicts[0] < large.num_predicts[0]
+
+
+def test_reasoning_models_get_reserved_output_budget() -> None:
+    single = RecordingClient(json.dumps({"importance": 4}))
+    batch = RecordingClient(json.dumps({"importances": [1, 2]}))
+    LlmImportanceScorer(client=single, reasoning_enabled=True).score_many(_contexts(1))
+    LlmImportanceScorer(client=batch, reasoning_enabled=True).score_many(_contexts(2))
+
+    assert single.num_predicts == [80]
+    assert batch.num_predicts[0] > 80
+
+
+def test_score_many_broken_batch_retries_each_item() -> None:
+    client = RecordingClient('{"importances": [4, 5')
+    scorer = LlmImportanceScorer(client=client)
+
+    assert scorer.score_many(_contexts(2)) == [3, 3]
+    assert len(client.prompts) == 3
+
+
+def test_parse_importance_value_rescues_truncated_json() -> None:
+    assert parse_importance_value('{"importance": 7, "rea', fallback_importance=3) == 7
+
+
+def test_score_many_rejects_mixed_residents() -> None:
+    contexts = _contexts(1) + [
+        ImportanceScoringContext(
+            observation="x", agent_name="Other", identity_stable_set=[]
+        )
+    ]
+    scorer = LlmImportanceScorer(client=RecordingClient("{}"))
+
+    with pytest.raises(ValueError):
+        scorer.score_many(contexts)
