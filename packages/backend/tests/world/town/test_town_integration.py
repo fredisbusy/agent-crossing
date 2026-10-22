@@ -16,7 +16,7 @@ from world.contracts import (
 from world.residents import (
     Resident,
     ResidentConfig,
-    ScheduleMindFactory,
+    ResidentMindFactory,
     apply_mind_selection,
     load_resident_configs,
 )
@@ -73,7 +73,7 @@ class Inviter:
 
 class InviterAwareFactory:
     def __init__(self) -> None:
-        self._schedule = ScheduleMindFactory(seed=0)
+        self._schedule = ResidentMindFactory(start_time=START, seed=0)
 
     def build(self, config: ResidentConfig):  # noqa: ANN201 - Mind 프로토콜
         if config.resident_id == "guest":
@@ -110,7 +110,7 @@ def test_whole_town_of_schedule_minds_runs_a_day_deterministically() -> None:
     def run() -> list[str]:
         space = load_town_space()
         configs = apply_mind_selection(load_resident_configs(), agent_count=0)
-        factory = ScheduleMindFactory(seed=3)
+        factory = ResidentMindFactory(start_time=datetime.datetime(2026, 2, 13, 6, 0), seed=3)
         residents = [Resident(c, space, factory) for c in configs]
         sim = TownSimulation(
             space=space,

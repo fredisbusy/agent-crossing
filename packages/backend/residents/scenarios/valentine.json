@@ -1,0 +1,23 @@
+{
+  "name": "valentine",
+  "title": "밸런타인데이 파티",
+  "start_time": "2023-02-13T07:00:00",
+  "minutes": 2190,
+  "focus_event": "밸런타인데이 파티",
+  "residents": {
+    "isabella_rodriguez": {
+      "hosting": [
+        {
+          "name": "밸런타인데이 파티",
+          "start_time": "2023-02-14T17:00:00",
+          "end_time": "2023-02-14T19:00:00",
+          "location_path": "Smallville > Hobbs Cafe > Seating"
+        }
+      ]
+    },
+    "maria_lopez": {
+      "friendships": { "klaus_mueller": 30 },
+      "seed_memories": ["Maria secretly has a crush on Klaus."]
+    }
+  }
+}
