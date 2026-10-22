@@ -266,6 +266,13 @@
     - [x] 768px 미만에서 지도 전체 폭과 접이식 주민 시트
     - [ ] 날씨 표현(월드 상태에 날씨가 생기면 아틀라스 `rain`·`snow_fall`을 연결)
 
+- [ ] `P2` 맵 정본을 Tiled 파일로 바꾸고 에디터로 고칠 수 있게 한다 (SPEC §15)
+  - DoD:
+    - [x] 편집용 의미 타일 PNG(`packages/shared/maps/town-tiles.png`)와 편집 안내(`maps/README.md`)
+    - [x] `pnpm check:map`: 장소 트리·주민이 쓰는 장소·길에서의 도달성·객체 이름과 크기·collision 일치 검사, `--fix-collision`
+    - [x] 생성기는 초기 맵 생성용으로 남기고 기존 맵을 `--force` 없이 덮어쓰지 않는다
+    - [ ] Tiled에서 마을 배치를 다시 그린다(건물 크기·모양 다양화, 골목·마당)
+
 - [ ] `P2` A\* pathfinding을 적용한다
   - Depends on: Tiled map + collision 연결
   - DoD:
