@@ -6,6 +6,20 @@ export function formatSimTime(iso: string): string {
   return match ? `${match[1]} ${match[2]}` : iso;
 }
 
+/** 시각만(`HH:mm`). 좁은 화면 상단 바용. */
+export function formatSimClock(iso: string): string {
+  const match = /T(\d{2}:\d{2})/.exec(iso);
+  return match ? match[1] : iso;
+}
+
+/** 좁은 화면용 짧은 연결 상태 문구. */
+export const CONNECTION_SHORT_LABELS: Record<ConnectionStatus, string> = {
+  connecting: "연결 중",
+  connected: "연결됨",
+  reconnecting: "재연결",
+  mock: "가짜",
+};
+
 export const CONNECTION_LABELS: Record<ConnectionStatus, string> = {
   connecting: "연결 중",
   connected: "연결됨",
