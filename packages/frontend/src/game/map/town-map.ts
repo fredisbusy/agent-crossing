@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { TILE_SIZE } from "../../town-layout";
 import { buildFallbackMap } from "./fallback-map";
 import { extractLocationAreas, type LocationArea } from "./locations";
+import { DECOR_LAYER, extractMapSprites, FURNITURE_LAYER, type MapSprite } from "./objects";
 import { drawPixelKit, isPixelKitEnabled, planPixelKit, preloadPixelKit } from "./pixel-kit";
 import { GROUND_LAYER, LOCATIONS_LAYER, TILESET_NAME } from "./tiled-types";
 import { paintTileset, TILESET_PIXEL_HEIGHT, TILESET_PIXEL_WIDTH } from "./tileset-art";
@@ -16,6 +17,10 @@ export interface TownMap {
   widthPx: number;
   heightPx: number;
   areas: LocationArea[];
+  /** 가구(막는 것·깔개·의자 포함). 대체 맵이면 빈 목록. */
+  furniture: MapSprite[];
+  /** 실외 장식과 가로등 빛 위치(`light`). 대체 맵이면 빈 목록. */
+  decor: MapSprite[];
   usedFallback: boolean;
 }
 
@@ -50,6 +55,8 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
     widthPx: tilemap.widthInPixels,
     heightPx: tilemap.heightInPixels,
     areas: extractLocationAreas(objects),
+    furniture: extractMapSprites(tilemap.getObjectLayer(FURNITURE_LAYER)?.objects ?? []),
+    decor: extractMapSprites(tilemap.getObjectLayer(DECOR_LAYER)?.objects ?? []),
     usedFallback,
   };
 }
