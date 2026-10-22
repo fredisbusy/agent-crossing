@@ -4,7 +4,7 @@ import { drawFacades, FACADE_LAYER, type FacadePlan, planFacades } from "./facad
 import { buildFallbackMap, TILE } from "./fallback-map";
 import { extractLocationAreas, type LocationArea } from "./locations";
 import { DECOR_LAYER, extractMapSprites, FURNITURE_LAYER, type MapSprite } from "./objects";
-import { drawPixelKit, hasPixelKit, planPixelKit, preloadPixelKit } from "./pixel-kit";
+import { drawPixelKit, hasPixelKit, planPixelKit, preloadPixelKit, type SignRect } from "./pixel-kit";
 import { GROUND_LAYER, LOCATIONS_LAYER, TILESET_NAME } from "./tiled-types";
 import { paintTileset, TILESET_PIXEL_HEIGHT, TILESET_PIXEL_WIDTH } from "./tileset-art";
 
@@ -24,6 +24,8 @@ export interface TownMap {
   decor: MapSprite[];
   /** 건물 정면(밤 창불 자리). 픽셀 팩이 없거나 대체 맵이면 빈 목록. */
   facades: FacadePlan[];
+  /** 건물 간판이 지금 차지하는 사각형(줌마다 달라진다). 주민 이름표가 비킨다. 간판이 없으면 빈 목록. */
+  signRects: () => SignRect[];
   usedFallback: boolean;
 }
 
@@ -54,12 +56,13 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
   const decor = extractMapSprites(tilemap.getObjectLayer(DECOR_LAYER)?.objects ?? []);
   // 아틀라스가 없으면 아래 코드 타일 레이어가 그대로 대체 화면이 된다.
   let facades: FacadePlan[] = [];
+  let signRects: () => SignRect[] = () => [];
   if (hasPixelKit(scene)) {
     const ground = layer.layer.data.flatMap((row) => row.map((tile) => tile.index));
     const isDoor = (tx: number, ty: number): boolean => ground[ty * tilemap.width + tx] === TILE.door;
     facades = planFacades(extractMapSprites(tilemap.getObjectLayer(FACADE_LAYER)?.objects ?? []), isDoor);
     const plan = planPixelKit(ground, tilemap.width, tilemap.height, { areas, furniture, decor, facades });
-    drawPixelKit(scene, plan, tilemap.widthInPixels, tilemap.heightInPixels);
+    signRects = drawPixelKit(scene, plan, tilemap.widthInPixels, tilemap.heightInPixels) ?? signRects;
     drawFacades(scene, facades);
   }
   return {
@@ -69,6 +72,7 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
     furniture,
     decor,
     facades,
+    signRects,
     usedFallback,
   };
 }

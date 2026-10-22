@@ -22,3 +22,25 @@ describe("resolveTagOffsets", () => {
     expect(sideBySide || upperBottom <= 10).toBe(true);
   });
 });
+
+describe("resolveTagOffsets with obstacles", () => {
+  it("moves a tag off a sign instead of covering it", () => {
+    const sign = { left: -60, right: 60, top: 10, bottom: 28 };
+    const out = resolveTagOffsets([box("tom", 0, 12, 1)], [sign]);
+    const moved = out.get("tom") ?? { dx: 0, dy: 0 };
+    const left = -20 + moved.dx;
+    const top = 12 + moved.dy;
+    const clear = left + 40 <= sign.left || left >= sign.right || top + 14 <= sign.top || top >= sign.bottom;
+    expect(clear).toBe(true);
+  });
+
+  it("prefers dropping below a long sign over sliding far sideways", () => {
+    const out = resolveTagOffsets([box("tom", -30, 12, 1)], [{ left: -60, right: 200, top: 10, bottom: 28 }]);
+    expect(out.get("tom")).toEqual({ dx: 0, dy: 28 + 1 - 12 });
+  });
+
+  it("leaves tags that do not touch any sign where they are", () => {
+    const out = resolveTagOffsets([box("far", 300, 0, 1)], [{ left: -60, right: 60, top: 10, bottom: 28 }]);
+    expect(out.get("far")).toEqual({ dx: 0, dy: 0 });
+  });
+});

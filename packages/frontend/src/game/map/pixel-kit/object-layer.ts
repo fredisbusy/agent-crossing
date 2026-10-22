@@ -7,6 +7,7 @@ import {
   layoutSign,
   PLANK_CELL,
   PLANK_END_WIDTH,
+  PLANK_HEIGHT,
   PLANK_MIDDLE_WIDTH,
   PLANK_TOP_OFFSET,
   type SignPlan,
@@ -37,6 +38,14 @@ const ANIM_FRAMES: Readonly<Record<string, readonly string[]>> = {
 
 type Tick = (timeMs: number) => void;
 
+/** 간판 판자가 지금 차지하는 월드 사각형(화면 고정 크기라 줌마다 달라진다). 주민 이름표가 비킨다. */
+export interface SignRect {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
 /** 애니 스프라이트는 프레임을 직접 바꾼다: Phaser 애니는 프레임을 바꿀 때마다 아틀라스 pivot으로 origin을 되돌린다. */
 function drawSprites(scene: Phaser.Scene, sprites: readonly ObjectSprite[], ticks: Tick[]): void {
   for (const sprite of sprites) {
@@ -50,7 +59,7 @@ function drawSprites(scene: Phaser.Scene, sprites: readonly ObjectSprite[], tick
 }
 
 /** 판자+아이콘+글자를 한 덩어리로 묶어 화면 크기를 고정한다(컨테이너를 1/줌으로 스케일). */
-function drawSign(scene: Phaser.Scene, sign: SignPlan, ticks: Tick[]): void {
+function drawSign(scene: Phaser.Scene, sign: SignPlan, ticks: Tick[]): () => SignRect {
   const text = scene.add
     .text(0, 0, sign.label, {
       fontFamily: SIGN_FONT,
@@ -78,12 +87,18 @@ function drawSign(scene: Phaser.Scene, sign: SignPlan, ticks: Tick[]): void {
   text.setPosition(left + layout.textX * s, frameTop + PLANK_CENTER_OFFSET * s);
   children.push(text);
   const container = scene.add.container(sign.centerX, sign.edgeY, children).setDepth(SIGN_DEPTH);
+  let rect: SignRect = { left: sign.centerX, right: sign.centerX, top: sign.edgeY, bottom: sign.edgeY };
   ticks.push(() => {
     const zoomScale = 1 / scene.cameras.main.zoom;
     const scale = sign.maxScale === null ? zoomScale : Math.min(zoomScale, sign.maxScale);
+    const width = layout.width * s * scale;
     container.setScale(scale);
-    container.x = clampSignCenter(sign.centerX, layout.width * s * scale, sign.bounds);
+    container.x = clampSignCenter(sign.centerX, width, sign.bounds);
+    // 판자 그림은 프레임(16px) 아래쪽 12px만 차 있다.
+    const plankTop = sign.edgeY + (frameTop + PLANK_TOP_OFFSET * s) * scale;
+    rect = { left: container.x - width / 2, right: container.x + width / 2, top: plankTop, bottom: plankTop + PLANK_HEIGHT * s * scale };
   });
+  return () => rect;
 }
 
 function drawCritters(scene: Phaser.Scene, critters: CritterPlan, ticks: Tick[]): void {
@@ -115,19 +130,24 @@ function drawCritters(scene: Phaser.Scene, critters: CritterPlan, ticks: Tick[])
   });
 }
 
-/** 가구·장식·간판·작은 생물을 장면에 얹는다. 바닥 캔버스는 `drawPixelKit`이 따로 굽는다. */
+/**
+ * 가구·장식·간판·작은 생물을 장면에 얹는다. 바닥 캔버스는 `drawPixelKit`이 따로 굽는다.
+ * 돌려주는 함수는 간판들이 지금 차지하는 사각형(이름표 비키기용)이다.
+ */
 export function drawPixelKitObjects(
   scene: Phaser.Scene,
   plan: { sprites: readonly ObjectSprite[]; signs: readonly SignPlan[]; critters: CritterPlan },
-): void {
+): () => SignRect[] {
   const ticks: Tick[] = [];
   drawSprites(scene, plan.sprites, ticks);
-  for (const sign of plan.signs) drawSign(scene, sign, ticks);
+  const signRects = plan.signs.map((sign) => drawSign(scene, sign, ticks));
   drawCritters(scene, plan.critters, ticks);
-  if (ticks.length === 0) return;
+  const currentSignRects = (): SignRect[] => signRects.map((rect) => rect());
+  if (ticks.length === 0) return currentSignRects;
   const onUpdate = (time: number): void => {
     for (const tick of ticks) tick(time);
   };
   scene.events.on(UPDATE_EVENT, onUpdate);
   scene.events.once(SHUTDOWN_EVENT, () => scene.events.off(UPDATE_EVENT, onUpdate));
+  return currentSignRects;
 }
