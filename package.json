@@ -10,7 +10,8 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "check:structure": "python3 scripts/check_structure.py",
-    "check:map": "python3 scripts/maps/check_town_map.py"
+    "check:map": "python3 scripts/maps/check_town_map.py",
+    "fix:map": "python3 scripts/maps/check_town_map.py --fix"
   },
   "devDependencies": {
     "prettier": "^3.0.0"

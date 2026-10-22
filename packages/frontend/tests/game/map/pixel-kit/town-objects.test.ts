@@ -29,6 +29,25 @@ const ground = layer("ground").data ?? [];
 const frames = new Set(Object.keys(atlas.frames));
 const facades = planFacades(extractMapSprites(layer(FACADE_LAYER).objects ?? []), (tx, ty) => ground[ty * town.width + tx] === TILE.door);
 
+describe("map objects", () => {
+  it("reads Tiled tile objects (gid) with y at the bottom edge", () => {
+    const [tile, rect] = extractMapSprites([
+      { name: "furn_bed", x: 16, y: 64, width: 16, height: 32, gid: 20 },
+      { name: "furn_bed", x: 16, y: 32, width: 16, height: 32 },
+    ]);
+    expect(tile).toEqual({ frame: "furn_bed", x: 16, y: 32, width: 16, height: 32 });
+    expect(rect).toEqual(tile);
+  });
+
+  it("keeps every town object inside the map and on a known frame", () => {
+    for (const sprite of [...furniture, ...decor]) {
+      expect(sprite.y).toBeGreaterThanOrEqual(0);
+      expect(sprite.y + sprite.height).toBeLessThanOrEqual(town.height * 16);
+      expect(sprite.frame === "light" || frames.has(sprite.frame)).toBe(true);
+    }
+  });
+});
+
 describe("place style", () => {
   const styleIn = (path: string, dx = 1, dy = 1) => {
     const area = areas.find((a) => a.location_path === path);

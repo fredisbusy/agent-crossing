@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from town_buildings import BUILDINGS, Building  # noqa: E402
 from town_decor import DecorItem, blocked_cells, park_decor, pond_decor, square_decor  # noqa: E402
 from town_furniture import FRAME_CELLS, ROOM_FURNITURE, WALKABLE_FRAMES  # noqa: E402
+from town_object_tiles import tileset_json, to_tile_object  # noqa: E402
 from town_yards import TERRACE, TERRACE_FURNITURE, TREES, yard_decor  # noqa: E402
 
 WIDTH = 64
@@ -191,6 +192,9 @@ def to_tiled(canvas: Canvas) -> dict[str, object]:
     locations = object_group(3, "locations", objects)
     furniture_objects = rect_objects(canvas.furniture, len(objects) + 1)
     decor_objects = rect_objects(canvas.decor, len(objects) + len(furniture_objects) + 1)
+    # 가구·장식은 Tiled에서 그림이 보이는 타일 객체로 낸다(y가 아랫변이 된다).
+    for obj in furniture_objects + decor_objects:
+        to_tile_object(obj)
     facade_objects = rect_objects(canvas.facades, len(objects) + len(furniture_objects) + len(decor_objects) + 1)
     next_id = len(objects) + len(furniture_objects) + len(decor_objects) + len(facade_objects) + 1
     tileset = {
@@ -224,7 +228,7 @@ def to_tiled(canvas: Canvas) -> dict[str, object]:
         "renderorder": "right-down",
         "tiledversion": "1.10.2",
         "tileheight": TILE,
-        "tilesets": [tileset],
+        "tilesets": [tileset, tileset_json()],
         "tilewidth": TILE,
         "type": "map",
         "version": "1.10",

@@ -280,6 +280,7 @@
 - [ ] `P2` 맵 정본을 Tiled 파일로 바꾸고 에디터로 고칠 수 있게 한다 (SPEC §15)
   - DoD:
     - [x] 편집용 의미 타일 PNG(`packages/shared/maps/town-tiles.png`)와 편집 안내(`maps/README.md`)
+    - [x] Tiled에서 실제 그림이 보이게: 의미 타일을 픽셀 그림으로, 가구·장식을 그림 모음 타일셋의 타일 객체로(`export_tileset.py`, `pnpm fix:map`)
     - [x] `pnpm check:map`: 장소 트리·주민이 쓰는 장소·길에서의 도달성·객체 이름과 크기·collision 일치 검사, `--fix-collision`
     - [x] 생성기는 초기 맵 생성용으로 남기고 기존 맵을 `--force` 없이 덮어쓰지 않는다
     - [ ] Tiled에서 마을 배치를 다시 그린다(건물 크기·모양 다양화, 골목·마당)

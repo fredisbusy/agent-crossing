@@ -13,15 +13,19 @@ export interface MapSprite {
   height: number;
 }
 
-/** Tiled 객체 목록에서 이름과 사각형이 있는 것만 뽑는다. */
+/**
+ * Tiled 객체 목록에서 이름과 사각형이 있는 것만 뽑는다.
+ * 그림 타일 객체(`gid`가 있음)는 Tiled 규칙상 y가 아랫변이라 높이를 빼 윗변으로 맞춘다.
+ */
 export function extractMapSprites(objects: readonly unknown[]): MapSprite[] {
   const sprites: MapSprite[] = [];
   for (const raw of objects) {
     if (typeof raw !== "object" || raw === null) continue;
-    const { name, x, y, width, height } = raw as Record<string, unknown>;
+    const { name, x, y, width, height, gid } = raw as Record<string, unknown>;
     if (typeof name !== "string" || name === "") continue;
     if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number" || typeof height !== "number") continue;
-    sprites.push({ frame: name, x, y, width, height });
+    const top = typeof gid === "number" && gid > 0 ? y - height : y;
+    sprites.push({ frame: name, x, y: top, width, height });
   }
   return sprites;
 }
