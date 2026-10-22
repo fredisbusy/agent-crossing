@@ -21,7 +21,9 @@ INSIGHTS_JSON_SHAPE = (
     "]}"
 )
 
-IMPORTANCE_JSON_SHAPE = '{"importance": <int 1-10>, "reason": "<short>"}'
+IMPORTANCE_JSON_SHAPE = '{"importance": <int 1-10>}'
+
+IMPORTANCE_BATCH_JSON_SHAPE = '{"importances": [<int 1-10>, <int 1-10>]}'
 
 DAY_PLAN_JSON_SHAPE = (
     '{"items": ['

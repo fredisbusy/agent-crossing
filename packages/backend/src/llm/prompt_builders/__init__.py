@@ -6,6 +6,7 @@ from .guard_blocks import (
     template_file_plan,
 )
 from .memory_prompts import (
+    build_importance_batch_scoring_prompt,
     build_importance_scoring_prompt,
     build_insights_with_citation_prompt,
     build_retrieval_query,
@@ -44,6 +45,7 @@ __all__ = [
     "SALIENT_QUESTIONS_JSON_SHAPE",
     "build_day_plan_prompt",
     "build_hourly_plan_prompt",
+    "build_importance_batch_scoring_prompt",
     "build_importance_scoring_prompt",
     "build_insights_with_citation_prompt",
     "build_minute_plan_prompt",
