@@ -6,7 +6,10 @@ from typing import Final, Literal, cast
 
 from dotenv import load_dotenv
 
-_ROOT_ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
+_ROOT_ENV_PATH = Path(
+    os.getenv("AGENT_CROSSING_ENV_FILE", Path(__file__).resolve().parents[3] / ".env")
+)
+"""읽을 .env 경로. 테스트는 로컬 .env의 영향을 받지 않도록 다른 경로를 준다."""
 load_dotenv(_ROOT_ENV_PATH)
 
 EMBEDDING_DIMENSION: Final[int] = 1024

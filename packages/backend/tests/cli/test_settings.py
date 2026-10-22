@@ -29,8 +29,12 @@ print(json.dumps({
             "EMBEDDING_MODEL",
             "LLM_API_KEY",
             "GOOGLE_AI_STUDIO_API_KEY",
+            "EMBEDDING_BASE_URL",
+            "EMBEDDING_API_KEY",
+            "LLM_REASONING_EFFORT",
         }
     }
+    process_env["AGENT_CROSSING_ENV_FILE"] = str(Path(__file__).with_name("missing.env"))
     src_path = str(Path(__file__).resolve().parents[2] / "src")
     existing_pythonpath = process_env.get("PYTHONPATH", "")
     process_env["PYTHONPATH"] = (
