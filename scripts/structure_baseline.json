@@ -2,5 +2,5 @@
   "file:packages/backend/src/agents/brain/graph.py": 534,
   "file:packages/backend/src/agents/planning/graph.py": 451,
   "file:packages/backend/src/agents/planning/state.py": 483,
-  "file:packages/backend/src/agents/reaction/graph.py": 498
+  "file:packages/backend/src/agents/reaction/graph.py": 488
 }

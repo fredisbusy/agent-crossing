@@ -18,9 +18,10 @@ from llm.guardrails.similarity import (
     recent_self_utterances,
     semantic_overlap_check,
 )
-from llm.governance.parsing import parse_reaction_intent, parse_reaction_utterance
+from llm.governance.parsing import parse_reaction_utterance
 
 from ..graph_support import GRAPH_END, GRAPH_START, GRAPH_STATE_FACTORY
+from .combined import generate_intent_step
 from .contracts import (
     GenerateClient,
     ReactionDecision,
@@ -28,6 +29,7 @@ from .contracts import (
     ReactionIntent,
     ReactionUtterance,
 )
+from .decisions import build_reaction_decision, decorate_decision_trace
 
 REACTION_GENERATE_OPTIONS = LlmGenerateOptions(
     temperature=0.35,
@@ -58,6 +60,9 @@ class ReactionGraphState(TypedDict):
     input: ReactionDecisionInput
     system_prompt: str
     intent_prompt: str
+    combined_prompt: str
+    combined_utterance: ReactionUtterance | None
+    combined_fallback_reason: str
     intent: ReactionIntent
     utterance_prompt: str
     working_prompt: str
@@ -164,6 +169,9 @@ class ReactionGraphRunner:
             input=input,
             system_prompt="",
             intent_prompt="",
+            combined_prompt="",
+            combined_utterance=None,
+            combined_fallback_reason="",
             intent=ReactionIntent(should_react=False, reason="uninitialized"),
             utterance_prompt="",
             working_prompt="",
@@ -198,19 +206,33 @@ class ReactionGraphRunner:
                 retrieved_memories=input.retrieved_memories,
                 dialogue_arc=input.dialogue_arc,
             ),
+            "combined_prompt": prompt_builders.build_reaction_combined_prompt(
+                agent_identity=input.agent_identity,
+                current_time=input.current_time,
+                observation_content=input.observation_content,
+                dialogue_history=input.dialogue_history,
+                profile=input.profile,
+                retrieved_memories=input.retrieved_memories,
+                dialogue_arc=input.dialogue_arc,
+            ),
         }
 
     def _generate_intent(
         self,
         state: ReactionGraphState,
-    ) -> dict[str, ReactionIntent]:
-        response = self.generation_client.generate(
-            prompt=state["intent_prompt"],
-            system=state["system_prompt"],
+    ) -> dict[str, object]:
+        intent, utterance, fallback_reason = generate_intent_step(
+            client=self.generation_client,
+            system_prompt=state["system_prompt"],
+            combined_prompt=state["combined_prompt"],
+            intent_prompt=state["intent_prompt"],
             options=REACTION_GENERATE_OPTIONS,
-            format_json=True,
         )
-        return {"intent": parse_reaction_intent(response)}
+        return {
+            "intent": intent,
+            "combined_utterance": utterance,
+            "combined_fallback_reason": fallback_reason,
+        }
 
     def _route_after_intent(
         self,
@@ -235,6 +257,7 @@ class ReactionGraphRunner:
                 critique=intent.critique,
                 trace=replace(
                     intent.trace,
+                    combined_fallback_reason=state["combined_fallback_reason"],
                     partner_retry_count=0,
                     semantic_hard_threshold=SEMANTIC_HARD_BLOCK_THRESHOLD,
                     semantic_soft_threshold=SEMANTIC_SOFT_PENALTY_THRESHOLD,
@@ -283,16 +306,19 @@ class ReactionGraphRunner:
         self,
         state: ReactionGraphState,
     ) -> dict[str, object]:
-        response = self.generation_client.generate(
-            prompt=state["working_prompt"],
-            system=state["system_prompt"],
-            options=REACTION_GENERATE_OPTIONS,
-            format_json=True,
-        )
-        utterance_result = parse_reaction_utterance(response)
+        utterance_result = state["combined_utterance"]
+        if utterance_result is None:
+            response = self.generation_client.generate(
+                prompt=state["working_prompt"],
+                system=state["system_prompt"],
+                options=REACTION_GENERATE_OPTIONS,
+                format_json=True,
+            )
+            utterance_result = parse_reaction_utterance(response)
         return {
             "utterance_result": utterance_result,
-            "decision": self._build_reaction_decision(
+            "combined_utterance": None,
+            "decision": build_reaction_decision(
                 intent=state["intent"],
                 utterance_result=utterance_result,
             ),
@@ -335,7 +361,8 @@ class ReactionGraphRunner:
             reference_embeddings=state["semantic_history_embeddings"],
             embedding_encoder=self.embedding_encoder,
         )
-        base_decision = self._decorate_decision_trace(
+        base_decision = decorate_decision_trace(
+            combined_fallback_reason=state["combined_fallback_reason"],
             decision=state["decision"],
             partner_retry_count=state["partner_retry_count"],
             semantic_retry_count=state["semantic_retry_count"],
@@ -459,40 +486,3 @@ class ReactionGraphRunner:
                 )
             )
         }
-
-    @staticmethod
-    def _build_reaction_decision(
-        *,
-        intent: ReactionIntent,
-        utterance_result: ReactionUtterance,
-    ) -> ReactionDecision:
-        return ReactionDecision(
-            should_react=True,
-            reaction=utterance_result.utterance,
-            reason=(utterance_result.reason or intent.reason).strip() or "n/a",
-            end_dialogue=utterance_result.end_dialogue or intent.end_dialogue,
-            thought=(utterance_result.thought or intent.thought).strip(),
-            critique=(utterance_result.critique or intent.critique).strip(),
-            trace=utterance_result.trace,
-        )
-
-    @staticmethod
-    def _decorate_decision_trace(
-        *,
-        decision: ReactionDecision,
-        partner_retry_count: int,
-        semantic_retry_count: int,
-        semantic_check: SemanticOverlapCheck,
-    ) -> ReactionDecision:
-        return replace(
-            decision,
-            trace=replace(
-                decision.trace,
-                partner_retry_count=partner_retry_count,
-                semantic_retry_count=semantic_retry_count,
-                max_semantic_similarity=semantic_check.max_similarity,
-                semantic_retry_trigger=semantic_check.trigger,
-                semantic_hard_threshold=SEMANTIC_HARD_BLOCK_THRESHOLD,
-                semantic_soft_threshold=SEMANTIC_SOFT_PENALTY_THRESHOLD,
-            ),
-        )

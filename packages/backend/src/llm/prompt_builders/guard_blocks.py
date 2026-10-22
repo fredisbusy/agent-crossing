@@ -73,6 +73,7 @@ def template_file_plan() -> list[str]:
         "minute_plan_instruction.md",
         "reaction_guidelines.md",
         "reaction_few_shot_examples.md",
+        "reaction_combined_question.md",
         "reaction_decision_question.md",
         "reaction_intent_question.md",
         "reaction_utterance_question.md",
