@@ -82,6 +82,8 @@ class LiteLlmClient:
             kwargs["api_key"] = self.api_key
         if self.reasoning_effort:
             kwargs["reasoning_effort"] = self.reasoning_effort
+            # LiteLLM 모델 표에 아직 없는 새 모델(예: gpt-6-luna)도 이 값을 그대로 보낸다.
+            kwargs["allowed_openai_params"] = ["reasoning_effort"]
         if selected_model.startswith(("ollama/", "ollama_chat/")):
             if final_options.repeat_penalty is not None:
                 kwargs["repeat_penalty"] = final_options.repeat_penalty
