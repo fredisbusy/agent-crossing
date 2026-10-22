@@ -38,6 +38,7 @@ def build_speech_prompt(
     scene: Scene,
     *,
     events: Sequence[str],
+    partner_notes: Sequence[str],
     talking_points: Sequence[str],
     history: Sequence[str],
     must_end: bool,
@@ -47,6 +48,9 @@ def build_speech_prompt(
         "town_speech.md",
         **_scene_vars(persona, scene),
         events=_bullets(events),
+        partner_notes=_bullets(
+            [n.format(partner=scene.partner) for n in partner_notes]
+        ),
         talking_points=_bullets(talking_points),
         history=_bullets(history) if history else "- (아직 아무 말도 하지 않았다)",
         turn_note=turn_note,

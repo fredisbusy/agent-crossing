@@ -66,6 +66,15 @@ class FactStore:
     def mark_told(self, other: ResidentId, fact: Fact) -> None:
         self._told.add(_told_key(other, fact))
 
+    def was_told(self, other: ResidentId, topic: str) -> bool:
+        """그 주제의 현재 내용을 `other`에게 이미 전했거나 `other`에게서 들었으면 True."""
+        known = self._facts.get(topic)
+        if known is None:
+            return False
+        return (
+            known.source_resident_id == other or _told_key(other, known) in self._told
+        )
+
     def mark_topic_told(self, other: ResidentId, topic: str) -> None:
         """그 주제의 현재 내용을 `other`에게 전한 것으로 친다."""
         known = self._facts.get(topic)

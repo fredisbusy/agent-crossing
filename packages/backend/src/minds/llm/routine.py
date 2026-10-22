@@ -7,7 +7,14 @@ import datetime
 from collections.abc import Sequence
 
 from agents.planning.models import DayPlanBroadStrokesRequest, DayPlanItem
-from minds.social import Commitment, Slot, SlotAction, describe_event, place_name
+from minds.social import (
+    Commitment,
+    Slot,
+    SlotAction,
+    describe_event,
+    josa,
+    place_name,
+)
 from world.contracts import LOCATION_SEPARATOR, Holiday, LocationPath
 
 from .contracts import LlmPersona
@@ -110,8 +117,10 @@ def plan_request(
     lines.append(
         f"Use exactly one of these place names as each item's location: {places}."
     )
+    lines.append("Write every action_content in natural Korean (한국어로 쓴다).")
     for holiday in holidays:
-        lines.append(f"오늘은 {holiday.name}이다. {' '.join(holiday.customs)}".strip())
+        today_is = josa(holiday.name, "이다", "다")
+        lines.append(f"오늘은 {today_is}. {' '.join(holiday.customs)}".strip())
     today = [c for c in commitments if c.event.start_time.date() == now.date()]
     for commitment in today:
         role = "연다" if commitment.role == "host" else "참석하기로 했다"

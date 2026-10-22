@@ -2,6 +2,7 @@ import asyncio
 import datetime
 
 from llm_fakes import CAFE, DAY, HOME, PARK, ScriptedClient, ctx, make_mind, view
+from minds.llm.routine import plan_request
 from minds.social import SocialSeed, event_act
 from world.contracts import (
     ConversationView,
@@ -171,3 +172,34 @@ def test_partner_farewell_makes_this_turn_the_last() -> None:
     said = asyncio.run(mind.respond(ctx("isabella", MORNING), _conv(bye)))
     assert said is not None and said.acts[-1].kind == "farewell"
     assert "이번 말로 대화를 마무리한다." in client.prompts[-1]
+
+
+def test_repeated_invite_from_the_model_is_dropped_and_partner_notes_shown() -> None:
+    reply = {
+        "utterance": "내일 파티 꼭 와요!",
+        "acts": [
+            {"kind": "invite", "event": PARTY.name},
+            {"kind": "accept", "event": PARTY.name},
+        ],
+    }
+    client = ScriptedClient(lambda _: reply)
+    mind, _ = make_mind(client)
+    mind.social.host(PARTY, MORNING)
+    first = asyncio.run(mind.respond(ctx("isabella", MORNING), _conv()))
+    assert first is not None and [a.kind for a in first.acts] == ["invite"]
+    second = asyncio.run(
+        mind.respond(
+            ctx("isabella", MORNING),
+            _conv(first, _said("maria", "isabella", SpeechAct(kind="smalltalk"))),
+        )
+    )
+    assert second is not None and [a.kind for a in second.acts] == ["smalltalk"]
+    assert "Maria를 밸런타인데이 파티에 이미 초대했다." in client.prompts[-1]
+
+
+def test_day_plan_is_requested_in_korean() -> None:
+    mind, _ = make_mind(ScriptedClient(lambda _: {}))
+    request = plan_request(
+        mind.persona, MORNING, commitments=(), holidays=(), yesterday=""
+    )
+    assert "한국어" in request.persona_background

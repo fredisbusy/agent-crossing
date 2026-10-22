@@ -196,6 +196,7 @@ class LLMMind:
             self.persona,
             scene,
             events=self._event_lines(ctx.now),
+            partner_notes=self.social.partner_notes(other, ctx.now),
             talking_points=[
                 describe_point(p, ctx.now)
                 for p in self.social.talking_points(other, ctx.now, ctx.holidays)
@@ -210,7 +211,9 @@ class LLMMind:
         )
         if draft is None:
             return None
-        acts = draft.acts
+        acts = tuple(
+            a for a in draft.acts if not self.social.is_redundant(a, other, ctx.now)
+        ) or (SpeechAct(kind="smalltalk"),)
         if ending and all(a.kind != "farewell" for a in acts):
             acts = (*acts, SpeechAct(kind="farewell"))
         utterance = Utterance(

@@ -47,6 +47,8 @@ class SocialState:
         self._heard: set[tuple[ResidentId, datetime.datetime, str]] = set()
         self._conversations: set[str] = set()
         self._invited: set[tuple[str, ResidentId]] = set()
+        self._going: set[tuple[str, ResidentId]] = set()
+        """(행사 이름, 주민): 나에게 가겠다고 말한 주민."""
         self._gifted: set[tuple[str, datetime.date, ResidentId]] = set()
 
     # --- 시작 상태 -----------------------------------------------------------
@@ -93,8 +95,10 @@ class SocialState:
                 continue
             elif act.kind == "invite":
                 self._learn_from(act, speaker, now)
-            elif act.kind == "accept" and self._hosts(act.event):
-                self.friendship.add(speaker, INVITE_ACCEPT_GAIN)
+            elif act.kind == "accept" and act.event:
+                self._going.add((act.event, speaker))
+                if self._hosts(act.event):
+                    self.friendship.add(speaker, INVITE_ACCEPT_GAIN)
             elif act.kind == "gift":
                 self.friendship.add(speaker, GIFT_GAIN)
 
@@ -197,6 +201,7 @@ class SocialState:
                 event.start_time <= now
                 or other == event.host_id
                 or (event.name, other) in self._invited
+                or (event.name, other) in self._going
             ):
                 continue
             if commitment.role == "host" or (
@@ -220,9 +225,66 @@ class SocialState:
                 and other != fact.event.host_id
                 and fact.topic not in inviting
                 and (fact.topic, other) not in self._invited
+                and (fact.topic, other) not in self._going
             ):
                 points.append(self.fact_act(fact, now))
         return tuple(points)
+
+    # --- 같은 말 되풀이 막기 ----------------------------------------------------
+
+    def is_redundant(
+        self, act: SpeechAct, other: ResidentId, now: datetime.datetime
+    ) -> bool:
+        """이미 한 초대·수락·소문·선물을 같은 상대에게 되풀이하는 화행이면 True.
+
+        두 마음 모두 말하기 직전에 이 검사로 걸러 낸다.
+        """
+        event = self.event_named(act.event) if act.event else None
+        name = act.event or ""
+        if act.kind == "invite":
+            return (
+                (name, other) in self._invited
+                or (name, other) in self._going
+                or (event is not None and other == event.host_id)
+            )
+        if act.kind == "accept":
+            return event is not None and self.agenda.is_committed(event)
+        if act.kind == "share_fact":
+            topic = act.topic or name
+            if event is not None and other == event.host_id:
+                return True
+            return (
+                (topic, other) in self._invited
+                or (topic, other) in self._going
+                or self.facts.was_told(other, topic)
+            )
+        if act.kind == "gift":
+            return self.gifted(act.item or "", now.date(), other)
+        return False
+
+    def partner_notes(
+        self, other: ResidentId, now: datetime.datetime
+    ) -> tuple[str, ...]:
+        """`other`와 행사 사이에 이미 오간 일 (`{partner}` 자리에 상대 이름이 들어간다)."""
+        notes: list[str] = []
+        for event in self._events_in_mind(now):
+            if other == event.host_id:
+                notes.append(f"{event.name}은(는) {{partner}}가 여는 행사다.")
+            if (event.name, other) in self._going:
+                notes.append(f"{{partner}}는 {event.name}에 가겠다고 이미 말했다.")
+            elif (event.name, other) in self._invited:
+                notes.append(f"{{partner}}를 {event.name}에 이미 초대했다.")
+            elif self.facts.was_told(other, event.name):
+                notes.append(f"{{partner}}에게 {event.name} 소식을 이미 전했다.")
+        return tuple(notes)
+
+    def _events_in_mind(self, now: datetime.datetime) -> tuple[SocialEvent, ...]:
+        seen: dict[str, SocialEvent] = {}
+        for commitment in self.agenda.upcoming(now):
+            seen.setdefault(commitment.event.name, commitment.event)
+        for event in self.facts.events(now):
+            seen.setdefault(event.name, event)
+        return tuple(seen.values())
 
 
 @runtime_checkable

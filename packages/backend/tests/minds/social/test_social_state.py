@@ -153,3 +153,28 @@ def test_accept_that_overlaps_another_commitment_is_not_kept() -> None:
     maria.said(_said("maria", "klaus", event_act("accept", dinner)), NOW)
     maria.said(_said("maria", "isabella", event_act("accept", PARTY), minute=1), NOW)
     assert [c.event.name for c in maria.agenda.commitments] == ["저녁 약속"]
+
+
+def test_redundant_acts_are_detected_per_partner() -> None:
+    hosted = PARTY.model_copy(update={"host_id": "isabella"})
+    isabella = _state("isabella")
+    isabella.host(hosted, NOW)
+    isabella.said(_said("isabella", "sam", event_act("invite", hosted)), NOW)
+    assert isabella.is_redundant(event_act("invite", hosted), "sam", NOW)
+    assert not isabella.is_redundant(event_act("invite", hosted), "klaus", NOW)
+    assert isabella.is_redundant(event_act("accept", hosted), "sam", NOW)
+    mei = _state("mei")
+    mei.hear(_said("isabella", "mei", event_act("invite", hosted)), NOW)
+    rumor = mei.fact_act(mei.facts.all()[0], NOW)
+    assert mei.is_redundant(rumor, "isabella", NOW)
+    assert not mei.is_redundant(rumor, "eddy", NOW)
+
+
+def test_partner_who_said_yes_is_not_invited_again_and_noted() -> None:
+    hosted = PARTY.model_copy(update={"host_id": "isabella"})
+    isabella = _state("isabella")
+    isabella.host(hosted, NOW)
+    isabella.hear(_said("klaus", "isabella", event_act("accept", hosted)), NOW)
+    assert isabella.talking_points("klaus", NOW) == ()
+    notes = [n.format(partner="Klaus") for n in isabella.partner_notes("klaus", NOW)]
+    assert notes == ["Klaus는 밸런타인데이 파티에 가겠다고 이미 말했다."]
