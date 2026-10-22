@@ -2,13 +2,15 @@
 
 `unknown`은 모르는 주제를 물었을 때의 `smalltalk` 문장이다.
 문장에는 마음 종류를 암시하는 단어를 쓰지 않는다 (SPEC §12 불가지 원칙).
-채움 필드: {topic} {fact} {event} {time} {place}
+`greet_again`은 오랜만에 만난 상대 인사, `thanks`는 선물을 받았을 때의 말이다.
+채움 필드: {topic} {fact} {event} {day} {time} {place} {item}
 """
 
 import datetime
 import random
 
-from world.contracts import LOCATION_SEPARATOR, LocationPath
+from minds.social import format_day, format_time, place_name
+from world.contracts import LocationPath
 
 from .config import Tone
 
@@ -19,6 +21,11 @@ _TEMPLATES: dict[tuple[str, Tone], tuple[str, ...]] = {
         "어서 오세요, 반갑습니다.",
     ),
     ("greet", "casual"): ("안녕!", "어, 안녕! 반가워.", "여어, 잘 지내?"),
+    ("greet_again", "polite"): (
+        "오랜만이에요! 잘 지내셨어요?",
+        "어머, 정말 오랜만이네요.",
+    ),
+    ("greet_again", "casual"): ("오랜만이다! 잘 지냈어?", "와, 이게 얼마 만이야!"),
     ("smalltalk", "polite"): (
         "오늘 날씨가 참 좋네요.",
         "요즘 마을이 활기차 보여요.",
@@ -46,8 +53,14 @@ _TEMPLATES: dict[tuple[str, Tone], tuple[str, ...]] = {
         "글쎄요, {topic}은 저도 들은 적이 없어요.",
     ),
     ("unknown", "casual"): ("{topic}? 잘 모르겠네.", "글쎄, {topic}은 못 들었어."),
-    ("invite", "polite"): ("{time}에 {place}에서 {event} 어떠세요?",),
-    ("invite", "casual"): ("{time}에 {place}에서 {event} 어때?",),
+    ("invite", "polite"): (
+        "{day} {time}에 {place}에서 {event} 어떠세요?",
+        "{day} {time}에 {place}에서 {event}을(를) 해요. 꼭 와 주세요!",
+    ),
+    ("invite", "casual"): (
+        "{day} {time}에 {place}에서 {event} 어때?",
+        "{day} {time}에 {place}에서 {event} 하는데 같이 가자!",
+    ),
     ("accept", "polite"): (
         "좋아요, {time}에 {place}에서 뵙겠습니다.",
         "네, {event} 꼭 갈게요. {time}에 봬요.",
@@ -61,6 +74,16 @@ _TEMPLATES: dict[tuple[str, Tone], tuple[str, ...]] = {
         "죄송해요, 이번엔 함께하기 힘들 것 같아요.",
     ),
     ("decline", "casual"): ("아쉽다, 그땐 좀 힘들어.", "미안, 이번엔 못 갈 것 같아."),
+    ("gift", "polite"): (
+        "{item} 준비했어요. 받아 주세요!",
+        "작은 {item}이에요. 마음만 받아 주세요.",
+    ),
+    ("gift", "casual"): ("{item} 줄게! 받아 줘.", "이거 {item}이야. 너 주려고 챙겼어."),
+    ("thanks", "polite"): (
+        "어머, 고마워요! 소중히 할게요.",
+        "이런 걸 다 챙겨 주시다니, 감사해요.",
+    ),
+    ("thanks", "casual"): ("와, 고마워! 진짜 기쁘다.", "헉, 나 주는 거야? 고마워!"),
     ("farewell", "polite"): ("그럼 이만 가볼게요. 안녕히 계세요.", "다음에 또 뵈어요."),
     ("farewell", "casual"): ("그럼 나 갈게, 잘 가!", "다음에 또 보자."),
 }
@@ -71,35 +94,26 @@ def render(
     tone: Tone,
     rng: random.Random,
     *,
+    now: datetime.datetime,
     topic: str = "",
     fact: str = "",
     event: str = "",
     when: datetime.datetime | None = None,
     location_path: LocationPath | None = None,
+    item: str = "",
 ) -> str:
-    """템플릿 하나를 rng로 골라 필드를 채운다. `key`는 화행 종류 또는 `unknown`."""
+    """템플릿 하나를 rng로 골라 필드를 채운다. `key`는 화행 종류 또는 위 특수 키."""
     options = _TEMPLATES[(key, tone)]
     template = options[rng.randrange(len(options))]
     return template.format(
         topic=topic,
         fact=fact,
         event=event,
+        day=format_day(when, now) if when else "",
         time=format_time(when) if when else "",
         place=place_name(location_path) if location_path else "",
+        item=item,
     )
-
-
-def format_time(moment: datetime.datetime) -> str:
-    meridiem = "오전" if moment.hour < 12 else "오후"
-    hour = moment.hour % 12 or 12
-    if moment.minute:
-        return f"{meridiem} {hour}시 {moment.minute}분"
-    return f"{meridiem} {hour}시"
-
-
-def place_name(location_path: LocationPath) -> str:
-    """위치 경로의 마지막 구성요소."""
-    return location_path.split(LOCATION_SEPARATOR)[-1]
 
 
 def all_templates() -> tuple[str, ...]:

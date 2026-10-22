@@ -40,7 +40,44 @@ SpeechActKind = Literal[
     "accept",
     "decline",
     "farewell",
+    "gift",
 ]
+
+
+def _naive(value: datetime.datetime | None) -> datetime.datetime | None:
+    """시뮬레이션 시계는 시간대 없는(naive) 시각이다. 시간대가 붙어 오면 떼어 맞춘다."""
+    if value is None or value.tzinfo is None:
+        return value
+    return value.replace(tzinfo=None)
+
+
+class SocialEvent(_Frozen):
+    """주민이 열거나 초대받는 행사. 두 마음이 같은 형식으로 약속·사실에 담는다 (SPEC §13)."""
+
+    name: str
+    start_time: datetime.datetime
+    end_time: datetime.datetime
+    location_path: LocationPath
+    host_id: ResidentId | None = None
+    is_open: bool = True
+    """소문으로 들은 주민도 와도 되는 행사인지."""
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _naive_sim_time(cls, value: datetime.datetime) -> datetime.datetime:
+        return value.replace(tzinfo=None)
+
+
+class Holiday(_Frozen):
+    """마을 달력의 기념일. 모든 마음에 같은 형식으로 전달된다 (SPEC §14)."""
+
+    name: str
+    customs: tuple[str, ...] = ()
+    """이날의 풍습 문장. 관찰 문장과 대화 맥락에 쓴다."""
+    greetings: tuple[str, ...] = ()
+    """이날 인사말."""
+    gift_item: str | None = None
+    """이날 주고받는 선물. 없으면 선물 풍습이 없다."""
 
 
 class SpeechAct(_Frozen):
@@ -50,19 +87,22 @@ class SpeechAct(_Frozen):
     fact: str | None = None
     """`share_fact`의 내용."""
     event: str | None = None
-    """`invite`·`accept`·`decline`이 가리키는 행사 이름."""
+    """`invite`·`accept`·`decline`이 가리키는 행사 이름. `share_fact`에 붙으면 행사 소문이다."""
     start_time: datetime.datetime | None = None
-    """`invite`의 시작 시각."""
+    """행사 시작 시각."""
+    end_time: datetime.datetime | None = None
+    """행사 종료 시각. 없으면 기본 길이(SPEC §13)를 쓴다."""
     location_path: LocationPath | None = None
     """`invite`의 장소."""
+    item: str | None = None
+    """`gift`로 건네는 물건."""
+    host_id: ResidentId | None = None
+    """행사 주최자. 전해 듣는 동안 주최자 정보가 사라지지 않게 싣는다."""
 
-    @field_validator("start_time")
+    @field_validator("start_time", "end_time")
     @classmethod
     def _naive_sim_time(cls, value: datetime.datetime | None) -> datetime.datetime | None:
-        """시뮬레이션 시계는 시간대 없는(naive) 시각이다. 시간대가 붙어 오면 떼어 맞춘다."""
-        if value is None or value.tzinfo is None:
-            return value
-        return value.replace(tzinfo=None)
+        return _naive(value)
 
 
 class Utterance(_Frozen):
@@ -134,6 +174,8 @@ class MindContext(_Frozen):
     nearby: tuple[ResidentPublicView, ...] = ()
     observations: tuple[Observation, ...] = ()
     """마지막으로 마음을 깨운 뒤 쌓인 새 관찰."""
+    holidays: tuple[Holiday, ...] = ()
+    """오늘의 기념일."""
 
 
 EncounterChoice = Literal["pass_by", "converse"]
@@ -148,7 +190,10 @@ class ConversationView(_Frozen):
 class Mind(Protocol):
     """주민의 마음. LLMMind와 ScheduleMind가 같은 계약을 따른다."""
 
-    kind: MindKind
+    @property
+    def kind(self) -> MindKind:
+        """디버그 인스펙터 전용 마음 종류. 다른 마음에는 전달하지 않는다."""
+        ...
 
     async def next_action(self, ctx: MindContext) -> ActionIntent:
         """현재 행동이 끝났거나 새 관찰이 생겼을 때 다음 행동을 정한다."""
