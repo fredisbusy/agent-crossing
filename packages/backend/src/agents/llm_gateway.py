@@ -1,6 +1,5 @@
 import datetime
 import json
-from dataclasses import dataclass
 from typing import Protocol, cast
 
 from llm.clients.types import JsonObject, LlmGenerateOptions
@@ -15,6 +14,7 @@ from .planning.models import (
     MinutePlanItem,
 )
 from .memory import reflection_prompts
+from .memory.contracts import InsightWithCitation
 
 class GenerateClient(Protocol):
     def generate(
@@ -25,12 +25,6 @@ class GenerateClient(Protocol):
         options: LlmGenerateOptions | None = None,
         format_json: bool = False,
     ) -> str: ...
-
-
-@dataclass(frozen=True)
-class InsightWithCitation:
-    context: str
-    citation_memory_ids: list[int]
 
 
 class LlmGateway:
