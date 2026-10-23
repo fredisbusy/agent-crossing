@@ -1,4 +1,5 @@
 import datetime
+from concurrent.futures import ThreadPoolExecutor
 from typing import Literal, Protocol, cast
 
 from typing_extensions import TypedDict
@@ -36,6 +37,13 @@ class StateGraphFactory(Protocol):
     ) -> ReflectionGraphBuilder: ...
 
 
+# 성찰 질문 1개당 검색 개수. 원 구현(reverie run_reflect)의 new_retrieve(n_count=30)를 따른다.
+# SPEC §6 참조. get_retrieval_memories의 기본값(3)은 다른 호출자가 쓰므로 바꾸지 않는다.
+REFLECTION_RETRIEVAL_TOP_K = 30
+
+# 통찰 생성 실패로 취급해 해당 질문만 건너뛰는 LLM 오류.
+_LLM_ERRORS = (RuntimeError, TimeoutError, ValueError)
+
 STATE_GRAPH = cast(StateGraphFactory, GRAPH_STATE_FACTORY)
 
 
@@ -43,10 +51,8 @@ class ReflectionGraphState(TypedDict):
     now: datetime.datetime
     recent_memories: list[MemoryObject]
     questions: list[str]
-    question_index: int
-    active_question: str
-    retrieved_memories: list[MemoryObject]
-    generated_insights: list[InsightWithCitation]
+    retrieved_by_question: list[list[MemoryObject]]
+    insights_by_question: list[list[InsightWithCitation]]
     persisted_reflection_count: int
 
 
@@ -74,49 +80,32 @@ class ReflectionGraphRunner:
         return self.reflection.should_reflect()
 
     def reflect(self, *, now: datetime.datetime) -> None:
-        _ = self.graph.invoke(self._initial_state(now=now))
-        self.reflection.clear_importance()
+        """성찰을 실행한다. LLM 오류는 밖으로 내지 않고, 성공 여부와 무관하게 누적 중요도를 리셋한다."""
+        try:
+            _ = self.graph.invoke(self._initial_state(now=now))
+        except _LLM_ERRORS:
+            pass
+        finally:
+            self.reflection.clear_importance()
 
     def _build_graph(self) -> ReflectionGraphInvoker:
         builder = STATE_GRAPH(ReflectionGraphState)
         builder.add_node("load_recent_memories", self._load_recent_memories)
         builder.add_node("generate_questions", self._generate_questions)
-        builder.add_node("prepare_question", self._prepare_question)
-        builder.add_node("retrieve_memories", self._retrieve_memories)
-        builder.add_node("generate_insights", self._generate_insights)
-        builder.add_node("persist_insights", self._persist_insights)
-        builder.add_node("advance_question", self._advance_question)
+        builder.add_node("retrieve_all", self._retrieve_all)
+        builder.add_node("generate_insights_all", self._generate_insights_all)
+        builder.add_node("persist_all", self._persist_all)
 
         builder.add_edge(GRAPH_START, "load_recent_memories")
         builder.add_edge("load_recent_memories", "generate_questions")
         builder.add_conditional_edges(
             "generate_questions",
             self._route_after_generate_questions,
-            {
-                "prepare_question": "prepare_question",
-                "__end__": GRAPH_END,
-            },
+            {"retrieve_all": "retrieve_all", "__end__": GRAPH_END},
         )
-        builder.add_edge("prepare_question", "retrieve_memories")
-        builder.add_edge("retrieve_memories", "generate_insights")
-        builder.add_edge("generate_insights", "persist_insights")
-        builder.add_conditional_edges(
-            "persist_insights",
-            self._route_after_persist_insights,
-            {
-                "advance_question": "advance_question",
-                "__end__": GRAPH_END,
-            },
-        )
-        builder.add_conditional_edges(
-            "advance_question",
-            self._route_after_advance_question,
-            {
-                "prepare_question": "prepare_question",
-                "__end__": GRAPH_END,
-            },
-        )
-
+        builder.add_edge("retrieve_all", "generate_insights_all")
+        builder.add_edge("generate_insights_all", "persist_all")
+        builder.add_edge("persist_all", GRAPH_END)
         return builder.compile()
 
     @staticmethod
@@ -125,10 +114,8 @@ class ReflectionGraphRunner:
             now=now,
             recent_memories=[],
             questions=[],
-            question_index=0,
-            active_question="",
-            retrieved_memories=[],
-            generated_insights=[],
+            retrieved_by_question=[],
+            insights_by_question=[],
             persisted_reflection_count=0,
         )
 
@@ -144,87 +131,67 @@ class ReflectionGraphRunner:
     def _generate_questions(
         self,
         state: ReflectionGraphState,
-    ) -> dict[str, object]:
-        questions = self.llm_gateway.generate_salient_high_level_questions(
-            agent_name=self.agent_name,
-            memories=state["recent_memories"],
-        )
+    ) -> dict[str, list[str]]:
         return {
-            "questions": questions,
-            "question_index": 0,
+            "questions": self.llm_gateway.generate_salient_high_level_questions(
+                agent_name=self.agent_name,
+                memories=state["recent_memories"],
+            )
         }
 
     def _route_after_generate_questions(
         self,
         state: ReflectionGraphState,
-    ) -> Literal["prepare_question", "__end__"]:
+    ) -> Literal["retrieve_all", "__end__"]:
         if not state["questions"]:
             return "__end__"
-        return "prepare_question"
+        return "retrieve_all"
 
-    def _prepare_question(
+    def _retrieve_all(
         self,
         state: ReflectionGraphState,
-    ) -> dict[str, str]:
-        return {"active_question": state["questions"][state["question_index"]]}
-
-    def _retrieve_memories(
-        self,
-        state: ReflectionGraphState,
-    ) -> dict[str, list[MemoryObject]]:
+    ) -> dict[str, list[list[MemoryObject]]]:
+        # 이번 회차 통찰을 저장하기 전에 모든 질문의 검색을 끝낸다(원 구현 순서).
         return {
-            "retrieved_memories": self.memory_manager.get_retrieval_memories(
-                query=state["active_question"],
+            "retrieved_by_question": self.memory_manager.get_retrieval_memories_many(
+                state["questions"],
                 current_time=state["now"],
+                top_k=REFLECTION_RETRIEVAL_TOP_K,
             )
         }
 
-    def _generate_insights(
+    def _generate_insights_for(
+        self, memories: list[MemoryObject]
+    ) -> list[InsightWithCitation]:
+        try:
+            return self.llm_gateway.generate_insights_with_citation_key(
+                agent_name=self.agent_name,
+                memories=memories,
+            )
+        except _LLM_ERRORS:
+            return []
+
+    def _generate_insights_all(
         self,
         state: ReflectionGraphState,
-    ) -> dict[str, list[InsightWithCitation]]:
-        return {
-            "generated_insights": self.llm_gateway.generate_insights_with_citation_key(
-                agent_name=self.agent_name,
-                memories=state["retrieved_memories"],
-            )
-        }
+    ) -> dict[str, list[list[InsightWithCitation]]]:
+        retrieved = state["retrieved_by_question"]
+        with ThreadPoolExecutor(max_workers=len(retrieved)) as pool:
+            # map은 입력(질문) 순서대로 결과를 돌려준다.
+            results = list(pool.map(self._generate_insights_for, retrieved))
+        return {"insights_by_question": results}
 
-    def _persist_insights(
+    def _persist_all(
         self,
         state: ReflectionGraphState,
     ) -> dict[str, int]:
-        for insight in state["generated_insights"]:
-            _ = self.memory_manager.create_reflection(
-                insight,
-                now=state["now"],
-                context=ReflectionContext(
-                    agent_name=self.agent_name,
-                    identity_stable_set=self.identity_stable_set,
-                ),
-            )
-
-        return {
-            "persisted_reflection_count": (
-                state["persisted_reflection_count"] + len(state["generated_insights"])
-            )
-        }
-
-    def _route_after_persist_insights(
-        self,
-        state: ReflectionGraphState,
-    ) -> Literal["advance_question", "__end__"]:
-        if state["question_index"] + 1 >= len(state["questions"]):
-            return "__end__"
-        return "advance_question"
-
-    def _advance_question(self, state: ReflectionGraphState) -> dict[str, int]:
-        return {"question_index": state["question_index"] + 1}
-
-    def _route_after_advance_question(
-        self,
-        state: ReflectionGraphState,
-    ) -> Literal["prepare_question", "__end__"]:
-        if state["question_index"] >= len(state["questions"]):
-            return "__end__"
-        return "prepare_question"
+        insights = [i for group in state["insights_by_question"] for i in group]
+        created = self.memory_manager.create_reflections(
+            insights,
+            now=state["now"],
+            context=ReflectionContext(
+                agent_name=self.agent_name,
+                identity_stable_set=self.identity_stable_set,
+            ),
+        )
+        return {"persisted_reflection_count": len(created)}

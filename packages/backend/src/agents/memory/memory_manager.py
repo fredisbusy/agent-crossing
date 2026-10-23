@@ -94,6 +94,41 @@ class MemoryManager:
             current_time=current_time,
         )
 
+    def get_retrieval_memories_many(
+        self,
+        queries: list[str],
+        *,
+        current_time: datetime.datetime,
+        top_k: int = 3,
+    ) -> list[list[MemoryObject]]:
+        """질문 여러 개를 임베딩 1회로 처리하고, 질문 순서대로 순차 검색한다."""
+        if not queries:
+            return []
+        embeddings = self._encode_texts(queries)
+        return [
+            self.memory_stream.retrieve(
+                query_embedding=embedding,
+                top_k=top_k,
+                current_time=current_time,
+            )
+            for embedding in embeddings
+        ]
+
+    def _encode_texts(self, texts: list[str]) -> list[np.ndarray]:
+        contexts = [EmbeddingEncodingContext(text=text) for text in texts]
+        encoder = self.embedding_encoder
+        if isinstance(encoder, BatchEmbeddingEncoder):
+            return encoder.encode_many(contexts)
+        return [encoder.encode(c) for c in contexts]
+
+    def _score_importances(
+        self, contexts: list[ImportanceScoringContext]
+    ) -> list[int]:
+        scorer = self.importance_scorer
+        if isinstance(scorer, BatchImportanceScorer):
+            return scorer.score_many(contexts)
+        return [scorer.score(c) for c in contexts]
+
     def create_observation(
         self,
         *,
@@ -143,12 +178,7 @@ class MemoryManager:
         """관찰 여러 개를 임베딩 1회 + 중요도 1회 배치로 저장한다. 순서를 보존한다."""
         if not items:
             return []
-        encoding_contexts = [EmbeddingEncodingContext(text=text) for text, _ in items]
-        encoder = self.embedding_encoder
-        if isinstance(encoder, BatchEmbeddingEncoder):
-            embeddings = encoder.encode_many(encoding_contexts)
-        else:
-            embeddings = [encoder.encode(c) for c in encoding_contexts]
+        embeddings = self._encode_texts([text for text, _ in items])
 
         scoring_contexts = [
             ImportanceScoringContext(
@@ -159,11 +189,7 @@ class MemoryManager:
             )
             for text, _ in items
         ]
-        scorer = self.importance_scorer
-        if isinstance(scorer, BatchImportanceScorer):
-            importances = scorer.score_many(scoring_contexts)
-        else:
-            importances = [scorer.score(c) for c in scoring_contexts]
+        importances = self._score_importances(scoring_contexts)
 
         return [
             self.create_observation(
@@ -196,6 +222,41 @@ class MemoryManager:
             context=context,
             importance=importance,
         )
+
+    def create_reflections(
+        self,
+        insights: list[InsightWithCitation],
+        *,
+        now: datetime.datetime,
+        context: ReflectionContext,
+    ) -> list[MemoryObject]:
+        """통찰 여러 개를 임베딩 1회 + 중요도 1회 배치로 저장한다. 입력 순서를 보존한다."""
+        if not insights:
+            return []
+        embeddings = self._encode_texts([i.context for i in insights])
+        importances = self._score_importances(
+            [
+                ImportanceScoringContext(
+                    observation=insight.context,
+                    agent_name=context.agent_name,
+                    identity_stable_set=context.identity_stable_set,
+                    current_plan=context.current_plan,
+                )
+                for insight in insights
+            ]
+        )
+        return [
+            self._store_reflection(
+                insight,
+                now=now,
+                embedding=embedding,
+                context=context,
+                importance=importance,
+            )
+            for insight, embedding, importance in zip(
+                insights, embeddings, importances, strict=True
+            )
+        ]
 
     def create_plan(
         self,
