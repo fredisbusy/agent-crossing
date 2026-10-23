@@ -1,4 +1,3 @@
-export { DaylightLayer, type DaylightInput } from "./daylight-layer";
 export { indoorAreas } from "./indoor-areas";
 export {
   daylightAt,

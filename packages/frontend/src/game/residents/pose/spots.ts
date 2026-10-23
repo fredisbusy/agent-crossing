@@ -1,5 +1,5 @@
 import type { MapSprite } from "../../map/objects";
-import { TILE_SIZE } from "../../../town-layout";
+import { TILE_SIZE } from "../../../tiled";
 
 export type SeatFacing = "down" | "up" | "right";
 

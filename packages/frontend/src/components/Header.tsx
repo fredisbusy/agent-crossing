@@ -9,23 +9,24 @@ import {
 } from "./format";
 
 export function Header() {
-  const snapshot = useWorldStore((state) => state.snapshot);
+  const simTime = useWorldStore((state) => state.snapshot?.sim_time ?? null);
+  const tick = useWorldStore((state) => state.snapshot?.tick ?? null);
   const connection = useWorldStore((state) => state.connection);
   const debug = useWorldStore((state) => state.debug);
   const toggleDebug = useWorldStore((state) => state.toggleDebug);
 
-  const hour = snapshot ? simHourOf(snapshot.sim_time) : null;
+  const hour = simTime ? simHourOf(simTime) : null;
   return (
     <header className="flex items-center justify-between gap-2 border-b border-amber-900/30 bg-amber-50 px-3 py-2 text-stone-800 md:gap-4 md:px-4">
       <h1 className="whitespace-nowrap text-base font-bold text-emerald-700 md:text-lg">Agent Crossing</h1>
       <div className="flex items-center gap-2 whitespace-nowrap text-sm md:gap-4">
         <span data-testid="sim-time">
           {hour === null ? null : <span aria-hidden="true">{isNightHour(hour) ? "🌙 " : "☀️ "}</span>}
-          <span className="md:hidden">{snapshot ? formatSimClock(snapshot.sim_time) : "--"}</span>
-          <span className="hidden md:inline">{snapshot ? formatSimTime(snapshot.sim_time) : "--"}</span>
+          <span className="md:hidden">{simTime ? formatSimClock(simTime) : "--"}</span>
+          <span className="hidden md:inline">{simTime ? formatSimTime(simTime) : "--"}</span>
         </span>
         <span className="hidden md:inline" data-testid="tick">
-          tick {snapshot ? snapshot.tick : "-"}
+          tick {tick ?? "-"}
         </span>
         <span className="flex items-center gap-1" data-testid="connection">
           <span className={`inline-block h-2 w-2 rounded-full ${CONNECTION_DOT_CLASSES[connection]}`} />

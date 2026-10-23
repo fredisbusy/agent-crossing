@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import { TILE_SIZE } from "../../../town-layout";
+import { TILE_SIZE } from "../../../tiled";
 import { paintFacade } from "./facade-art";
 import { FACADE_HEIGHT, type FacadePlan } from "./facade-plan";
 

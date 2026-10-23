@@ -10,6 +10,13 @@ from .models import (
     MinutePlanItem,
 )
 from .planner import Planner
+from .selection import (
+    PlanSelection,
+    PlanWindow,
+    select_hourly_plan,
+    select_minute_plan,
+    select_plan_items,
+)
 
 __all__ = [
     "DayPlan",
@@ -21,5 +28,10 @@ __all__ = [
     "MinutePlan",
     "MinutePlanItem",
     "Planner",
+    "PlanSelection",
+    "PlanWindow",
+    "select_hourly_plan",
+    "select_minute_plan",
+    "select_plan_items",
     "PlanningGraphRunner",
 ]

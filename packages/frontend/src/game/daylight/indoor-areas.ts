@@ -1,4 +1,4 @@
-import type { LocationArea } from "../map/locations";
+import type { LocationArea } from "../../tiled";
 
 /** 실내가 아닌 최상위 장소(광장·공원). */
 const OUTDOOR_ROOTS = ["Town Square", "Johnson Park"];

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { TILE } from "../../../../src/game/map/fallback-map";
+import { TILE } from "../../../../src/tiled";
 import {
   FACADE_HEIGHT,
   FACADE_LAYER,
@@ -11,9 +11,9 @@ import {
   type FacadePlan,
   hasWindow,
   paintFacade,
-  type Painter,
   planFacades,
 } from "../../../../src/game/map/facade";
+import type { Painter } from "../../../../src/game/draw";
 import { extractMapSprites } from "../../../../src/game/map/objects";
 
 interface RawLayer {

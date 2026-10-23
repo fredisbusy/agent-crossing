@@ -2,9 +2,9 @@ import Phaser from "phaser";
 import atlasImageUrl from "../../../assets/pixel-kit/atlas.png?url";
 import atlasDataUrl from "../../../assets/pixel-kit/atlas.tp.json?url";
 import type { PixelKitPlan } from "./cells";
+import { PIXEL_KIT_ATLAS_KEY } from "./atlas-key";
 import { drawPixelKitObjects, type SignRect } from "./object-layer";
 
-export const PIXEL_KIT_ATLAS_KEY = "pixel-kit";
 const PIXEL_KIT_GROUND_KEY = "pixel-kit-ground";
 const OUTSIDE_GRASS_FRAME = "grass_spring_b";
 const OUTSIDE_TINT = 0xb8c8b0;

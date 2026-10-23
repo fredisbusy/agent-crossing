@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from agents.memory.memory_object import MemoryObject
-from agents.planning.models import DayPlanBroadStrokesRequest, DayPlanItem
+from agents.planning.models import (
+    DayPlanBroadStrokesRequest,
+    DayPlanItem,
+    HourlyPlanItem,
+    MinutePlanItem,
+)
 from llm.clients.types import LlmGenerateOptions
 from minds.social import SpeechStyle
 from world.contracts import LocationPath, ResidentId
@@ -42,6 +47,22 @@ class DayPlanner(Protocol):
     def generate_day_plan(
         self, request: DayPlanBroadStrokesRequest
     ) -> list[DayPlanItem]: ...
+
+    def generate_hourly_plan(
+        self,
+        *,
+        agent_name: str,
+        current_time: datetime.datetime,
+        day_plan_item: DayPlanItem,
+    ) -> list[HourlyPlanItem]: ...
+
+    def generate_minute_plan(
+        self,
+        *,
+        agent_name: str,
+        current_time: datetime.datetime,
+        hourly_plan_item: HourlyPlanItem,
+    ) -> list[MinutePlanItem]: ...
 
 
 class MemoryStore(Protocol):

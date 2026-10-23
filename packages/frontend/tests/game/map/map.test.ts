@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildFallbackMap, TILE, TILE_COUNT } from "../../../src/game/map/fallback-map";
-import { extractLocationAreas } from "../../../src/game/map/locations";
-import { LOCATIONS_LAYER, type TiledObjectLayer, type TiledTileLayer } from "../../../src/game/map/tiled-types";
+import { buildFallbackMap, TILE_COUNT } from "../../../src/game/map/fallback-map";
+import { extractLocationAreas, LOCATIONS_LAYER, TILE, type TiledObjectLayer, type TiledTileLayer } from "../../../src/tiled";
 import { CAFE_DOOR, locationPathAt } from "../../../src/town-layout";
 
 describe("fallback map", () => {

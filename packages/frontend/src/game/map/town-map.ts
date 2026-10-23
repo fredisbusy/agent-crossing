@@ -1,11 +1,9 @@
 import Phaser from "phaser";
-import { TILE_SIZE } from "../../town-layout";
+import { extractLocationAreas, GROUND_LAYER, LOCATIONS_LAYER, TILE, TILE_SIZE, TILESET_NAME, type LocationArea } from "../../tiled";
 import { drawFacades, FACADE_LAYER, type FacadePlan, planFacades } from "./facade";
-import { buildFallbackMap, TILE } from "./fallback-map";
-import { extractLocationAreas, type LocationArea } from "./locations";
+import { buildFallbackMap } from "./fallback-map";
 import { DECOR_LAYER, extractMapSprites, FURNITURE_LAYER, type MapSprite } from "./objects";
 import { drawPixelKit, hasPixelKit, planPixelKit, preloadPixelKit, type SignRect } from "./pixel-kit";
-import { GROUND_LAYER, LOCATIONS_LAYER, TILESET_NAME } from "./tiled-types";
 import { paintTileset, TILESET_PIXEL_HEIGHT, TILESET_PIXEL_WIDTH } from "./tileset-art";
 
 export const TOWN_MAP_KEY = "town";
@@ -43,13 +41,28 @@ function ensureTilesetTexture(scene: Phaser.Scene): void {
   texture.refresh();
 }
 
+function drawCodeTileLayer(scene: Phaser.Scene, tilemap: Phaser.Tilemaps.Tilemap): Phaser.Tilemaps.TilemapLayer | Phaser.Tilemaps.TilemapGPULayer | null {
+  ensureTilesetTexture(scene);
+  const tileset = tilemap.addTilesetImage(TILESET_NAME, TILESET_TEXTURE_KEY, TILE_SIZE, TILE_SIZE, 0, 0, 1);
+  if (!tileset) return null;
+  return tilemap.createLayer(GROUND_LAYER, tileset, 0, 0);
+}
+
 function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): TownMap | null {
   if (!scene.cache.tilemap.exists(key)) return null;
   const tilemap = scene.make.tilemap({ key });
-  const tileset = tilemap.addTilesetImage(TILESET_NAME, TILESET_TEXTURE_KEY, TILE_SIZE, TILE_SIZE, 0, 0, 1);
-  if (!tileset) return null;
-  const layer = tilemap.createLayer(GROUND_LAYER, tileset, 0, 0);
-  if (!layer) return null;
+  // 픽셀 아틀라스가 있으면 구운 바닥 이미지가 타일 레이어를 완전히 덮으니 레이어·코드 타일셋을 만들지 않는다(칸 번호만 읽는다).
+  const usePixelKit = hasPixelKit(scene);
+  let groundRows: Phaser.Tilemaps.Tile[][];
+  if (usePixelKit) {
+    const data = tilemap.getLayer(GROUND_LAYER)?.data;
+    if (!data) return null;
+    groundRows = data;
+  } else {
+    const layer = drawCodeTileLayer(scene, tilemap);
+    if (!layer) return null;
+    groundRows = layer.layer.data;
+  }
   // `collision` 레이어는 백엔드 경로 탐색 전용이라 그리지 않는다.
   const areas = extractLocationAreas(tilemap.getObjectLayer(LOCATIONS_LAYER)?.objects ?? []);
   const furniture = extractMapSprites(tilemap.getObjectLayer(FURNITURE_LAYER)?.objects ?? []);
@@ -57,12 +70,15 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
   // 아틀라스가 없으면 아래 코드 타일 레이어가 그대로 대체 화면이 된다.
   let facades: FacadePlan[] = [];
   let signRects: () => SignRect[] = () => [];
-  if (hasPixelKit(scene)) {
-    const ground = layer.layer.data.flatMap((row) => row.map((tile) => tile.index));
+  if (usePixelKit) {
+    const ground = groundRows.flatMap((row) => row.map((tile) => tile.index));
     const isDoor = (tx: number, ty: number): boolean => ground[ty * tilemap.width + tx] === TILE.door;
     facades = planFacades(extractMapSprites(tilemap.getObjectLayer(FACADE_LAYER)?.objects ?? []), isDoor);
     const plan = planPixelKit(ground, tilemap.width, tilemap.height, { areas, furniture, decor, facades });
-    signRects = drawPixelKit(scene, plan, tilemap.widthInPixels, tilemap.heightInPixels) ?? signRects;
+    const drawnSigns = drawPixelKit(scene, plan, tilemap.widthInPixels, tilemap.heightInPixels);
+    // 아틀라스는 있는데 바닥 캔버스를 못 만든 드문 경우: 바닥이 비지 않게 코드 타일 레이어를 그린다.
+    if (drawnSigns) signRects = drawnSigns;
+    else drawCodeTileLayer(scene, tilemap);
     drawFacades(scene, facades);
   }
   return {
@@ -79,7 +95,6 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
 
 /** `town.json`을 그리고, 없거나 잘못됐으면 내장 대체 맵을 그린다. */
 export function buildTownMap(scene: Phaser.Scene): TownMap {
-  ensureTilesetTexture(scene);
   const loaded = tryBuild(scene, TOWN_MAP_KEY, false);
   if (loaded) return loaded;
   if (!scene.cache.tilemap.exists(FALLBACK_MAP_KEY)) {

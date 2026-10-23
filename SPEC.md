@@ -55,6 +55,11 @@ Backend 레이어 책임:
 5. Act: 이동/대화/행동 실행
 6. Reflect Trigger Check: 누적 중요도 임계치 검사
 
+기억 쓰기(Store) 배치 규칙:
+
+- 관찰 여러 개는 임베딩 1회 + 중요도 LLM 1회 배치로 저장한다(깨진 배치는 건별 재채점)
+- 내가 한 말은 말한 직후가 아니라 다음 기억 쓰기나 검색 전에 같은 배치 맨 앞에 합쳐 저장한다. 저장 시각은 말한 시각이고 검색 결과는 같다. 시뮬레이션이 끝날 때 남은 것은 버릴 수 있다
+
 실패 처리 원칙:
 
 - 중요도 파싱 실패: fallback 값 사용(기본 3)
@@ -137,19 +142,20 @@ Backend 레이어 책임:
 
 - 최근 이벤트 누적 중요도 `>= 150`
 
-실행 파이프라인:
+실행 파이프라인(원 저자 구현 `run_reflect` 순서):
 
 1. 최근 memory 100개 수집
-2. salient questions 3개 생성
-3. 질문별 retrieval 수행
-4. high-level insight 5개 생성
-5. 각 insight를 REFLECTION 메모리로 저장(citations 포함)
-6. 누적 중요도 카운터 리셋
+2. salient questions 3개 생성(더 오면 앞 3개만)
+3. 질문 3개를 임베딩 1회로 묶고, 질문 순서대로 질문당 top_k=30 retrieval 수행(원 구현 `new_retrieve(n_count=30)`). 이번 회차 insight를 저장하기 **전에** 세 질문의 검색을 모두 끝낸다
+4. 질문별 high-level insight 5개 생성(질문별 호출은 동시에 실행하고 결과는 질문 순서로 모은다)
+5. 모든 insight를 REFLECTION 메모리로 저장(citations 포함, 임베딩·중요도는 배치 1회씩)
+6. 누적 중요도 카운터 리셋(성공 여부와 무관)
 
 규칙:
 
 - reflection memory도 retrieval 후보에 포함
-- insight는 반드시 근거 memory id를 citations에 보존
+- insight는 반드시 근거 memory id를 citations에 보존(존재하는 id만, 중복 제거, 순서 유지)
+- 성찰 중 LLM 오류는 tick을 멈추지 않는다. 질문 하나의 insight 생성이 실패하면 그 질문만 비운다
 
 ---
 
@@ -179,6 +185,11 @@ Backend 레이어 책임:
 - day plan만 하루 전체를 미리 생성하고, hourly/minute plan은 near future만 just-in-time으로 재귀 분해한다
 - hourly plan은 현재 시점의 active day-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다
 - minute plan은 현재 시점의 active hourly-plan item(필요 시 다음 전이 1개 포함) 범위를 벗어나지 않는다
+
+에이전트 요약 설명(논문 부록 A):
+
+- 하루 1회(그날 첫 결정 때) 기억 검색 3번(핵심 성격 / 요즘 하루 일과·하는 일 / 요즘 자기 삶에 대한 느낌, 질의별 top_k 5)과 LLM 1회로 2~4문장 요약을 만들고 그날 동안 캐시한다
+- 하루 계획·조우·대화 프롬프트의 페르소나 자리에 싣는다. LLM이 실패하면 정체성 문장으로 대체한다
 
 react 정책:
 
@@ -296,6 +307,8 @@ God mode 입력:
 - 시뮬레이션 시계는 주입한다. 기본 틱 = 게임 시간 1분.
 - 마을 달력(`TownCalendar`): 새해(1/1), 밸런타인데이(2/14, 초콜릿), 핼러윈(10/31, 사탕), 크리스마스(12/25, 작은 선물). 날이 바뀌면 모든 주민에게 같은 `event` 관찰("오늘은 밸런타인데이다. …")을 보내고, `MindContext.holidays`로 그날 기념일을 함께 넘긴다.
 - `faithful`(기본): 모든 주민의 대기 중인 마음 결정이 끝날 때까지 시계를 멈춘다. 같은 시드 + 같은 LLM 응답 캐시면 같은 결과를 낸다. 평가·재현용.
+- LLM 응답 캐시: `LLM_RESPONSE_CACHE`(sqlite 경로, 비우면 끔)와 `LLM_RESPONSE_CACHE_MODE`(`readwrite`|`replay`|`off`). 재현 실행은 `replay`로 하고, 미적중은 오류다. 생성 키는 모델·엔드포인트·system·prompt·샘플링 옵션·`format_json`·`reasoning_effort`이고, 임베딩 키는 텍스트별(모델·엔드포인트·차원)이다. temperature>0이어도 같은 프롬프트면 기록된 응답을 재생한다. 동시에 같은 키를 놓치면 먼저 쓴 응답이 남고 모든 호출자가 그 값을 받는다. 빈 응답과 `format_json`인데 JSON이 아닌 응답은 저장하지 않는다.
+- LLM 재시도: `LLM_NUM_RETRIES`(기본 1). 호출 하나의 최악 소요는 `LLM_TIMEOUT_SECONDS × (1 + 재시도)`이고, faithful 모드에서는 그동안 시계가 멈춘다.
 - `realtime`: 시계는 계속 흐르고, 결정이 늦게 오면 몸은 현재 행동을 이어 간다. 관람용(후순위).
 - 행동 진행 중인 주민의 마음은 부르지 않는다. 마음은 다음 경우에만 깨운다.
   1. 행동이 끝났을 때(`until` 도달, `move`는 도착)
@@ -311,7 +324,9 @@ God mode 입력:
 - 위치 경로는 §8의 `Town > Building > Room > Object` 트리이며 장소 객체 레이어에서 만든다. 주민마다 아는 장소만 담은 개인 환경 트리를 가진다(논문 4.3).
 - 경로 탐색: 충돌 그리드 위 4방향 A*(백엔드). 시뮬레이션 권한은 백엔드 단일이고, 프런트는 WebSocket 스냅샷·변경분을 보간해 그리기만 한다.
 - 프런트: Phaser 4 + React 19 + Zustand. 에셋은 코드 생성 → CC0 팩 순(`assets/LICENSES.md` 기록).
-- QA 훅: 프런트 `window.render_game_to_text` / `window.advanceTime`, 백엔드 `GET /world/text`(짧은 JSON 상태)·`POST /world/advance`(시뮬레이션 분 단위 진행).
+- QA 훅: 프런트 `window.render_game_to_text` / `window.advanceTime`, 백엔드 `GET /world/text`(짧은 JSON 상태)·`POST /world/advance`(시뮬레이션 분 단위 진행). 프런트 훅은 Phaser를 동적으로 불러온 뒤에 생기므로 하네스는 훅이 생길 때까지 기다린다.
+- 프런트 보간 길이는 스냅샷 도착 간격의 EMA다(네트워크 계층에서 `performance.now()`로 재고, 숨은 탭·재접속 공백의 표본은 버리며, QA 수동 시계에서는 1000ms 고정). WebSocket 주소는 `VITE_WORLD_SOCKET_URL` → 페이지 location 기준(`ws(s)://<host>:8000/ws/world`) 순으로 정한다.
+- 프런트 번들: 첫 화면은 진입 청크만 받고, Phaser(공식 ESM 번들)는 게임 청크가 동적으로 불러온다. `phaser/src/*` 별칭은 webpack 전용 가정(DefinePlugin 플래그, 조건부 require, `global`) 때문에 Vite에서 깨지므로 쓰지 않는다.
 
 ## 16. 하이브리드 평가
 

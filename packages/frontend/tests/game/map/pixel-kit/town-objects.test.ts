@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import atlas from "../../../../src/assets/pixel-kit/atlas.tp.json";
-import { TILE } from "../../../../src/game/map/fallback-map";
-import { extractLocationAreas } from "../../../../src/game/map/locations";
+import { extractLocationAreas, TILE } from "../../../../src/tiled";
 import { extractMapSprites } from "../../../../src/game/map/objects";
 import { planPixelKit } from "../../../../src/game/map/pixel-kit";
 import { birdPose, butterflyPose } from "../../../../src/game/map/pixel-kit/critters";
