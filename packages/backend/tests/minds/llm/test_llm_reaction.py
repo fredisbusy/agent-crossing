@@ -17,7 +17,8 @@ from llm_fakes import (
 )
 from minds.llm import LLMMind
 from minds.llm.planning.reaction import REACTION_LOG_SIZE
-from world.contracts import MindContext, Observation, Utterance
+from minds.social import SocialSeed
+from world.contracts import MindContext, Observation, SocialEvent, Utterance
 
 HOME_CAFE = CAFE
 MARKER = "반응해야 하는가"
@@ -149,7 +150,7 @@ def test_reacting_replaces_only_the_rest_of_the_day() -> None:
         original(since)
 
     mind._decomposer.invalidate = spy  # pyright: ignore[reportPrivateUsage]
-    # 반응 끝(10:30) 전에 끝나는 항목은 버리고, 걸친 항목은 10:30에서 자른다.
+    # 반응 끝(10:30) 전에 끝나는 항목은 버리고, 걸친 항목은 10:30에서 자르며, 같은 시각에 구간이 둘 생기지 않게 겹친 항목은 버린다.
     planner._later = [  # pyright: ignore[reportPrivateUsage]
         (10, 11, "짧은 일"),
         (10, 11, "정리"),
@@ -162,7 +163,6 @@ def test_reacting_replaces_only_the_rest_of_the_day() -> None:
         ("09:00", "10:00", PARK, "공원을 산책한다"),
         ("10:00", "10:30", SQUARE, "광장에서 소란을 살핀다"),
         ("10:30", "11:00", HOME_CAFE, "짧은 일"),
-        ("10:30", "11:00", HOME_CAFE, "정리"),
         ("11:00", "13:00", HOME_CAFE, "점심"),
     ]
     assert action.kind == "move" and action.location_path == SQUARE
@@ -265,3 +265,20 @@ def test_reaction_log_keeps_only_the_most_recent_records() -> None:
     assert len(log) == REACTION_LOG_SIZE
     assert log[-1].observations == f"소식 {REACTION_LOG_SIZE + 4}"
     assert log[0].observations == "소식 5"
+
+
+def test_no_judgement_during_a_commitment() -> None:
+    client = _client()
+    mind, _ = make_mind(client)
+    party = SocialEvent(
+        name="파티",
+        start_time=at(16),
+        end_time=at(18),
+        location_path=CAFE,
+    )
+    mind.social.apply_seed(SocialSeed(hosting=(party,)), at(9))
+    _start(mind)
+    asyncio.run(
+        mind.next_action(woken(at(16, 30), sight("Maria가 들어온다", at(16, 30))))
+    )
+    assert _judged(client) == [] and mind.reaction_log == ()

@@ -106,9 +106,9 @@ class Reactor:
         summary: str,
         make_request: Callable[[], DayPlanBroadStrokesRequest],
     ) -> bool:
-        """새 관찰에 반응해 계획을 바꿨으면 True. 잠 중이거나 볼 것이 없으면 LLM을 부르지 않는다."""
+        """새 관찰에 반응해 계획을 바꿨으면 True. 잠·약속 중이거나 볼 것이 없으면 LLM을 부르지 않는다."""
         seen = self.new_sights(ctx)
-        if not seen or slot.action == "sleep":
+        if not seen or slot.action == "sleep" or slot.is_commitment:
             return False
         verdict = self._judge(ctx, slot, seen, summary)
         digest = _digest(seen)
@@ -166,7 +166,7 @@ class Reactor:
         if later is None:
             later = self._trimmed_rest(now, end)
         self.items.add(item)
-        self._routine.replace_from(now, [item, *later])
+        self._routine.replace_from(now, _without_overlap([item, *later]))
         self._decomposer.invalidate(since=now)
         name = self._persona.display_name
         self._writer.store(
@@ -228,6 +228,21 @@ class Reactor:
                 replace(old, start_time=max(slot.start, end), end_time=slot.end)
             )
         return rest
+
+
+def _without_overlap(items: Sequence[DayPlanItem]) -> list[DayPlanItem]:
+    """시작 순으로 늘어놓고 앞 항목 끝까지 시작을 미뤄 겹침을 없앤다. 길이가 0 이하면 버린다."""
+    ordered: list[DayPlanItem] = []
+    cursor: datetime.datetime | None = None
+    for planned in sorted(items, key=lambda i: i.start_time):
+        start = (
+            planned.start_time if cursor is None else max(cursor, planned.start_time)
+        )
+        if planned.end_time <= start:
+            continue
+        ordered.append(replace(planned, start_time=start))
+        cursor = planned.end_time if cursor is None else max(cursor, planned.end_time)
+    return ordered
 
 
 def parse_verdict(raw: str) -> Verdict:
