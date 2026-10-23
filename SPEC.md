@@ -26,18 +26,18 @@ Agent Crossing은 NPC가 기억과 계획을 기반으로 자율 행동하는 2D
 ## 2. 시스템 아키텍처
 
 ```text
-Frontend (React 19 + Phaser 3)
+Frontend (React 19 + Phaser 4)
   - map rendering, inspector, user intervention
-        <-> WebSocket
+        <-> WebSocket (WorldSnapshot)
 Backend (FastAPI)
-  - AgentBrain (tick loop)
-  - Memory (PostgreSQL + pgvector)
-  - World clock/scheduler
+  - TownRuntime (tick loop, 시계·스케줄러, 스냅샷 구독)
+  - TownSimulation: 주민 = 몸 + 마음(LLMMind / ScheduleMind, §12)
+  - Memory stream (지금은 프로세스 안, 영속 저장은 §4.2)
 ```
 
 Backend 레이어 책임:
 
-- API 레이어: 요청/응답, websocket 브로드캐스트
+- API 레이어: 요청/응답, websocket 브로드캐스트(§9)
 - Service/UseCase: 인지 루프 오케스트레이션
 - Domain: MemoryObject, plan/reflection/ranking 규칙
 - Repository: PostgreSQL + pgvector I/O
@@ -216,17 +216,20 @@ react 정책:
 
 ---
 
-## 9. API / 이벤트 계약 (초안)
+## 9. API / 이벤트 계약
 
-WebSocket 이벤트 최소 단위:
+백엔드는 `TownRuntime`(`world/town/runtime.py`) 하나를 서비스한다. 틱은 락 하나로 직렬화하고, 밖으로 내는 상태는 마지막으로 완결된 틱의 스냅샷이다(틱 도중의 반쪽 상태는 내지 않는다). 스케줄러 중지는 틱 경계에서만 한다.
 
-- `agent_id`
-- `position`
-- `current_action`
-- `current_plan_item`
-- `dialogue`
-- `emoji`
-- `timestamp`
+- `GET /world/state`: `{"snapshot": WorldSnapshot, "scheduler_running": bool, "tick_interval_seconds": float, "last_error": str | null}`
+- `GET /world/text`: QA용 짧은 JSON 상태(§15)
+- `POST /world/advance?minutes=N`(1..1440): N틱 진행 후 `WorldSnapshot`
+- `POST /world/tick/start`, `POST /world/tick/stop`: 스케줄러(틱 → 알림 → `WORLD_TICK_INTERVAL_SECONDS` 대기)
+- `WS /ws/world`: 접속 즉시 1회, 이후 틱마다 `{"type": "snapshot", "snapshot": WorldSnapshot}`. 구독자별로 최신 스냅샷 하나만 보관해 느린 클라이언트가 틱을 막지 않는다
+- `WorldSnapshot`(`world/contracts.py` = `packages/shared/src/world.ts`): `tick`, `sim_time`(ISO), `residents[]`(`resident_id`, `display_name`, `tile`, `location_path`, `action_description`, `emoji`, `utterance_text`, `mind_kind`)
+- 마을 구성 설정: `TOWN_SCENARIO`(기본 `valentine`), `TOWN_AGENTS`(쉼표 id), `TOWN_AGENT_COUNT`(기본 0 = LLM 없이 기동), `TOWN_SEED`. CLI(`run_town_scenario.py`)와 같은 `build_town`으로 조립한다
+- 시작 시 DB 초기화가 실패해도 경고만 남기고 기동한다(마을은 아직 DB를 쓰지 않는다)
+
+남은 것: 변경분(delta) 메시지, 스냅샷의 `current_plan_item`.
 
 God mode 입력:
 
