@@ -1,6 +1,7 @@
 from .calendar import DEFAULT_HOLIDAYS, TownCalendar
 from .clock import SimClock
 from .conversation import TownConversation
+from .runtime import TownRuntime
 from .simulation import SimulationMode, TownSimulation
 
 __all__ = [
@@ -9,5 +10,6 @@ __all__ = [
     "SimulationMode",
     "TownCalendar",
     "TownConversation",
+    "TownRuntime",
     "TownSimulation",
 ]
