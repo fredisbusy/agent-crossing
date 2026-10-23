@@ -121,9 +121,7 @@ class MemoryManager:
             return encoder.encode_many(contexts)
         return [encoder.encode(c) for c in contexts]
 
-    def _score_importances(
-        self, contexts: list[ImportanceScoringContext]
-    ) -> list[int]:
+    def _score_importances(self, contexts: list[ImportanceScoringContext]) -> list[int]:
         scorer = self.importance_scorer
         if isinstance(scorer, BatchImportanceScorer):
             return scorer.score_many(contexts)
@@ -221,6 +219,7 @@ class MemoryManager:
             embedding=embedding,
             context=context,
             importance=importance,
+            known_memory_ids=self._known_memory_ids(),
         )
 
     def create_reflections(
@@ -245,6 +244,7 @@ class MemoryManager:
                 for insight in insights
             ]
         )
+        known_memory_ids = self._known_memory_ids()
         return [
             self._store_reflection(
                 insight,
@@ -252,6 +252,7 @@ class MemoryManager:
                 embedding=embedding,
                 context=context,
                 importance=importance,
+                known_memory_ids=known_memory_ids,
             )
             for insight, embedding, importance in zip(
                 insights, embeddings, importances, strict=True
@@ -281,6 +282,18 @@ class MemoryManager:
             current_plan=context.current_plan,
         )
 
+    @staticmethod
+    def _filter_citations(citation_ids: list[int], known_ids: set[int]) -> list[int]:
+        """존재하는 id만, 중복 없이, 순서를 유지해 남긴다."""
+        filtered: list[int] = []
+        for citation_id in citation_ids:
+            if citation_id in known_ids and citation_id not in filtered:
+                filtered.append(citation_id)
+        return filtered
+
+    def _known_memory_ids(self) -> set[int]:
+        return {memory.id for memory in self.memory_stream.memories}
+
     def _store_reflection(
         self,
         insight: InsightWithCitation,
@@ -289,16 +302,11 @@ class MemoryManager:
         embedding: np.ndarray,
         context: ReflectionContext,
         importance: int | None,
+        known_memory_ids: set[int],
     ) -> MemoryObject:
-        # MemoryStream.add_memory는 id=len(memories)로 매기므로 id는 0..len-1 범위다.
-        memory_count = len(self.memory_stream.memories)
-        filtered_citations: list[int] = []
-        for citation_memory_id in insight.citation_memory_ids:
-            if not 0 <= citation_memory_id < memory_count:
-                continue
-            if citation_memory_id in filtered_citations:
-                continue
-            filtered_citations.append(citation_memory_id)
+        filtered_citations = self._filter_citations(
+            insight.citation_memory_ids, known_memory_ids
+        )
         return self._store_memory(
             node_type=NodeType.REFLECTION,
             content=insight.context,

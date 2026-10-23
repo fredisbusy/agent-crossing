@@ -1,4 +1,6 @@
 import datetime
+import threading
+import time
 from typing import cast
 
 import numpy as np
@@ -20,9 +22,11 @@ SEEDED = 40
 class Encoder:
     def __init__(self) -> None:
         self.many_calls: int = 0
+        self.single_calls: int = 0
 
     def encode(self, context: EmbeddingEncodingContext) -> np.ndarray:
         _ = context
+        self.single_calls += 1
         return np.ones(EMBEDDING_DIMENSION)
 
     def encode_many(self, contexts: list[EmbeddingEncodingContext]) -> list[np.ndarray]:
@@ -33,9 +37,11 @@ class Encoder:
 class Scorer:
     def __init__(self) -> None:
         self.many_calls: int = 0
+        self.single_calls: int = 0
 
     def score(self, context: ImportanceScoringContext) -> int:
         _ = context
+        self.single_calls += 1
         return 5
 
     def score_many(self, contexts: list[ImportanceScoringContext]) -> list[int]:
@@ -72,6 +78,10 @@ class FakeLlm:
         self.questions: list[str] = questions
         self.failing: set[str] = set()
         self.fail_questions: bool = False
+        self.question_error: Exception = RuntimeError("boom")
+        self.question_calls: int = 0
+        self.barrier: threading.Barrier | None = None
+        self.delays: dict[str, float] = {}
         self.manager: TrackingManager | None = None
         self.seen: dict[str, list[str]] = {}
 
@@ -80,8 +90,9 @@ class FakeLlm:
     ) -> list[str]:
         _ = agent_name
         _ = memories
+        self.question_calls += 1
         if self.fail_questions:
-            raise RuntimeError("boom")
+            raise self.question_error
         return self.questions
 
     def generate_insights_with_citation_key(
@@ -91,6 +102,9 @@ class FakeLlm:
         assert self.manager is not None
         question = self.manager.question_by_list_id[id(memories)]
         self.seen[question] = [m.content for m in memories]
+        if self.barrier is not None:
+            _ = self.barrier.wait(timeout=5)
+        time.sleep(self.delays.get(question, 0))
         if question in self.failing:
             raise TimeoutError("slow")
         return [
@@ -145,9 +159,14 @@ def test_retrieval_precedes_persist_with_top_k_30_and_batched_storage() -> None:
     for contents in llm.seen.values():
         assert len(contents) == 30
         assert not any("-i" in c for c in contents)
-    assert _stored(manager) == [f"{q}-i{n}" for q in ("q1", "q2", "q3") for n in range(2)]
+    assert _stored(manager) == [
+        f"{q}-i{n}" for q in ("q1", "q2", "q3") for n in range(2)
+    ]
     assert encoder.many_calls == 2  # 질문 임베딩 1회 + 통찰 임베딩 1회
     assert scorer.many_calls == 1
+    assert encoder.single_calls == 0
+    assert scorer.single_calls == 0
+    assert llm.question_calls == 1
 
 
 def test_one_question_failure_keeps_other_insights() -> None:
@@ -200,3 +219,42 @@ def test_no_questions_ends_without_storing() -> None:
 
     assert _stored(manager) == []
     assert encoder.many_calls == 0
+
+
+def test_insight_generation_runs_concurrently_and_keeps_question_order() -> None:
+    llm = FakeLlm(["q1", "q2", "q3"])
+    # 세 호출이 동시에 들어와야만 barrier를 통과한다. 순차 구현이면 타임아웃으로 실패한다.
+    llm.barrier = threading.Barrier(3)
+    # 첫 질문이 가장 늦게 끝나도 저장 순서는 질문 순서를 따른다.
+    llm.delays = {"q1": 0.2, "q2": 0.1}
+    runner, manager, _, _ = _setup(llm)
+
+    runner.reflect(now=LATER)
+
+    assert llm.barrier.broken is False
+    assert _stored(manager) == [
+        f"{q}-i{n}" for q in ("q1", "q2", "q3") for n in range(2)
+    ]
+
+
+def test_questions_are_capped_to_three() -> None:
+    llm = FakeLlm(["q1", "q2", "q3", "q4", "q5"])
+    runner, manager, _, _ = _setup(llm)
+
+    runner.reflect(now=LATER)
+
+    assert set(llm.seen) == {"q1", "q2", "q3"}
+    assert len(_stored(manager)) == 6
+
+
+def test_value_error_from_question_generation_is_swallowed() -> None:
+    llm = FakeLlm(["q1"])
+    llm.fail_questions = True
+    llm.question_error = ValueError("bad json")
+    runner, manager, _, _ = _setup(llm)
+    runner.record_observation_importance(150)
+
+    runner.reflect(now=LATER)
+
+    assert runner.should_reflect() is False
+    assert _stored(manager) == []

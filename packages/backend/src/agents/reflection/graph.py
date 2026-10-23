@@ -41,8 +41,12 @@ class StateGraphFactory(Protocol):
 # SPEC §6 참조. get_retrieval_memories의 기본값(3)은 다른 호출자가 쓰므로 바꾸지 않는다.
 REFLECTION_RETRIEVAL_TOP_K = 30
 
-# 통찰 생성 실패로 취급해 해당 질문만 건너뛰는 LLM 오류.
-_LLM_ERRORS = (RuntimeError, TimeoutError, ValueError)
+# 성찰 초점 질문 개수 상한. SPEC §6.
+REFLECTION_QUESTION_COUNT = 3
+
+# reflect() 밖으로 내보내지 않는 오류. ValueError는 코드 결함을 가릴 수 있어 LLM 호출 지점에서만 잡는다.
+_REFLECT_ERRORS = (RuntimeError, TimeoutError)
+_LLM_CALL_ERRORS = (RuntimeError, TimeoutError, ValueError)
 
 STATE_GRAPH = cast(StateGraphFactory, GRAPH_STATE_FACTORY)
 
@@ -83,7 +87,7 @@ class ReflectionGraphRunner:
         """성찰을 실행한다. LLM 오류는 밖으로 내지 않고, 성공 여부와 무관하게 누적 중요도를 리셋한다."""
         try:
             _ = self.graph.invoke(self._initial_state(now=now))
-        except _LLM_ERRORS:
+        except _REFLECT_ERRORS:
             pass
         finally:
             self.reflection.clear_importance()
@@ -132,12 +136,14 @@ class ReflectionGraphRunner:
         self,
         state: ReflectionGraphState,
     ) -> dict[str, list[str]]:
-        return {
-            "questions": self.llm_gateway.generate_salient_high_level_questions(
+        try:
+            questions = self.llm_gateway.generate_salient_high_level_questions(
                 agent_name=self.agent_name,
                 memories=state["recent_memories"],
             )
-        }
+        except ValueError:
+            questions = []
+        return {"questions": questions[:REFLECTION_QUESTION_COUNT]}
 
     def _route_after_generate_questions(
         self,
@@ -168,7 +174,7 @@ class ReflectionGraphRunner:
                 agent_name=self.agent_name,
                 memories=memories,
             )
-        except _LLM_ERRORS:
+        except _LLM_CALL_ERRORS:
             return []
 
     def _generate_insights_all(
