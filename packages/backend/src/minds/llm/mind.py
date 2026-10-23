@@ -44,6 +44,8 @@ from .prompts import (
     describe_events,
     describe_point,
 )
+from .recall import MemoryWriter
+from .summary import build_summary, identity_text
 from .routine import PlannedRoutine, plan_request, resolve_place
 
 DEFAULT_MAX_TURNS = 6
@@ -73,12 +75,16 @@ class LLMMind:
         self._planner = planner
         self._memory = memory
         self._reflection = reflection
+        self._writer = MemoryWriter(memory, reflection)
         self._max_turns = max_turns
         self._seeded = False
+        self._summary = ""
+        self._summary_day: datetime.date | None = None
 
     # --- Mind 프로토콜 --------------------------------------------------------
 
     async def next_action(self, ctx: MindContext) -> ActionIntent:
+        await self._flush()
         await asyncio.to_thread(self._prepare_day, ctx)
         slot = self.social.agenda.slot_at(ctx.now)
         return intent_for_slot(slot, ctx.self_state.location_path)
@@ -86,6 +92,7 @@ class LLMMind:
     async def on_encounter(
         self, ctx: MindContext, other: ResidentPublicView
     ) -> EncounterChoice:
+        await self._flush()
         if self.social.friendship.in_cooldown(other.resident_id, ctx.now):
             return "pass_by"
         if self.social.talking_points(other.resident_id, ctx.now, ctx.holidays):
@@ -96,6 +103,7 @@ class LLMMind:
     async def respond(
         self, ctx: MindContext, conversation: ConversationView
     ) -> Utterance | None:
+        await self._flush()
         me = self.persona.resident_id
         other = partner_of(me, conversation)
         if other is None or should_stop(me, conversation):
@@ -111,11 +119,17 @@ class LLMMind:
                 self.social.hear(obs.utterance, obs.observed_at)
         await asyncio.to_thread(self._remember_all, observations)
 
+    async def _flush(self) -> None:
+        """대기 중인 내 발화가 있으면 저장한다(관찰이 없어도 검색 전에 반영)."""
+        if self._writer.has_pending:
+            await asyncio.to_thread(self._writer.flush)
+
     # --- 계획 -----------------------------------------------------------------
 
     def _prepare_day(self, ctx: MindContext) -> None:
         self._remember_seed(ctx.now)
         today = ctx.now.date()
+        self._refresh_summary(ctx.now)
         if self.routine.has_plan(today):
             return
         request = plan_request(
@@ -124,6 +138,7 @@ class LLMMind:
             commitments=self.social.agenda.upcoming(ctx.now),
             holidays=ctx.holidays,
             yesterday=self._yesterday(ctx.now),
+            summary=self._summary,
         )
         try:
             items = self._planner.generate_day_plan(request)
@@ -136,22 +151,31 @@ class LLMMind:
                 for s in slots
             ]
             summary = "; ".join(lines)
-            self._store(
+            self._writer.store(
                 f"{self.persona.display_name}의 오늘 계획: {summary}", ctx.now, "plan"
             )
+
+    def _refresh_summary(self, now: datetime.datetime) -> None:
+        """에이전트 요약 설명을 하루에 한 번만 만든다 (논문 부록 A)."""
+        if self._summary_day == now.date():
+            return
+        self._writer.flush()
+        self._summary = build_summary(self.persona, self._memory, self._client, now)
+        self._summary_day = now.date()
 
     def _remember_seed(self, now: datetime.datetime) -> None:
         """시작 기억과 시작 사실(여는 행사 포함)을 기억 스트림에 한 번 넣는다."""
         if self._seeded:
             return
         self._seeded = True
-        for text in self.persona.seed_memories:
-            self._store(text, now)
+        items = [(text, now) for text in self.persona.seed_memories]
         for fact in self.social.facts.all():
             if fact.source_resident_id == self.persona.resident_id:
-                self._store(f"{fact.topic}: {fact.fact}", now)
+                items.append((f"{fact.topic}: {fact.fact}", now))
+        self._writer.store_many(items)
 
     def _yesterday(self, now: datetime.datetime) -> str:
+        self._writer.flush()
         found = self._memory.retrieve("어제 한 일", now, RETRIEVE_TOP_K)
         return " ".join(m.content for m in found)
 
@@ -160,6 +184,7 @@ class LLMMind:
     def _scene(
         self, ctx: MindContext, partner_id: str, partner_name: str, query: str
     ) -> Scene:
+        self._writer.flush()
         action = ctx.self_state.action
         return Scene(
             now=ctx.now,
@@ -170,6 +195,7 @@ class LLMMind:
             friendship=self.social.friendship.score(partner_id),
             last_met=self.social.friendship.last_talk(partner_id),
             memories=self._memory.retrieve(query, ctx.now, RETRIEVE_TOP_K),
+            summary=self._summary or identity_text(self.persona),
         )
 
     def _ask_encounter(self, ctx: MindContext, other: ResidentPublicView) -> bool:
@@ -225,7 +251,7 @@ class LLMMind:
         )
         self.social.said(utterance, ctx.now)
         partner = names.get(other, other)
-        self._store(
+        self._writer.defer(
             f'{self.persona.display_name}가 {partner}에게 말했다: "{draft.text}"',
             ctx.now,
         )
@@ -260,16 +286,9 @@ class LLMMind:
             if spoken is not None and spoken.speaker_id == self.persona.resident_id:
                 continue
             items.append((obs.text, obs.observed_at))
-        for importance in self._memory.remember_many(items) if items else []:
-            self._reflection.record_observation_importance(importance)
+        self._writer.store_many(items)
         if observations and self._reflection.should_reflect():
             self._reflection.reflect(now=observations[-1].observed_at)
-
-    def _store(
-        self, text: str, now: datetime.datetime, kind: str = "observation"
-    ) -> None:
-        importance = self._memory.remember(text, now, kind=kind)
-        self._reflection.record_observation_importance(importance)
 
     def _generate(self, prompt: str, options: LlmGenerateOptions) -> str:
         try:

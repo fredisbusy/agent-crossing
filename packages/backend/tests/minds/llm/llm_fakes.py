@@ -79,6 +79,10 @@ class FixedPlanner:
 class ListMemory:
     def __init__(self) -> None:
         self.stored: list[tuple[str, str]] = []
+        self.batches: list[list[str]] = []
+        """remember_many 호출마다 넘어온 문장들."""
+        self.queries: list[str] = []
+        self.stored_at_query: list[int] = []
 
     def remember(
         self, content: str, now: datetime.datetime, *, kind: str = "observation"
@@ -87,11 +91,14 @@ class ListMemory:
         return 3
 
     def remember_many(self, items: list[tuple[str, datetime.datetime]]) -> list[int]:
+        self.batches.append([text for text, _ in items])
         return [self.remember(text, now) for text, now in items]
 
     def retrieve(
         self, query: str, now: datetime.datetime, top_k: int
     ) -> list[MemoryObject]:
+        self.queries.append(query)
+        self.stored_at_query.append(len(self.stored))
         return [
             MemoryObject(
                 id=i,
@@ -122,7 +129,11 @@ class CountingReflection:
 
 
 def make_mind(
-    client: ScriptedClient, *, resident_id: str = "isabella", max_turns: int = 6
+    client: ScriptedClient,
+    *,
+    resident_id: str = "isabella",
+    max_turns: int = 6,
+    reflection: CountingReflection | None = None,
 ) -> tuple[LLMMind, ListMemory]:
     memory = ListMemory()
     persona = LlmPersona(
@@ -139,7 +150,7 @@ def make_mind(
         client=client,
         planner=FixedPlanner(),
         memory=memory,
-        reflection=CountingReflection(),
+        reflection=reflection or CountingReflection(),
         max_turns=max_turns,
     )
     return mind, memory
