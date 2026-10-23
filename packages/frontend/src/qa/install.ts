@@ -1,5 +1,5 @@
 import type { TownGameHandle } from "../game";
-import type { WorldFeed } from "../net";
+import { DEFAULT_TICK_INTERVAL_MS, type WorldFeed } from "../net";
 import { useWorldStore } from "../stores";
 import { renderStateToText } from "./state-text";
 
@@ -24,6 +24,8 @@ export function installQaHooks(target: QaTarget): () => void {
   };
 
   window.advanceTime = (ms) => {
+    // 수동 시계에서는 도착 시각이 의미가 없으니 보간 길이를 기본값으로 고정한다(결정론).
+    useWorldStore.getState().lockTickInterval(DEFAULT_TICK_INTERVAL_MS);
     target.game.freezeRealtime();
     target.feed.pause();
     let remaining = Math.max(0, ms);

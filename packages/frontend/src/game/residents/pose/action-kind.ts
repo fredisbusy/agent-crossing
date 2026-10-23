@@ -87,10 +87,9 @@ export interface ActionInput {
 export function classifyAction(input: ActionInput): ActionKind | null {
   if (input.moving) return "walk";
   if (input.talking) return "talk";
-  const text = input.action_description ?? "";
-  return (
-    firstMatch(SPECIFIC_TEXT_RULES, text) ??
-    firstMatch(EMOJI_RULES, input.emoji ?? "") ??
-    firstMatch(GENERIC_TEXT_RULES, text)
-  );
+  return classifyText(input.action_description ?? "", input.emoji ?? "");
+}
+
+function classifyText(text: string, emoji: string): ActionKind | null {
+  return firstMatch(SPECIFIC_TEXT_RULES, text) ?? firstMatch(EMOJI_RULES, emoji) ?? firstMatch(GENERIC_TEXT_RULES, text);
 }

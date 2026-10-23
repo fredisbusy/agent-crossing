@@ -72,7 +72,16 @@ export class ResidentView {
   private bubbleDepth = BUBBLE_DEPTH;
   private tile = { x: 0, y: 0 };
   private pxY = 0;
+  private kindText: string | null = null;
+  private kindEmoji: string | null = null;
+  private kindOfText: ActionKind | null = null;
   private shownKind: ActionKind | "emoji" | null = null;
+  /** Phaser는 같은 값을 넣어도 depth 정렬을 예약하므로 마지막으로 넣은 값을 기억해 바뀔 때만 설정한다. */
+  private bodyDepth = Number.NaN;
+  private overlayDepth = Number.NaN;
+  private biasPx = 0;
+  /** 라벨 배율을 마지막으로 맞춘 줌. 줌이 바뀔 때만 다시 맞춘다. */
+  private scaledZoom = Number.NaN;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -119,7 +128,7 @@ export class ResidentView {
     this.bubble = new SpeechBubble(scene, usePixelKit);
     this.bubbleLayer = scene.add.container(0, this.topY - HEAD_GAP, [this.bubble.container]);
     this.overlay = scene.add.container(0, 0, [this.iconLayer, this.tagLayer, this.bubbleLayer]);
-    this.overlay.setDepth(TAG_DEPTH);
+    this.setOverlayDepth(TAG_DEPTH);
     this.hideBubble();
     this.setIcon(null, null);
   }
@@ -130,7 +139,7 @@ export class ResidentView {
     const py = (y + 0.5) * TILE_SIZE;
     this.pxY = py;
     this.container.setPosition(px, py);
-    this.container.setDepth(py);
+    this.setBodyDepth(py + this.biasPx);
     this.overlay.setPosition(px, py);
     this.figure?.track(x, y);
   }
@@ -139,14 +148,23 @@ export class ResidentView {
     this.ring.setVisible(selected);
     this.tile = { x: resident.tile.x, y: resident.tile.y };
     const moving = this.figure?.isMoving ?? false;
-    const kind = classifyAction({
-      action_description: resident.action_description,
-      emoji: resident.emoji,
-      talking: bubble !== null,
-      moving,
-    });
+    const kind = moving || bubble !== null ? classifyAction({ ...this.textInput(resident), talking: bubble !== null, moving }) : this.textKind(resident);
     this.applyPose(kind, moving);
     this.syncLabels(resident, kind, bubble);
+  }
+
+  private textInput(resident: ResidentSnapshot): { action_description: string | null; emoji: string | null } {
+    return { action_description: resident.action_description, emoji: resident.emoji };
+  }
+
+  /** 걷지도 말하지도 않을 때의 행동 종류. 정규식 수십 개를 프레임마다 돌리지 않도록 마지막 (문구, 이모지) 결과를 기억한다. */
+  private textKind(resident: ResidentSnapshot): ActionKind | null {
+    if (resident.action_description !== this.kindText || resident.emoji !== this.kindEmoji) {
+      this.kindText = resident.action_description;
+      this.kindEmoji = resident.emoji;
+      this.kindOfText = classifyAction({ ...this.textInput(resident), talking: false, moving: false });
+    }
+    return this.kindOfText;
   }
 
   /** 이름표의 월드 좌표 사각형(겹침 회피용). 선택된 주민·아래쪽 주민이 우선. */
@@ -184,7 +202,20 @@ export class ResidentView {
     // 자는 동안 이름표는 침대 그림 아래로 비켜 침대·베개를 가리지 않게 한다.
     this.tagBedBottom = pose.bed ? bedFoot : null;
     this.figure.apply(pose, bedFoot);
-    this.container.setDepth(this.pxY + this.depthBias(pose));
+    this.biasPx = this.depthBias(pose);
+    this.setBodyDepth(this.pxY + this.biasPx);
+  }
+
+  private setBodyDepth(depth: number): void {
+    if (depth === this.bodyDepth) return;
+    this.bodyDepth = depth;
+    this.container.setDepth(depth);
+  }
+
+  private setOverlayDepth(depth: number): void {
+    if (depth === this.overlayDepth) return;
+    this.overlayDepth = depth;
+    this.overlay.setDepth(depth);
   }
 
   private depthBias(pose: Pose): number {
@@ -194,11 +225,15 @@ export class ResidentView {
   }
 
   private syncLabels(resident: ResidentSnapshot, kind: ActionKind | null, bubble: string | null): void {
-    const inverse = 1 / this.scene.cameras.main.zoom;
-    this.tagLayer.setScale(inverse);
+    const zoom = this.scene.cameras.main.zoom;
+    if (zoom !== this.scaledZoom) {
+      this.scaledZoom = zoom;
+      const inverse = 1 / zoom;
+      this.tagLayer.setScale(inverse);
+      this.iconLayer.setScale(Math.max(1, ICON_MIN_SCREEN_PX / (ICON_ART_PX * zoom)));
+      this.bubbleLayer.setScale(inverse);
+    }
     this.tagLayer.setPosition(this.tagOffset.dx, this.tagY() + this.tagOffset.dy);
-    this.iconLayer.setScale(Math.max(1, ICON_MIN_SCREEN_PX / (ICON_ART_PX * this.scene.cameras.main.zoom)));
-    this.bubbleLayer.setScale(inverse);
     if (bubble !== this.bubbleShown) {
       if (bubble) this.showBubble(bubble);
       else this.hideBubble();
@@ -225,12 +260,12 @@ export class ResidentView {
     this.bubbleShown = text;
     this.bubble.show(text);
     this.bubbleDepth = BUBBLE_DEPTH + this.scene.time.now * 0.001;
-    this.overlay.setDepth(this.bubbleDepth);
+    this.setOverlayDepth(this.bubbleDepth);
   }
 
   private hideBubble(): void {
     this.bubbleShown = null;
     this.bubble.hide();
-    this.overlay.setDepth(TAG_DEPTH);
+    this.setOverlayDepth(TAG_DEPTH);
   }
 }
