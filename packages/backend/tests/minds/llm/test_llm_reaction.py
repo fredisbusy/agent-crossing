@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime
+import json
 
 from agents.planning.models import DayPlanBroadStrokesRequest, DayPlanItem
 from llm_fakes import (
@@ -16,7 +17,7 @@ from llm_fakes import (
     make_mind,
 )
 from minds.llm import LLMMind
-from minds.llm.planning.reaction import REACTION_LOG_SIZE
+from minds.llm.planning.reaction import REACTION_LOG_SIZE, parse_verdict
 from minds.social import SocialSeed
 from world.contracts import MindContext, Observation, SocialEvent, Utterance
 
@@ -282,3 +283,116 @@ def test_no_judgement_during_a_commitment() -> None:
         mind.next_action(woken(at(16, 30), sight("Maria가 들어온다", at(16, 30))))
     )
     assert _judged(client) == [] and mind.reaction_log == ()
+
+
+def _by_minutes(*minutes: int) -> ScriptedClient:
+    queue = list(minutes)
+
+    def reply(prompt: str) -> object:
+        if MARKER not in prompt:
+            return {"summary": "친절한 카페 주인이다"}
+        if not queue:
+            return {"react": False}
+        count = queue.pop(0)
+        return {
+            "react": True,
+            "reason": "r",
+            "reaction": {
+                "description": f"반응{count}",
+                "location": "Town Square",
+                "minutes": count,
+            },
+        }
+
+    return ScriptedClient(reply)
+
+
+def test_event_observation_without_subject_is_judged() -> None:
+    client = _client({"react": False, "reason": "그대로"})
+    mind, _ = make_mind(client)
+    _start(mind)
+    holiday = Observation(
+        kind="event", text="오늘은 기념일이다", observed_at=at(10), location_path=CAFE
+    )
+    asyncio.run(mind.next_action(woken(at(10), holiday)))
+    assert len(_judged(client)) == 1
+
+
+def test_nested_reaction_with_failed_replan_is_not_decomposed() -> None:
+    planner = ReplanPlanner(None)
+    mind, _ = make_mind(_by_minutes(120, 10), planner=planner)
+    _start(mind)
+    asyncio.run(mind.next_action(woken(at(10), sight("소란", at(10)))))
+    asyncio.run(mind.next_action(woken(at(10, 20), sight("또 소란", at(10, 20)))))
+    calls = len(planner.hourly_calls)
+    action = asyncio.run(mind.next_action(ctx("isabella", at(10, 35), where=SQUARE)))
+    assert action.description == "반응120" and action.until == at(12)
+    assert len(planner.hourly_calls) == calls
+
+
+def test_reaction_stops_at_midnight_without_replanning() -> None:
+    class LatePlanner(ReplanPlanner):
+        def generate_day_plan(
+            self, request: DayPlanBroadStrokesRequest
+        ) -> list[DayPlanItem]:
+            self.requests.append(request)
+            return [DayPlanItem(at(22), at(23, 59), "Town Square", "책을 읽는다")]
+
+    planner = LatePlanner([])
+    mind, _ = make_mind(_by_minutes(120), planner=planner)
+    asyncio.run(mind.next_action(ctx("isabella", at(22, 10))))
+    action = asyncio.run(mind.next_action(woken(at(23, 30), sight("소란", at(23, 30)))))
+    midnight = DAY + datetime.timedelta(days=1)
+    assert action.until == midnight and len(planner.requests) == 1
+    assert not mind.routine.has_plan(midnight.date())
+
+
+def test_timezone_aware_replan_results_are_normalized() -> None:
+    zone = datetime.timezone(datetime.timedelta(hours=9))
+
+    class AwarePlanner(ReplanPlanner):
+        def generate_day_plan(
+            self, request: DayPlanBroadStrokesRequest
+        ) -> list[DayPlanItem]:
+            if not self.requests:
+                return super().generate_day_plan(request)
+            self.requests.append(request)
+            return [
+                DayPlanItem(
+                    at(10, 15).replace(tzinfo=zone),
+                    at(13).replace(tzinfo=zone),
+                    "Hobbs Cafe Seating",
+                    "점심",
+                )
+            ]
+
+    mind, _ = make_mind(_client(), planner=AwarePlanner([]))
+    _start(mind)
+    asyncio.run(mind.next_action(woken(at(10), sight("소란", at(10)))))
+    assert _plan(mind) == [
+        ("09:00", "10:00", PARK, "공원을 산책한다"),
+        ("10:00", "10:30", SQUARE, "광장에서 소란을 살핀다"),
+        ("10:30", "13:00", CAFE, "점심"),
+    ]
+
+
+def test_minutes_accept_floats_and_numeric_strings() -> None:
+    def parsed(value: object) -> int:
+        reply = {"react": True, "reaction": {"description": "가본다", "minutes": value}}
+        verdict = parse_verdict(json.dumps(reply))
+        assert verdict.reaction is not None
+        return verdict.reaction.minutes
+
+    assert parsed(30.0) == 30 and parsed("30") == 30 and parsed(" 45.4 ") == 45
+    assert parsed("곧") == 0 and parsed(True) == 0 and parsed(None) == 0
+
+
+def test_stale_reaction_items_are_dropped_on_a_new_day() -> None:
+    mind, _ = make_mind(_by_minutes(30), planner=ReplanPlanner([]))
+    _start(mind)
+    asyncio.run(mind.next_action(woken(at(10), sight("소란", at(10)))))
+    reactor = mind._reactor  # pyright: ignore[reportPrivateUsage]
+    assert len(reactor.items) == 1
+    tomorrow = at(10) + datetime.timedelta(days=1)
+    asyncio.run(mind.next_action(woken(tomorrow, sight("소란", tomorrow))))
+    assert reactor.items == set()

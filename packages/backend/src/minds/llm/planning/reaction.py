@@ -6,6 +6,7 @@
 
 import datetime
 import json
+import math
 from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -107,6 +108,7 @@ class Reactor:
         make_request: Callable[[], DayPlanBroadStrokesRequest],
     ) -> bool:
         """새 관찰에 반응해 계획을 바꿨으면 True. 잠·약속 중이거나 볼 것이 없으면 LLM을 부르지 않는다."""
+        self.items = {i for i in self.items if i.end_time.date() >= ctx.now.date()}
         seen = self.new_sights(ctx)
         if not seen or slot.action == "sleep" or slot.is_commitment:
             return False
@@ -157,12 +159,13 @@ class Reactor:
         now = ctx.now
         start = now.replace(second=0, microsecond=0)
         minutes = max(MIN_REACTION_MINUTES, min(MAX_REACTION_MINUTES, reaction.minutes))
-        end = start + datetime.timedelta(minutes=minutes)
+        midnight = start.replace(hour=0, minute=0) + datetime.timedelta(days=1)
+        end = min(start + datetime.timedelta(minutes=minutes), midnight)
         place = (
             find_place(reaction.location, self._persona) or ctx.self_state.location_path
         )
         item = DayPlanItem(start, end, place, reaction.description)
-        later = self._replan(now, item, make_request)
+        later = self._replan(now, item, make_request) if end < midnight else []
         if later is None:
             later = self._trimmed_rest(now, end)
         self.items.add(item)
@@ -224,9 +227,10 @@ class Reactor:
             old = self._routine.item_for(slot)
             if old is None or slot.end <= end:
                 continue
-            rest.append(
-                replace(old, start_time=max(slot.start, end), end_time=slot.end)
-            )
+            trimmed = replace(old, start_time=max(slot.start, end), end_time=slot.end)
+            if old in self.items:
+                self.items.add(trimmed)
+            rest.append(trimmed)
         return rest
 
 
@@ -258,11 +262,21 @@ def parse_verdict(raw: str) -> Verdict:
     description = _text(fields, "description")
     if not description:
         return Verdict(False, reason, None)
-    minutes = fields.get("minutes")
-    count = minutes if isinstance(minutes, int) and not isinstance(minutes, bool) else 0
+    count = _minutes(fields.get("minutes"))
     return Verdict(
         True, reason, Reaction(description, _text(fields, "location"), count)
     )
+
+
+def _minutes(value: object) -> int:
+    """정수·실수(반올림)·숫자 문자열을 분으로. 못 읽으면 0(최소 분으로 보정된다)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return 0
+    try:
+        number = float(value)
+    except ValueError:
+        return 0
+    return round(number) if math.isfinite(number) else 0
 
 
 def _digest(seen: Sequence[Observation]) -> str:
