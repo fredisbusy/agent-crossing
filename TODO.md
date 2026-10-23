@@ -170,20 +170,23 @@
     - [x] 검색 3번 + LLM 1회, 그날 캐시, 실패 시 정체성 문장으로 대체
     - [x] 프롬프트에 NPC·agent·rule 단어를 넣지 않는다
 
-- [ ] `P1` hourly plan 생성기를 구현한다
+- [x] `P1` hourly plan 생성기를 구현한다
   - Depends on: day plan 생성기 구현
   - DoD:
     - [x] active day plan 항목 입력을 기준으로 near-future hourly plan을 생성한다
     - [x] 현재 시점 기준 active day plan 항목을 선택한다
     - [x] hourly plan이 시간 순서로 정렬된다
+    - [x] 마을 LLMMind가 하루 계획 항목당 1회 just-in-time으로 만들어 쓴다 (2026-10-23, SPEC §12)
 
-- [ ] `P1` minute plan(5~15분 단위) 생성기를 구현한다
+- [x] `P1` minute plan(5~15분 단위) 생성기를 구현한다
   - Depends on: hourly plan 생성기 구현
   - DoD:
     - [x] minute plan 단위가 5~15분 범위를 만족한다
     - [x] active hourly plan 항목 입력을 기준으로 near-future minute plan을 생성한다
     - [x] 현재 시점 기준 active hourly plan 항목을 선택한다
     - [x] 현재 시점 기준 다음 실행 항목을 즉시 찾을 수 있다
+    - [x] 마을 LLMMind가 지금의 분 단위 행동을 몸에 넘기고, 실패하면 시간 항목 끝까지 하루 구간으로 대체한다 (SPEC §12)
+    - [ ] 실제 모델로 하루당 분해 호출 수(추정 20~35회)와 행동 서술 품질을 잰다
 
 ### 3-B. Tick react 판정과 부분 재계획
 
