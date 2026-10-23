@@ -51,7 +51,6 @@ export interface SignLayout {
   textX: number;
 }
 
-/** 글자 폭에 맞춰 판자 폭(양끝 4 + 가운데 8의 배수)과 아이콘·글자 위치를 정한다. */
 /** 폭 `width`인 간판의 가운데 x를 `bounds` 안으로 옮긴다. 다 못 들어가면 bounds 가운데. */
 export function clampSignCenter(centerX: number, width: number, bounds: readonly [number, number] | null): number {
   if (bounds === null) return centerX;
@@ -60,6 +59,7 @@ export function clampSignCenter(centerX: number, width: number, bounds: readonly
   return Math.min(Math.max(centerX, left + width / 2), right - width / 2);
 }
 
+/** 글자 폭에 맞춰 판자 폭(양끝 4 + 가운데 8의 배수)과 아이콘·글자 위치를 정한다. */
 export function layoutSign(textWidth: number): SignLayout {
   const iconX = PLANK_END_WIDTH;
   const textX = iconX + ICON_SIZE + ICON_GAP;

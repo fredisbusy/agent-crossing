@@ -178,7 +178,7 @@ function paintDoor(ctx: Painter, ox: number, style: FacadeStyle): void {
   }
 }
 
-/** 정면 하나를 (0,0)부터 columns×16 × 32 px로 그린다. */
+/** 정면 하나를 (0,0)부터 columns×16 × FACADE_HEIGHT(48) px로 그린다. */
 export function paintFacade(ctx: Painter, plan: FacadePlan): void {
   const width = plan.columns * COLUMN;
   const { style } = plan;
