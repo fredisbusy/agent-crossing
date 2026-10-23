@@ -3,14 +3,20 @@ from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-import litellm
-from settings import EMBEDDING_DIMENSION, LLM_MAX_CONCURRENCY
+from settings import EMBEDDING_DIMENSION, LLM_MAX_CONCURRENCY, LLM_NUM_RETRIES
 
 from .types import LlmGenerateOptions
 
 
 class LiteLlmClientError(RuntimeError):
     pass
+
+
+def _litellm() -> Any:
+    """litellm은 import 비용이 커서 첫 호출 때 불러온다."""
+    import litellm
+
+    return litellm
 
 
 def _coerce_text(value: object) -> str | None:
@@ -52,6 +58,8 @@ class LiteLlmClient:
     """임베딩 전용 키. 없으면 `api_key`."""
     reasoning_effort: str | None = None
     """추론 모델에 보내는 추론 강도. 없으면 보내지 않는다."""
+    num_retries: int = LLM_NUM_RETRIES
+    """LiteLLM 재시도 횟수. 호출 하나의 최악 소요는 timeout x (1 + 재시도)."""
     max_concurrency: int = LLM_MAX_CONCURRENCY
     """동시 요청 상한. 주민 마음들이 동시에 부르므로 Ollama 같은 직렬 백엔드의 대기열을 막는다."""
     _slots: threading.BoundedSemaphore | None = field(
@@ -92,7 +100,7 @@ class LiteLlmClient:
             "top_p": final_options.top_p,
             "max_tokens": final_options.num_predict,
             "timeout": self.timeout_seconds,
-            "num_retries": 2,
+            "num_retries": self.num_retries,
         }
         if self.base_url:
             kwargs["api_base"] = self.base_url
@@ -117,7 +125,7 @@ class LiteLlmClient:
 
         try:
             with self._slot():
-                response = litellm.completion(**kwargs)
+                response = _litellm().completion(**kwargs)
         except Exception as exc:
             raise LiteLlmClientError(f"LiteLLM completion failed: {exc}") from exc
 
@@ -167,7 +175,7 @@ class LiteLlmClient:
             "model": model or self.default_embedding_model,
             "input": inputs,
             "timeout": self.timeout_seconds,
-            "num_retries": 2,
+            "num_retries": self.num_retries,
             "dimensions": expected_dim,
         }
         base_url = self.embedding_base_url or self.base_url
@@ -179,7 +187,7 @@ class LiteLlmClient:
 
         try:
             with self._slot():
-                response = litellm.embedding(**kwargs)
+                response = _litellm().embedding(**kwargs)
         except Exception as exc:
             raise LiteLlmClientError(f"LiteLLM embedding failed: {exc}") from exc
 
