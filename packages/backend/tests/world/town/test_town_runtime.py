@@ -1,8 +1,10 @@
 """TownRuntime: 락 직렬화, 최신만 보관하는 구독 큐, 스케줄러."""
 
 import asyncio
+import json
 
 from town_fakes import CAFE, ScriptedMind, make_sim
+from world.contracts import ActionIntent, MindContext
 from world.town import TownRuntime
 
 
@@ -35,22 +37,85 @@ def test_subscriber_queue_keeps_only_latest_snapshot() -> None:
     asyncio.run(scenario())
 
 
+class SlowMind(ScriptedMind):
+    """next_action에서 양보하며 동시 진입 수와 완료 수를 센다."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.entered = asyncio.Event()
+        self.inside = 0
+        self.max_inside = 0
+        self.finished = 0
+
+    async def next_action(self, ctx: MindContext) -> ActionIntent:
+        self.inside += 1
+        self.max_inside = max(self.max_inside, self.inside)
+        self.entered.set()
+        await asyncio.sleep(0.05)
+        self.inside -= 1
+        self.finished += 1
+        return await super().next_action(ctx)
+
+
 def test_concurrent_advances_are_serialized() -> None:
     async def scenario() -> None:
-        runtime = make_runtime()
+        mind = SlowMind()
+        runtime = TownRuntime(
+            make_sim({"ann": (CAFE, mind)}), tick_interval_seconds=0.0
+        )
+        await asyncio.gather(runtime.advance(2), runtime.advance(2))
+        assert runtime.snapshot().tick == 4
+        assert mind.max_inside == 1
+
+    asyncio.run(scenario())
+
+
+def test_stop_during_tick_completes_that_tick() -> None:
+    async def scenario() -> None:
+        mind = SlowMind()
+        runtime = TownRuntime(
+            make_sim({"ann": (CAFE, mind)}), tick_interval_seconds=0.01
+        )
         queue = runtime.subscribe()
-        seen: list[int] = []
+        await runtime.start()
+        await mind.entered.wait()
+        assert mind.finished == 0
+        await runtime.stop()
+        assert mind.finished == 1 and mind.inside == 0
+        assert runtime.snapshot().tick == 1
+        assert queue.qsize() == 1 and queue.get_nowait().tick == 1
+        await asyncio.sleep(0.1)
+        assert runtime.snapshot().tick == 1 and queue.empty()
+        assert not runtime.scheduler_running
 
-        async def collect() -> None:
-            while True:
-                seen.append((await queue.get()).tick)
+    asyncio.run(scenario())
 
-        collector = asyncio.create_task(collect())
-        await asyncio.gather(runtime.advance(4), runtime.advance(4))
-        await asyncio.sleep(0)
-        collector.cancel()
-        assert runtime.snapshot().tick == 8
-        assert seen == sorted(seen) and seen[-1] == 8
+
+def test_snapshot_is_last_completed_tick_during_tick() -> None:
+    async def scenario() -> None:
+        mind = SlowMind()
+        runtime = TownRuntime(make_sim({"ann": (CAFE, mind)}), tick_interval_seconds=0.0)
+        task = asyncio.create_task(runtime.advance(1))
+        await mind.entered.wait()
+        assert runtime.snapshot().tick == 0
+        assert json.loads(runtime.text_state())["tick"] == 0
+        await task
+        assert json.loads(runtime.text_state())["tick"] == 1
+
+    asyncio.run(scenario())
+
+
+def test_scheduler_error_is_recorded() -> None:
+    async def scenario() -> None:
+        class Boom(ScriptedMind):
+            async def next_action(self, ctx: MindContext) -> ActionIntent:
+                raise ValueError("boom")
+
+        runtime = TownRuntime(make_sim({"ann": (CAFE, Boom())}), tick_interval_seconds=0.0)
+        await runtime.start()
+        await asyncio.sleep(0.05)
+        assert not runtime.scheduler_running
+        assert runtime.last_error == "ValueError: boom"
 
     asyncio.run(scenario())
 

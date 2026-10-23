@@ -24,24 +24,31 @@ class TownRuntime:
         self._lock = asyncio.Lock()
         self._subscribers: set[asyncio.Queue[WorldSnapshot]] = set()
         self._task: asyncio.Task[None] | None = None
+        self._stop_event = asyncio.Event()
+        self._snapshot = simulation.snapshot()
+        self._text = simulation.text_state()
+        """마지막으로 완결된 틱의 상태. 틱 도중의 반쪽 상태는 밖으로 내지 않는다."""
+        self.last_error: str | None = None
 
     @property
     def scheduler_running(self) -> bool:
         return self._task is not None and not self._task.done()
 
     def snapshot(self) -> WorldSnapshot:
-        return self._simulation.snapshot()
+        return self._snapshot
 
     def text_state(self) -> str:
-        return self._simulation.text_state()
+        return self._text
 
     async def advance(self, minutes: int) -> WorldSnapshot:
         """`minutes`틱을 차례로 돌리고 매 틱 뒤 구독자에게 알린다."""
         async with self._lock:
             for _ in range(minutes):
                 await self._simulation.tick()
-                self._publish(self._simulation.snapshot())
-            return self._simulation.snapshot()
+                self._snapshot = self._simulation.snapshot()
+                self._text = self._simulation.text_state()
+                self._publish(self._snapshot)
+            return self._snapshot
 
     def subscribe(self) -> asyncio.Queue[WorldSnapshot]:
         queue: asyncio.Queue[WorldSnapshot] = asyncio.Queue(maxsize=1)
@@ -61,23 +68,26 @@ class TownRuntime:
     async def start(self) -> None:
         if self.scheduler_running:
             return
-        self._task = asyncio.create_task(self._run())
+        self._stop_event = asyncio.Event()
+        self.last_error = None
+        self._task = asyncio.create_task(self._run(self._stop_event))
 
     async def stop(self) -> None:
+        """진행 중인 틱은 끝까지 마친 뒤 멈춘다. 취소는 틱 사이 sleep에만 걸린다."""
         task = self._task
-        self._task = None
-        if task is None:
-            return
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
+        self._stop_event.set()
+        if task is not None:
             await task
+        self._task = None
 
-    async def _run(self) -> None:
+    async def _run(self, stop_event: asyncio.Event) -> None:
         try:
-            while True:
+            while not stop_event.is_set():
                 await self.advance(1)
-                await asyncio.sleep(self.tick_interval_seconds)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(
+                        stop_event.wait(), timeout=self.tick_interval_seconds
+                    )
+        except Exception as error:
+            self.last_error = f"{type(error).__name__}: {error}"
             logger.exception("마을 스케줄러가 오류로 멈췄다")
