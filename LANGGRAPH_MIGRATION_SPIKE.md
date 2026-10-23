@@ -1,5 +1,7 @@
 # LangGraph Migration Spike
 
+> 상태(2026-10-23): 이 문서의 1순위 대상이던 reaction 파이프라인과 `agent_brain`은 옛 2인 대화 스택과 함께 삭제했다(마을 `LLMMind`로 대체). 계획(`agents/planning/graph.py`)도 LangGraph 상태 그래프 세 벌을 재시도 헬퍼 하나로 바꿨다. 지금 LangGraph를 쓰는 곳은 성찰(`agents/reflection/graph.py`)뿐이다. 아래는 당시 스파이크 기록이다.
+
 ## Goal
 
 - Check which existing backend concepts can be reconstituted as LangGraph state, nodes, edges, or subgraphs.

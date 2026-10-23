@@ -410,7 +410,8 @@
   - DoD:
     - [x] `window.render_game_to_text` / `window.advanceTime`이 개발 빌드에서 동작한다
 - [x] `P2` 구조 정책 기준선 줄이기: `llm/` 큰 파일 분할, `tests/` 소스 구조 미러링
-- [ ] `P2` 남은 기준선: `agents/planning/graph.py` 분할 (brain·reaction graph·planning state는 옛 스택 삭제로 해소)
+- [x] `P2` 남은 기준선: `agents/planning/graph.py` 분할 (brain·reaction graph·planning state는 옛 스택 삭제로 해소, graph.py는 재시도 헬퍼로 451 → 189줄, 기준선 0건, 2026-10-23)
+- [x] `P2` 의존 방향 위반 제거: `llm`이 `agents`를 import하던 계획·성찰 프롬프트·파싱·`LlmGateway`를 agents로 올리고 `tests/policy/test_layering.py`로 고정
 
 ### 6-B. 2차: 통합
 

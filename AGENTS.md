@@ -20,14 +20,18 @@
 ```
 packages/
 ├── shared/              # 공통 타입, 상수, DTO, 메시지 스키마
-├── frontend/            # React 19 + Phaser 3
+├── frontend/            # React 19 + Phaser 4
 │   ├── src/game/        # Phaser scene, 엔티티, 렌더링 로직
 │   ├── src/components/  # React UI 컴포넌트 (DOM 조작 금지)
+│   ├── src/net/         # WebSocket 수신·틱 간격 추정 (DOM 접근은 여기까지)
+│   ├── src/tiled/       # Tiled 맵 파싱·지도 상수
 │   └── src/stores/      # Zustand 상태 저장소 (UI-게임 브릿지)
 └── backend/             # FastAPI
-    ├── src/api/         # HTTP/WebSocket 엔드포인트
-    ├── src/agents/      # 에이전트 뇌, decision pipeline
-    └── src/memory/      # Retrieval Scorer, memory stream, pgvector 인터페이스
+    ├── src/api/         # HTTP/WebSocket 엔드포인트 (TownRuntime 서비스)
+    ├── src/world/       # 마을 틱 루프·런타임, 공간, 주민(몸), 시나리오 조립, 공유 계약
+    ├── src/minds/       # 마음: LLMMind(논문 인지 루프), ScheduleMind(규칙), 공유 사회 상태
+    ├── src/agents/      # 인지 부품: memory stream·Retrieval Scorer, reflection, planning, LlmGateway
+    └── src/llm/         # LLM 클라이언트(응답 캐시), 임베딩, 중요도 채점, 템플릿 로더
 ```
 
 - **금지**: Phaser에서 DOM 직접 접근(`document.querySelector` 등).
@@ -101,16 +105,16 @@ LLM 호출/행동 설계 시 프롬프트 컨텍스트는 다음을 모두 포�
 - 작업 완료 시마다 관련 변경만 선별해 Conventional Commit 형식으로 커밋한다.
 - 회귀를 줄이기 위해 파일 범위를 좁은 변경으로 반복 적용하고, 불필요한 리팩터링을 피한다.
 
-## 9. Brain / Governance / Diagnostics 경계 규칙
+## 9. Mind / Governance / Diagnostics 경계 규칙
 
 논문 핵심 루프(Perceive/Retrieve/Reflect/Plan/React)와 운영 디버깅 정보를 섞지 않기 위해 아래 규칙을 따른다.
 
-- `agents/agent_brain.py`의 `ActionLoopResult`에는 런타임 행동에 필요한 최소 필드만 유지한다. (예: `talk`, `utterance`, `speak_decision`, `action_intent`, `silent_reason`)
-- LLM 반응 파싱/재시도/억제/fallback/threshold 관련 추적 정보는 `llm/governance` 또는 `llm/guardrails`가 소유한다.
-- `raw_response`, `parse_error`, retry count, threshold, suppress/fallback reason 같은 필드는 도메인 상태가 아닌 **governance trace**로 취급한다.
-- `model_thought`, `self_critique`, `decision_process`, `action_summary`처럼 관측성 중심의 표현/포맷팅은 Brain 내부에서 조립하지 말고 별도 diagnostics 모듈에서 생성한다.
-- API/시뮬레이터 로그 출력 형식은 diagnostics 계층에서 결정하고, Brain은 해당 형식에 의존하지 않는다.
-- 새 필드를 추가할 때는 먼저 분류한다: (1) 행동 결정에 필수인 도메인 필드인지, (2) 운영/디버깅 필드인지. (2)는 Brain 결과 객체에 직접 추가하지 않는다.
+- 마음이 몸·마을에 넘기는 결과(`ActionIntent`, `Utterance`, `EncounterChoice`, `world/contracts.py`)에는 행동에 필요한 필드만 둔다.
+- LLM 응답 파싱·재시도·fallback 같은 처리와 그 추적 정보는 그 호출을 소유한 모듈이 가진다: 계획은 `agents/planning`(재시도 헬퍼·파싱), 성찰은 `agents/reflection`, 중요도는 `llm/importance_scorer`, 반응 판정은 `minds/llm/planning/reaction`.
+- `raw_response`, `parse_error`, retry count, threshold, fallback reason 같은 필드는 도메인 상태가 아닌 **governance trace**로 취급한다.
+- 판정 근거처럼 관측성 중심의 정보는 결과 객체에 싣지 말고 마음의 진단 버퍼(예: `LLMMind.reaction_log`)나 별도 diagnostics에 둔다.
+- API·로그 출력 형식은 api/diagnostics 쪽이 정하고, 마음은 그 형식에 의존하지 않는다.
+- 새 필드를 추가할 때는 먼저 분류한다: (1) 행동 결정에 필수인 도메인 필드인지, (2) 운영/디버깅 필드인지. (2)는 마음의 결과 객체에 직접 추가하지 않는다.
 
 ## 10. 코드 구조 정책 (Code Structure Policy)
 
@@ -133,7 +137,7 @@ LLM 호출/행동 설계 시 프롬프트 컨텍스트는 다음을 모두 포�
 - 기술 계층(`utils/`, `helpers/`, `models/`)으로 모으지 않고 기능으로 묶는다. 예: `world/space/`, `world/residents/`, `minds/schedule/`.
 - 폴더마다 공개 진입점을 둔다(Python `__init__.py`의 `__all__`, TS `index.ts`). 다른 기능은 진입점만 import하고 내부 파일을 직접 import하지 않는다.
 - 기능 폴더 안 기본 배치: `contracts.py`(Protocol·DTO·스키마) → 구현 파일들 → `README.md`(10줄 안팎: 책임, 진입점, 의존 방향). 새 기능 폴더를 만들면 README도 같이 만든다.
-- 의존 방향은 한쪽으로만: `api → world → minds/agents → memory·llm`. 아래 층이 위 층을 import하지 않는다. 순환이 필요해 보이면 `contracts`로 인터페이스를 내린다.
+- 의존 방향은 한쪽으로만: `api → world → minds/agents → memory·llm`. 아래 층이 위 층을 import하지 않는다. 순환이 필요해 보이면 `contracts`로 인터페이스를 내린다. `tests/policy/test_layering.py`가 AST로 강제한다(`llm`→`agents`·`minds`·`world`·`api`, `agents`→`minds`·`world`·`api`, `minds`·`world`→`api` 금지, 문자열 동적 import 포함).
 
 ### 10-3. 테스트 배치
 
