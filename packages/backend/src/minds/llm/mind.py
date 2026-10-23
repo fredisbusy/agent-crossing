@@ -46,7 +46,7 @@ from .prompts import (
 )
 from .recall import MemoryWriter
 from .summary import build_summary, identity_text
-from .routine import PlannedRoutine, plan_request, resolve_place
+from .planning import PlannedRoutine, plan_request, resolve_place
 
 DEFAULT_MAX_TURNS = 6
 """한 대화에서 내가 말하는 최대 횟수. 마지막 말은 작별이다."""

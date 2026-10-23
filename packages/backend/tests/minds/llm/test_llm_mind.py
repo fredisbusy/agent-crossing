@@ -3,7 +3,7 @@ import datetime
 from dataclasses import replace
 
 from llm_fakes import CAFE, DAY, HOME, PARK, ScriptedClient, ctx, make_mind, view
-from minds.llm.routine import plan_request
+from minds.llm.planning import plan_request
 from minds.social import SocialSeed, SpeechStyle, event_act
 from world.contracts import (
     ConversationView,

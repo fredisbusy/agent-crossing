@@ -7,7 +7,7 @@ from .contracts import (
 )
 from .memory import ManagedMemory
 from .mind import LLMMind
-from .routine import PlannedRoutine, resolve_place
+from .planning import PlannedRoutine, resolve_place
 
 __all__ = [
     "DayPlanner",

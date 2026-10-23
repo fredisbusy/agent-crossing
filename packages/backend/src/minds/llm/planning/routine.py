@@ -17,7 +17,7 @@ from minds.social import (
 )
 from world.contracts import LOCATION_SEPARATOR, Holiday, LocationPath
 
-from .contracts import LlmPersona
+from ..contracts import LlmPersona
 
 WAKE_HOUR = 7
 """계획이 없을 때 일어나는 시각."""
