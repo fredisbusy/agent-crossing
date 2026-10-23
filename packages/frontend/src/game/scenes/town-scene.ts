@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { ResidentSnapshot } from "@agent-crossing/shared";
 import { TickIntervalEstimator } from "../../net";
 import { useWorldStore } from "../../stores";
-import { DaylightLayer } from "../daylight";
+import { DaylightLayer } from "../daylight/layer";
 import { buildTownMap, LocationOverlay, preloadTownMap } from "../map";
 import { BubbleTracker, MotionTracker, ResidentView, SpotMap, TagLayoutCache, type TagObstacle } from "../residents";
 import { attachCameraControls } from "./camera-controls";

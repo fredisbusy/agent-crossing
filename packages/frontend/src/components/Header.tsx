@@ -1,6 +1,5 @@
 import { useWorldStore } from "../stores";
-// phaser를 끌어오는 `../game/daylight` 인덱스 대신 순수 모듈을 직접 가져온다.
-import { isNightHour, simHourOf } from "../game/daylight/daylight-phase";
+import { isNightHour, simHourOf } from "../game/daylight";
 import {
   CONNECTION_DOT_CLASSES,
   CONNECTION_LABELS,

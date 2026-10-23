@@ -90,16 +90,6 @@ export function classifyAction(input: ActionInput): ActionKind | null {
   return classifyText(input.action_description ?? "", input.emoji ?? "");
 }
 
-/** 정규식 수십 개를 프레임마다 돌리지 않도록 (문구, 이모지)별 결과를 기억한다. */
-const TEXT_CACHE_LIMIT = 512;
-const textCache = new Map<string, ActionKind | null>();
-
 function classifyText(text: string, emoji: string): ActionKind | null {
-  const key = `${text}\u0000${emoji}`;
-  const cached = textCache.get(key);
-  if (cached !== undefined) return cached;
-  const kind = firstMatch(SPECIFIC_TEXT_RULES, text) ?? firstMatch(EMOJI_RULES, emoji) ?? firstMatch(GENERIC_TEXT_RULES, text);
-  if (textCache.size >= TEXT_CACHE_LIMIT) textCache.clear();
-  textCache.set(key, kind);
-  return kind;
+  return firstMatch(SPECIFIC_TEXT_RULES, text) ?? firstMatch(EMOJI_RULES, emoji) ?? firstMatch(GENERIC_TEXT_RULES, text);
 }

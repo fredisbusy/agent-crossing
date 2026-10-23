@@ -43,6 +43,13 @@ function ensureTilesetTexture(scene: Phaser.Scene): void {
   texture.refresh();
 }
 
+function drawCodeTileLayer(scene: Phaser.Scene, tilemap: Phaser.Tilemaps.Tilemap): Phaser.Tilemaps.TilemapLayer | null {
+  ensureTilesetTexture(scene);
+  const tileset = tilemap.addTilesetImage(TILESET_NAME, TILESET_TEXTURE_KEY, TILE_SIZE, TILE_SIZE, 0, 0, 1);
+  if (!tileset) return null;
+  return tilemap.createLayer(GROUND_LAYER, tileset, 0, 0);
+}
+
 function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): TownMap | null {
   if (!scene.cache.tilemap.exists(key)) return null;
   const tilemap = scene.make.tilemap({ key });
@@ -54,10 +61,7 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
     if (!data) return null;
     groundRows = data;
   } else {
-    ensureTilesetTexture(scene);
-    const tileset = tilemap.addTilesetImage(TILESET_NAME, TILESET_TEXTURE_KEY, TILE_SIZE, TILE_SIZE, 0, 0, 1);
-    if (!tileset) return null;
-    const layer = tilemap.createLayer(GROUND_LAYER, tileset, 0, 0);
+    const layer = drawCodeTileLayer(scene, tilemap);
     if (!layer) return null;
     groundRows = layer.layer.data;
   }
@@ -73,7 +77,10 @@ function tryBuild(scene: Phaser.Scene, key: string, usedFallback: boolean): Town
     const isDoor = (tx: number, ty: number): boolean => ground[ty * tilemap.width + tx] === TILE.door;
     facades = planFacades(extractMapSprites(tilemap.getObjectLayer(FACADE_LAYER)?.objects ?? []), isDoor);
     const plan = planPixelKit(ground, tilemap.width, tilemap.height, { areas, furniture, decor, facades });
-    signRects = drawPixelKit(scene, plan, tilemap.widthInPixels, tilemap.heightInPixels) ?? signRects;
+    const drawnSigns = drawPixelKit(scene, plan, tilemap.widthInPixels, tilemap.heightInPixels);
+    // 아틀라스는 있는데 바닥 캔버스를 못 만든 드문 경우: 바닥이 비지 않게 코드 타일 레이어를 그린다.
+    if (drawnSigns) signRects = drawnSigns;
+    else drawCodeTileLayer(scene, tilemap);
     drawFacades(scene, facades);
   }
   return {

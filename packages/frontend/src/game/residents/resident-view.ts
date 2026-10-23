@@ -72,6 +72,9 @@ export class ResidentView {
   private bubbleDepth = BUBBLE_DEPTH;
   private tile = { x: 0, y: 0 };
   private pxY = 0;
+  private kindText: string | null = null;
+  private kindEmoji: string | null = null;
+  private kindOfText: ActionKind | null = null;
   private shownKind: ActionKind | "emoji" | null = null;
   /** Phaser는 같은 값을 넣어도 depth 정렬을 예약하므로 마지막으로 넣은 값을 기억해 바뀔 때만 설정한다. */
   private bodyDepth = Number.NaN;
@@ -145,14 +148,23 @@ export class ResidentView {
     this.ring.setVisible(selected);
     this.tile = { x: resident.tile.x, y: resident.tile.y };
     const moving = this.figure?.isMoving ?? false;
-    const kind = classifyAction({
-      action_description: resident.action_description,
-      emoji: resident.emoji,
-      talking: bubble !== null,
-      moving,
-    });
+    const kind = moving || bubble !== null ? classifyAction({ ...this.textInput(resident), talking: bubble !== null, moving }) : this.textKind(resident);
     this.applyPose(kind, moving);
     this.syncLabels(resident, kind, bubble);
+  }
+
+  private textInput(resident: ResidentSnapshot): { action_description: string | null; emoji: string | null } {
+    return { action_description: resident.action_description, emoji: resident.emoji };
+  }
+
+  /** 걷지도 말하지도 않을 때의 행동 종류. 정규식 수십 개를 프레임마다 돌리지 않도록 마지막 (문구, 이모지) 결과를 기억한다. */
+  private textKind(resident: ResidentSnapshot): ActionKind | null {
+    if (resident.action_description !== this.kindText || resident.emoji !== this.kindEmoji) {
+      this.kindText = resident.action_description;
+      this.kindEmoji = resident.emoji;
+      this.kindOfText = classifyAction({ ...this.textInput(resident), talking: false, moving: false });
+    }
+    return this.kindOfText;
   }
 
   /** 이름표의 월드 좌표 사각형(겹침 회피용). 선택된 주민·아래쪽 주민이 우선. */
