@@ -1,6 +1,4 @@
-import { TILE_SIZE } from "../../../town-layout";
-import { TILE } from "../fallback-map";
-import type { LocationArea } from "../locations";
+import { TILE, TILE_SIZE, type LocationArea } from "../../../tiled";
 import type { MapSprite } from "../objects";
 import { variantHash } from "./hash";
 

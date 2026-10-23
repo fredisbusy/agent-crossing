@@ -1,23 +1,12 @@
+import { rectContains, type TileRect } from "../tiled";
+
 /**
  * 내장 대체 마을의 기하 정보 (SPEC §15).
  * town.json이 없을 때의 대체 맵과 가짜 피드(?mock=1)가 같은 도로를 공유한다.
  */
 
-export const TILE_SIZE = 16;
 export const FALLBACK_MAP_WIDTH = 40;
 export const FALLBACK_MAP_HEIGHT = 28;
-
-export interface TilePoint {
-  x: number;
-  y: number;
-}
-
-export interface TileRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 export interface NamedArea {
   location_path: string;
@@ -44,10 +33,6 @@ export const FALLBACK_AREAS: readonly NamedArea[] = [
   { location_path: "Town > Pond", rect: POND },
   { location_path: "Town > Plaza", rect: PLAZA },
 ];
-
-export function rectContains(rect: TileRect, x: number, y: number): boolean {
-  return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
-}
 
 /** 타일이 속한 장소 경로. 어느 영역도 아니면 `Town`. */
 export function locationPathAt(x: number, y: number): string {

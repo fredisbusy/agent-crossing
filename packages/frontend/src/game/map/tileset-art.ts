@@ -1,5 +1,5 @@
-import { TILE_SIZE } from "../../town-layout";
-import { TILE, TILE_COUNT } from "./fallback-map";
+import { TILE, TILE_SIZE } from "../../tiled";
+import { TILE_COUNT } from "./fallback-map";
 
 /** 아늑한 마을 팔레트. */
 export const PALETTE = {

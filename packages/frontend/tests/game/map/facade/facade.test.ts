@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { TILE } from "../../../../src/game/map/fallback-map";
+import { TILE } from "../../../../src/tiled";
 import {
   FACADE_HEIGHT,
   FACADE_LAYER,

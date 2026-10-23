@@ -4,10 +4,10 @@ import {
   findPath,
   locationAt,
   walkGridFromTiled,
-  type TilePoint,
   type WalkGrid,
   type WalkPlace,
 } from "../town-layout";
+import type { TilePoint } from "../tiled";
 
 /** 시뮬레이션 시각이 틱마다 흐르는 분(가짜 피드 전용). */
 export const MOCK_SIM_MINUTES_PER_TICK = 1;

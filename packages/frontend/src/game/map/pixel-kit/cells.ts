@@ -1,7 +1,5 @@
 import type { FacadePlan } from "../facade";
-import { TILE } from "../fallback-map";
-import { TILE_SIZE } from "../../../town-layout";
-import type { LocationArea } from "../locations";
+import { TILE, TILE_SIZE, type LocationArea } from "../../../tiled";
 import type { MapSprite } from "../objects";
 import { type CritterPlan, planCritters } from "./critters";
 import { cellHash, variantHash } from "./hash";

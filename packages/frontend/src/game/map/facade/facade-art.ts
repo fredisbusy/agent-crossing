@@ -1,4 +1,4 @@
-import { TILE_SIZE } from "../../../town-layout";
+import { TILE_SIZE } from "../../../tiled";
 import { FACADE_HEIGHT, type FacadePlan } from "./facade-plan";
 import { DOOR_TOP, doorGlass, facadeSeed, type GlassRect, hasWindow, WINDOW_GLASS } from "./facade-glass";
 import type { FacadeStyle } from "./facade-style";

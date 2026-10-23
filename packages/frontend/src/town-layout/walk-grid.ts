@@ -1,4 +1,15 @@
-import type { TilePoint, TileRect } from "./fallback-layout";
+import {
+  asRecord,
+  COLLISION_LAYER,
+  extractLocationAreas,
+  findLayer,
+  LOCATIONS_LAYER,
+  PATH_SEPARATOR,
+  smallestAreaAt,
+  toTileRect,
+  type TilePoint,
+  type TileRect,
+} from "../tiled";
 
 /** Tiled 맵의 `collision` 레이어와 `locations` 사각형으로 만든 통행 격자 (SPEC §15). */
 export interface WalkGrid {
@@ -23,11 +34,6 @@ export interface WalkPlace {
   tile: TilePoint;
 }
 
-const COLLISION_LAYER = "collision";
-const LOCATIONS_LAYER = "locations";
-const LOCATION_PATH_PROPERTY = "location_path";
-const SEPARATOR = " > ";
-
 /** 4방향 이웃. 순서를 고정해 경로가 결정론적이다. */
 const NEIGHBORS: readonly TilePoint[] = [
   { x: 0, y: -1 },
@@ -36,55 +42,6 @@ const NEIGHBORS: readonly TilePoint[] = [
   { x: -1, y: 0 },
 ];
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
-}
-
-function findLayer(layers: unknown, name: string): Record<string, unknown> | null {
-  if (!Array.isArray(layers)) return null;
-  for (const layer of layers as unknown[]) {
-    const record = asRecord(layer);
-    if (record?.name === name) return record;
-  }
-  return null;
-}
-
-function readLocationPath(properties: unknown): string | null {
-  if (!Array.isArray(properties)) return null;
-  for (const entry of properties as unknown[]) {
-    const record = asRecord(entry);
-    if (record?.name === LOCATION_PATH_PROPERTY && typeof record.value === "string") return record.value;
-  }
-  return null;
-}
-
-function readAreas(layer: Record<string, unknown> | null, tileWidth: number, tileHeight: number): WalkArea[] {
-  const objects = layer?.objects;
-  if (!Array.isArray(objects)) return [];
-  const areas: WalkArea[] = [];
-  for (const raw of objects as unknown[]) {
-    const object = asRecord(raw);
-    const path = readLocationPath(object?.properties);
-    const { x, y, width, height } = object ?? {};
-    if (path === null || typeof x !== "number" || typeof y !== "number") continue;
-    if (typeof width !== "number" || typeof height !== "number") continue;
-    areas.push({
-      location_path: path,
-      rect: {
-        x: Math.floor(x / tileWidth),
-        y: Math.floor(y / tileHeight),
-        width: Math.round(width / tileWidth),
-        height: Math.round(height / tileHeight),
-      },
-    });
-  }
-  return areas;
-}
-
-function contains(rect: TileRect, x: number, y: number): boolean {
-  return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
-}
-
 export function isWalkable(grid: WalkGrid, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x >= grid.width || y >= grid.height) return false;
   return !grid.blocked[y * grid.width + x];
@@ -92,12 +49,8 @@ export function isWalkable(grid: WalkGrid, x: number, y: number): boolean {
 
 /** 칸이 속한 가장 작은 장소의 경로. 없으면 마을 이름. */
 export function locationAt(grid: WalkGrid, x: number, y: number): string {
-  let best: WalkArea | null = null;
-  for (const area of grid.areas) {
-    if (!contains(area.rect, x, y)) continue;
-    if (best === null || area.rect.width * area.rect.height < best.rect.width * best.rect.height) best = area;
-  }
-  return best ? best.location_path : grid.outsideName;
+  const area = smallestAreaAt(grid.areas, x, y, (candidate) => candidate.rect);
+  return area ? area.location_path : grid.outsideName;
 }
 
 /** 사각형 중심에서 가장 가까운 통행 칸(사각형 안). 동점이면 y, x가 작은 쪽. */
@@ -121,7 +74,7 @@ function standTile(grid: WalkGrid, rect: TileRect): TilePoint | null {
 
 function leafAreas(areas: readonly WalkArea[]): WalkArea[] {
   return areas.filter(
-    (area) => !areas.some((other) => other.location_path.startsWith(area.location_path + SEPARATOR)),
+    (area) => !areas.some((other) => other.location_path.startsWith(area.location_path + PATH_SEPARATOR)),
   );
 }
 
@@ -134,8 +87,12 @@ export function walkGridFromTiled(map: unknown): WalkGrid | null {
   if (typeof tilewidth !== "number" || typeof tileheight !== "number") return null;
   const data = findLayer(layers, COLLISION_LAYER)?.data;
   if (!Array.isArray(data) || data.length !== width * height) return null;
-  const areas = readAreas(findLayer(layers, LOCATIONS_LAYER), tilewidth, tileheight);
-  const outsideName = areas[0]?.location_path.split(SEPARATOR)[0] ?? "Town";
+  const objects = findLayer(layers, LOCATIONS_LAYER)?.objects;
+  const areas: WalkArea[] = (Array.isArray(objects) ? extractLocationAreas(objects as unknown[]) : []).map((area) => ({
+    location_path: area.location_path,
+    rect: toTileRect(area, tilewidth, tileheight),
+  }));
+  const outsideName = areas[0]?.location_path.split(PATH_SEPARATOR)[0] ?? "Town";
   const grid: WalkGrid = {
     width,
     height,

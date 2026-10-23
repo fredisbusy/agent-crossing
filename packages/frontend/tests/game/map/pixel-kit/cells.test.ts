@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import atlas from "../../../../src/assets/pixel-kit/atlas.tp.json";
-import { buildFallbackMap, TILE } from "../../../../src/game/map/fallback-map";
+import { buildFallbackMap } from "../../../../src/game/map/fallback-map";
+import { TILE } from "../../../../src/tiled";
 import { planPixelKit } from "../../../../src/game/map/pixel-kit";
 import { neighborMask } from "../../../../src/game/map/pixel-kit/cells";
-import type { TiledTileLayer } from "../../../../src/game/map/tiled-types";
+import type { TiledTileLayer } from "../../../../src/tiled";
 
 const frames = new Set(Object.keys(atlas.frames));
 const names = (plan: ReturnType<typeof planPixelKit>) => plan.ground.map((d) => d.frame);

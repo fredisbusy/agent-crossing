@@ -1,6 +1,5 @@
-import { TILE_SIZE } from "../../../town-layout";
+import { TILE_SIZE, type LocationArea } from "../../../tiled";
 import { EAVE_BOTTOM, type FacadePlan } from "../facade";
-import type { LocationArea } from "../locations";
 import { BUILDING_STYLES, buildingNameOf } from "./place-style";
 
 /** 건물 하나에 걸 간판의 위치 계획(글자 폭은 그릴 때 잰다). */

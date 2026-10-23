@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { ResidentSnapshot } from "@agent-crossing/shared";
-import { TILE_SIZE } from "../../town-layout";
+import { TILE_SIZE } from "../../tiled";
 import { hasPixelKit, PIXEL_KIT_ATLAS_KEY } from "../map/pixel-kit";
 import { NameTag, SpeechBubble, type TagBox, type TagOffset } from "./labels";
 import { choosePose, classifyAction, type ActionKind, type Pose, type SpotMap } from "./pose";

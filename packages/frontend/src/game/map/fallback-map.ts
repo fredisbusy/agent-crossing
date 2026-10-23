@@ -10,30 +10,19 @@ import {
   PLAZA,
   SHOP,
   SHOP_DOOR,
-  TILE_SIZE,
-  rectContains,
-  type TileRect,
 } from "../../town-layout";
 import {
   COLLISION_LAYER,
   GROUND_LAYER,
-  LOCATIONS_LAYER,
   LOCATION_PATH_PROPERTY,
+  LOCATIONS_LAYER,
+  rectContains,
+  TILE,
+  TILE_SIZE,
   TILESET_NAME,
+  type TileRect,
   type TiledMap,
-} from "./tiled-types";
-
-/** 타일셋 gid (SPEC §15). */
-export const TILE = {
-  grass: 1,
-  road: 2,
-  floor: 3,
-  wall: 4,
-  water: 5,
-  furniture: 6,
-  door: 7,
-  tree: 8,
-} as const;
+} from "../../tiled";
 
 export const TILE_COUNT = 8;
 const BLOCKING = new Set<number>([TILE.wall, TILE.water, TILE.furniture, TILE.tree]);
