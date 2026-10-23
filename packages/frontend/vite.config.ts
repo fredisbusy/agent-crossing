@@ -1,5 +1,5 @@
 import { readdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -7,21 +7,27 @@ import tailwindcss from '@tailwindcss/vite';
 // 런타임이 publicDir에서 요청하는 파일(town-map.ts, mock-town.ts의 `town.json`). 편집용 그림·README는 배포하지 않는다.
 const RUNTIME_PUBLIC_FILES: ReadonlySet<string> = new Set(['town.json']);
 
+// 빌드가 직접 만드는 이름. publicDir에 같은 이름이 생겨도 지우지 않는다.
+const BUILD_OUTPUT_NAMES: ReadonlySet<string> = new Set(['index.html']);
+
 // 빌드 뒤 outDir에 복사된 publicDir 항목 중 런타임 파일이 아닌 것을 지운다(dev 서버는 publicDir 전체를 그대로 서빙).
 function pruneEditorOnlyPublicFiles(): Plugin {
   let publicDir = '';
   let outDir = '';
+  let assetsDir = '';
   return {
     name: 'prune-editor-only-public-files',
     apply: 'build',
     configResolved(config) {
       publicDir = config.publicDir;
-      outDir = join(config.root, config.build.outDir);
+      outDir = resolve(config.root, config.build.outDir);
+      assetsDir = config.build.assetsDir;
     },
     closeBundle() {
       if (publicDir === '') return;
       for (const name of readdirSync(publicDir)) {
-        if (!RUNTIME_PUBLIC_FILES.has(name)) rmSync(join(outDir, name), { recursive: true, force: true });
+        if (RUNTIME_PUBLIC_FILES.has(name) || BUILD_OUTPUT_NAMES.has(name) || name === assetsDir) continue;
+        rmSync(join(outDir, name), { recursive: true, force: true });
       }
     },
   };
