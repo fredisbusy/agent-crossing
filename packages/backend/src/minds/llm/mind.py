@@ -81,6 +81,7 @@ class LLMMind:
     # --- Mind 프로토콜 --------------------------------------------------------
 
     async def next_action(self, ctx: MindContext) -> ActionIntent:
+        await self._flush()
         await asyncio.to_thread(self._prepare_day, ctx)
         slot = self.social.agenda.slot_at(ctx.now)
         return intent_for_slot(slot, ctx.self_state.location_path)
@@ -88,6 +89,7 @@ class LLMMind:
     async def on_encounter(
         self, ctx: MindContext, other: ResidentPublicView
     ) -> EncounterChoice:
+        await self._flush()
         if self.social.friendship.in_cooldown(other.resident_id, ctx.now):
             return "pass_by"
         if self.social.talking_points(other.resident_id, ctx.now, ctx.holidays):
@@ -98,6 +100,7 @@ class LLMMind:
     async def respond(
         self, ctx: MindContext, conversation: ConversationView
     ) -> Utterance | None:
+        await self._flush()
         me = self.persona.resident_id
         other = partner_of(me, conversation)
         if other is None or should_stop(me, conversation):
@@ -112,6 +115,11 @@ class LLMMind:
             if obs.kind == "utterance" and obs.utterance is not None:
                 self.social.hear(obs.utterance, obs.observed_at)
         await asyncio.to_thread(self._remember_all, observations)
+
+    async def _flush(self) -> None:
+        """대기 중인 내 발화가 있으면 저장한다(관찰이 없어도 검색 전에 반영)."""
+        if self._writer.has_pending:
+            await asyncio.to_thread(self._writer.flush)
 
     # --- 계획 -----------------------------------------------------------------
 
@@ -147,13 +155,14 @@ class LLMMind:
         if self._seeded:
             return
         self._seeded = True
-        for text in self.persona.seed_memories:
-            self._writer.store(text, now)
+        items = [(text, now) for text in self.persona.seed_memories]
         for fact in self.social.facts.all():
             if fact.source_resident_id == self.persona.resident_id:
-                self._writer.store(f"{fact.topic}: {fact.fact}", now)
+                items.append((f"{fact.topic}: {fact.fact}", now))
+        self._writer.store_many(items)
 
     def _yesterday(self, now: datetime.datetime) -> str:
+        self._writer.flush()
         found = self._memory.retrieve("어제 한 일", now, RETRIEVE_TOP_K)
         return " ".join(m.content for m in found)
 
@@ -162,6 +171,7 @@ class LLMMind:
     def _scene(
         self, ctx: MindContext, partner_id: str, partner_name: str, query: str
     ) -> Scene:
+        self._writer.flush()
         action = ctx.self_state.action
         return Scene(
             now=ctx.now,
@@ -227,7 +237,7 @@ class LLMMind:
         )
         self.social.said(utterance, ctx.now)
         partner = names.get(other, other)
-        self._writer.store(
+        self._writer.defer(
             f'{self.persona.display_name}가 {partner}에게 말했다: "{draft.text}"',
             ctx.now,
         )
