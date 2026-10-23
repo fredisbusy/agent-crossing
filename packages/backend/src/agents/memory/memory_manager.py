@@ -103,27 +103,17 @@ class MemoryManager:
         context: ObservationContext,
         importance: int | None = None,
     ) -> MemoryObject:
-        final_importance = importance
-        if final_importance is None:
-            scoring_context = ImportanceScoringContext(
-                observation=content,
-                agent_name=context.agent_name,
-                identity_stable_set=context.identity_stable_set,
-                current_plan=context.current_plan,
-            )
-            final_importance = self.importance_scorer.score(scoring_context)
-        final_importance = clamp_importance(final_importance)
-
-        self.memory_stream.add_memory(
+        return self._store_memory(
             node_type=NodeType.OBSERVATION,
-            citations=None,
             content=content,
             now=now,
-            importance=final_importance,
             embedding=embedding,
+            importance=importance,
+            citations=None,
+            agent_name=context.agent_name,
+            identity_stable_set=context.identity_stable_set,
+            current_plan=context.current_plan,
         )
-
-        return self.memory_stream.memories[-1]
 
     def create_observation_from_text(
         self,
@@ -199,37 +189,13 @@ class MemoryManager:
         embedding = self.embedding_encoder.encode(
             EmbeddingEncodingContext(text=insight.context)
         )
-
-        final_importance = importance
-        if final_importance is None:
-            scoring_context = ImportanceScoringContext(
-                observation=insight.context,
-                agent_name=context.agent_name,
-                identity_stable_set=context.identity_stable_set,
-                current_plan=context.current_plan,
-            )
-            final_importance = self.importance_scorer.score(scoring_context)
-        final_importance = clamp_importance(final_importance)
-
-        known_memory_ids = {memory.id for memory in self.memory_stream.memories}
-        filtered_citations: list[int] = []
-        for citation_memory_id in insight.citation_memory_ids:
-            if citation_memory_id not in known_memory_ids:
-                continue
-            if citation_memory_id in filtered_citations:
-                continue
-            filtered_citations.append(citation_memory_id)
-
-        self.memory_stream.add_memory(
-            node_type=NodeType.REFLECTION,
-            citations=filtered_citations,
-            content=insight.context,
+        return self._store_reflection(
+            insight,
             now=now,
-            importance=final_importance,
             embedding=embedding,
+            context=context,
+            importance=importance,
         )
-
-        return self.memory_stream.memories[-1]
 
     def create_plan(
         self,
@@ -242,25 +208,78 @@ class MemoryManager:
         embedding = self.embedding_encoder.encode(
             EmbeddingEncodingContext(text=content)
         )
-
-        final_importance = importance
-        if final_importance is None:
-            scoring_context = ImportanceScoringContext(
-                observation=content,
-                agent_name=context.agent_name,
-                identity_stable_set=context.identity_stable_set,
-                current_plan=context.current_plan,
-            )
-            final_importance = self.importance_scorer.score(scoring_context)
-        final_importance = clamp_importance(final_importance)
-
-        self.memory_stream.add_memory(
+        return self._store_memory(
             node_type=NodeType.PLAN,
-            citations=None,
             content=content,
             now=now,
-            importance=final_importance,
             embedding=embedding,
+            importance=importance,
+            citations=None,
+            agent_name=context.agent_name,
+            identity_stable_set=context.identity_stable_set,
+            current_plan=context.current_plan,
         )
 
+    def _store_reflection(
+        self,
+        insight: InsightWithCitation,
+        *,
+        now: datetime.datetime,
+        embedding: np.ndarray,
+        context: ReflectionContext,
+        importance: int | None,
+    ) -> MemoryObject:
+        # MemoryStream.add_memory는 id=len(memories)로 매기므로 id는 0..len-1 범위다.
+        memory_count = len(self.memory_stream.memories)
+        filtered_citations: list[int] = []
+        for citation_memory_id in insight.citation_memory_ids:
+            if not 0 <= citation_memory_id < memory_count:
+                continue
+            if citation_memory_id in filtered_citations:
+                continue
+            filtered_citations.append(citation_memory_id)
+        return self._store_memory(
+            node_type=NodeType.REFLECTION,
+            content=insight.context,
+            now=now,
+            embedding=embedding,
+            importance=importance,
+            citations=filtered_citations,
+            agent_name=context.agent_name,
+            identity_stable_set=context.identity_stable_set,
+            current_plan=context.current_plan,
+        )
+
+    def _store_memory(
+        self,
+        *,
+        node_type: NodeType,
+        content: str,
+        now: datetime.datetime,
+        embedding: np.ndarray,
+        importance: int | None,
+        citations: list[int] | None,
+        agent_name: str,
+        identity_stable_set: list[str],
+        current_plan: str | None,
+    ) -> MemoryObject:
+        """임베딩이 준비된 기억을 중요도(없으면 채점) clamp 후 저장한다."""
+        final_importance = importance
+        if final_importance is None:
+            final_importance = self.importance_scorer.score(
+                ImportanceScoringContext(
+                    observation=content,
+                    agent_name=agent_name,
+                    identity_stable_set=identity_stable_set,
+                    current_plan=current_plan,
+                )
+            )
+        self.memory_stream.add_memory(
+            node_type=node_type,
+            citations=citations,
+            content=content,
+            now=now,
+            importance=clamp_importance(final_importance),
+            embedding=embedding,
+        )
         return self.memory_stream.memories[-1]
