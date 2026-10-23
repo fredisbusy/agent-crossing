@@ -65,3 +65,10 @@ LLM_REASONING_EFFORT: Final[str | None] = os.getenv("LLM_REASONING_EFFORT") or N
 WORLD_TICK_INTERVAL_SECONDS: Final[float] = float(
     os.getenv("WORLD_TICK_INTERVAL_SECONDS", "1.0")
 )
+TOWN_SCENARIO: Final[str] = os.getenv("TOWN_SCENARIO", "valentine")
+"""API가 띄울 마을 시나리오 이름(residents/scenarios/<name>.json)."""
+TOWN_AGENTS: Final[str] = os.getenv("TOWN_AGENTS", "")
+"""LLM 마음으로 올릴 주민 id(쉼표 구분). 비우면 TOWN_AGENT_COUNT를 따른다."""
+TOWN_AGENT_COUNT: Final[int] = int(os.getenv("TOWN_AGENT_COUNT", "0"))
+"""LLM 마음 주민 수. 0이면 전원 규칙 마음이라 LLM 없이 뜬다."""
+TOWN_SEED: Final[int] = int(os.getenv("TOWN_SEED", "0"))

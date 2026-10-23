@@ -2,7 +2,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from llm.embedding_encoder import EmbeddingEncodingContext, LlmEmbeddingEncoder
-from llm.guardrails.similarity import embed_sentences
 from settings import EMBEDDING_DIMENSION
 
 
@@ -100,16 +99,6 @@ def test_cache_hit_survives_eviction_within_same_batch() -> None:
     vectors = encoder.encode_many(_contexts("a", "bb", "ccc"))
 
     assert [int(np.argmax(v)) for v in vectors] == [1, 2, 3]
-
-
-def test_embed_sentences_uses_batch_encoder() -> None:
-    client = BatchEmbeddingClient()
-    encoder = LlmEmbeddingEncoder(client=client, model="m")
-
-    pairs = embed_sentences(sentences=["안녕", "반가워"], embedding_encoder=encoder)
-
-    assert [sentence for sentence, _ in pairs] == ["안녕", "반가워"]
-    assert client.batches == [["안녕", "반가워"]]
 
 
 def test_shared_cache_survives_concurrent_threads() -> None:

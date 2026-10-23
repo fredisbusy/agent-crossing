@@ -1,7 +1,7 @@
 import datetime
 import json
 from dataclasses import dataclass
-from typing import cast
+from typing import Protocol, cast
 
 from agents.memory.memory_object import MemoryObject
 from agents.planning.graph import PlanningGraphRunner
@@ -11,14 +11,8 @@ from agents.planning.models import (
     HourlyPlanItem,
     MinutePlanItem,
 )
-from agents.reaction import (
-    GenerateClient,
-    ReactionDecision,
-    ReactionDecisionInput,
-)
-from agents.reaction.graph import ReactionGraphRunner
 from llm.clients.types import JsonObject, LlmGenerateOptions
-from llm.guardrails.similarity import EmbeddingEncoder
+from llm.embedding_encoder import EmbeddingEncoder
 
 from . import prompt_builders
 
@@ -41,6 +35,17 @@ MINUTE_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
 )
 
 
+class GenerateClient(Protocol):
+    def generate(
+        self,
+        *,
+        prompt: str,
+        system: str | None = None,
+        options: LlmGenerateOptions | None = None,
+        format_json: bool = False,
+    ) -> str: ...
+
+
 @dataclass(frozen=True)
 class InsightWithCitation:
     context: str
@@ -56,10 +61,6 @@ class LlmGateway:
     ):
         self.generation_client: GenerateClient = generation_client
         self.embedding_encoder: EmbeddingEncoder | None = embedding_encoder
-        self.reaction_graph: ReactionGraphRunner = ReactionGraphRunner(
-            generation_client=generation_client,
-            embedding_encoder=embedding_encoder,
-        )
         self.planning_graph: PlanningGraphRunner = PlanningGraphRunner(
             planning_client=self
         )
@@ -212,9 +213,3 @@ class LlmGateway:
             format_json=True,
             options=options,
         )
-
-    def decide_reaction(
-        self,
-        input: ReactionDecisionInput,
-    ) -> ReactionDecision:
-        return self.reaction_graph.decide_reaction(input)

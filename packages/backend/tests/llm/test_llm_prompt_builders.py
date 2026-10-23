@@ -3,119 +3,12 @@ import datetime
 import numpy as np
 from agents.memory.memory_object import MemoryObject, NodeType
 from agents.planning.models import DayPlanItem, HourlyPlanItem
-from agents.reaction import DialogueArc
 from llm.prompt_builders import (
     build_day_plan_prompt,
     build_hourly_plan_prompt,
     build_minute_plan_prompt,
-    build_reaction_intent_prompt,
-    build_reaction_utterance_prompt,
     build_salient_questions_prompt,
 )
-from llm_gateway_helpers import (
-    build_reaction_input,
-)
-
-
-def test_reaction_prompt_includes_concise_utterance_constraint() -> None:
-    request = build_reaction_input(dialogue_history=[])
-    prompt = build_reaction_utterance_prompt(
-        agent_identity=request.agent_identity,
-        current_time=request.current_time,
-        observation_content=request.observation_content,
-        dialogue_history=request.dialogue_history,
-        profile=request.profile,
-        retrieved_memories=request.retrieved_memories,
-        intent_reason="react",
-        intent_thought="",
-        intent_critique="",
-        dialogue_arc=None,
-    )
-
-    assert "Keep utterance concise and short" in prompt
-    assert "80 Korean characters" in prompt
-
-
-def test_reaction_prompt_includes_few_shot_and_reflection_anchor() -> None:
-    reflection_memory = MemoryObject(
-        id=1,
-        node_type=NodeType.REFLECTION,
-        citations=None,
-        content="상대의 요청이 원칙과 충돌하면 정중히 거절한다.",
-        created_at=datetime.datetime(2026, 2, 27, 13, 0, 0),
-        last_accessed_at=datetime.datetime(2026, 2, 27, 13, 0, 0),
-        importance=8,
-        embedding=np.asarray([0.1, 0.2], dtype=np.float32),
-    )
-
-    request = build_reaction_input(
-        dialogue_history=[],
-        retrieved_memories=[reflection_memory],
-    )
-    prompt = build_reaction_utterance_prompt(
-        agent_identity=request.agent_identity,
-        current_time=request.current_time,
-        observation_content=request.observation_content,
-        dialogue_history=request.dialogue_history,
-        profile=request.profile,
-        retrieved_memories=request.retrieved_memories,
-        intent_reason="react",
-        intent_thought="",
-        intent_critique="",
-        dialogue_arc=None,
-    )
-
-    assert "[Identity Anchor - highest priority]" in prompt
-    assert "Few-shot calibration examples" in prompt
-    assert "polite refusal" in prompt
-
-
-def test_reaction_intent_prompt_requests_intent_shape() -> None:
-    request = build_reaction_input(dialogue_history=[])
-    prompt = build_reaction_intent_prompt(
-        agent_identity=request.agent_identity,
-        current_time=request.current_time,
-        observation_content=request.observation_content,
-        dialogue_history=request.dialogue_history,
-        profile=request.profile,
-        retrieved_memories=request.retrieved_memories,
-        dialogue_arc=None,
-    )
-
-    assert "Should [Jiho Park] react to the observation right now?" in prompt
-    assert '"should_react": <boolean>' in prompt
-
-
-def test_reaction_prompt_includes_short_dialogue_arc_guidance() -> None:
-    request = build_reaction_input(dialogue_history=[("안녕", "안녕")])
-    prompt = build_reaction_utterance_prompt(
-        agent_identity=request.agent_identity,
-        current_time=request.current_time,
-        observation_content=request.observation_content,
-        dialogue_history=request.dialogue_history,
-        profile=request.profile,
-        retrieved_memories=request.retrieved_memories,
-        intent_reason="respond",
-        intent_thought="",
-        intent_critique="",
-        dialogue_arc=DialogueArc(
-            goal="Ask briefly about the decaf blend and wrap up naturally.",
-            turns_taken=4,
-            target_turns=5,
-            remaining_turns=1,
-            phase="closing",
-            should_wrap_up=True,
-        ),
-    )
-
-    assert "[Short Conversation Arc]" in prompt
-    assert (
-        "Conversation goal: Ask briefly about the decaf blend and wrap up naturally."
-        in prompt
-    )
-    assert "phase=closing" in prompt
-    assert "Do not introduce a new major topic" in prompt
-    assert "set end_dialogue=true" in prompt
 
 
 def test_day_plan_prompt_contains_persona_and_json_shape() -> None:

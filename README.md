@@ -27,7 +27,7 @@ Built with **React 19 + Phaser 3** (frontend) and **FastAPI** (backend).
 packages/
   shared/      # shared types/constants
   frontend/    # React + Phaser client
-  backend/     # FastAPI + agent brain
+  backend/     # FastAPI + town simulation
 ```
 
 ## Getting Started
@@ -54,6 +54,14 @@ pnpm dev:backend
 
 # terminal 2
 pnpm dev:frontend
+```
+
+The backend serves the town simulation (`TownSimulation`): `GET /world/state`, `GET /world/text`, `POST /world/advance?minutes=N`, `POST /world/tick/start|stop`, and `ws://localhost:8000/ws/world` for snapshots. By default every resident uses the rule-based mind (no LLM calls). Configure with `TOWN_SCENARIO`, `TOWN_AGENTS` (comma-separated resident ids), `TOWN_AGENT_COUNT`, `TOWN_SEED`.
+
+Run a scenario headless and print its metrics:
+
+```bash
+pnpm dev:simulation -- --scenario valentine
 ```
 
 ### LLM provider switch
