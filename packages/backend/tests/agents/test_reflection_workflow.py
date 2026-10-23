@@ -17,27 +17,32 @@ class StubMemoryService:
     def get_recent_memories(self, limit: int) -> list[MemoryObject]:
         return self.recent_memories[:limit]
 
-    def get_retrieval_memories(
+    def get_retrieval_memories_many(
         self,
+        queries: list[str],
         *,
-        query: str,
         current_time: datetime.datetime,
-    ) -> list[MemoryObject]:
+        top_k: int,
+    ) -> list[list[MemoryObject]]:
         _ = current_time
-        self.retrieval_queries.append(query)
-        return self.recent_memories
+        _ = top_k
+        self.retrieval_queries.extend(queries)
+        # 질문별로 구분되도록 질문 내용을 담은 기억을 돌려준다.
+        return [
+            [_memory(memory_id=0, content=query)] for query in queries
+        ]
 
-    def create_reflection(
+    def create_reflections(
         self,
-        insight: InsightWithCitation,
+        insights: list[InsightWithCitation],
         *,
         now: datetime.datetime,
         context: object,
-    ) -> InsightWithCitation:
+    ) -> list[InsightWithCitation]:
         _ = now
         _ = context
-        self.created_reflections.append(insight)
-        return insight
+        self.created_reflections.extend(insights)
+        return insights
 
 
 class StubLlmService:
@@ -51,7 +56,6 @@ class StubLlmService:
         self.insights_by_question: dict[str, list[InsightWithCitation]] = (
             insights_by_question
         )
-        self.current_question_index: int = 0
 
     def generate_salient_high_level_questions(
         self,
@@ -69,11 +73,7 @@ class StubLlmService:
         agent_name: str,
         memories: list[MemoryObject],
     ) -> list[InsightWithCitation]:
-        _ = agent_name
-        _ = memories
-        question = self.questions[self.current_question_index]
-        self.current_question_index += 1
-        return self.insights_by_question[question]
+        return self.insights_by_question[memories[0].content]
 
 
 def _memory(*, memory_id: int, content: str) -> MemoryObject:

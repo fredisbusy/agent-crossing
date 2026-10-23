@@ -94,6 +94,39 @@ class MemoryManager:
             current_time=current_time,
         )
 
+    def get_retrieval_memories_many(
+        self,
+        queries: list[str],
+        *,
+        current_time: datetime.datetime,
+        top_k: int = 3,
+    ) -> list[list[MemoryObject]]:
+        """질문 여러 개를 임베딩 1회로 처리하고, 질문 순서대로 순차 검색한다."""
+        if not queries:
+            return []
+        embeddings = self._encode_texts(queries)
+        return [
+            self.memory_stream.retrieve(
+                query_embedding=embedding,
+                top_k=top_k,
+                current_time=current_time,
+            )
+            for embedding in embeddings
+        ]
+
+    def _encode_texts(self, texts: list[str]) -> list[np.ndarray]:
+        contexts = [EmbeddingEncodingContext(text=text) for text in texts]
+        encoder = self.embedding_encoder
+        if isinstance(encoder, BatchEmbeddingEncoder):
+            return encoder.encode_many(contexts)
+        return [encoder.encode(c) for c in contexts]
+
+    def _score_importances(self, contexts: list[ImportanceScoringContext]) -> list[int]:
+        scorer = self.importance_scorer
+        if isinstance(scorer, BatchImportanceScorer):
+            return scorer.score_many(contexts)
+        return [scorer.score(c) for c in contexts]
+
     def create_observation(
         self,
         *,
@@ -103,27 +136,17 @@ class MemoryManager:
         context: ObservationContext,
         importance: int | None = None,
     ) -> MemoryObject:
-        final_importance = importance
-        if final_importance is None:
-            scoring_context = ImportanceScoringContext(
-                observation=content,
-                agent_name=context.agent_name,
-                identity_stable_set=context.identity_stable_set,
-                current_plan=context.current_plan,
-            )
-            final_importance = self.importance_scorer.score(scoring_context)
-        final_importance = clamp_importance(final_importance)
-
-        self.memory_stream.add_memory(
+        return self._store_memory(
             node_type=NodeType.OBSERVATION,
-            citations=None,
             content=content,
             now=now,
-            importance=final_importance,
             embedding=embedding,
+            importance=importance,
+            citations=None,
+            agent_name=context.agent_name,
+            identity_stable_set=context.identity_stable_set,
+            current_plan=context.current_plan,
         )
-
-        return self.memory_stream.memories[-1]
 
     def create_observation_from_text(
         self,
@@ -153,12 +176,7 @@ class MemoryManager:
         """관찰 여러 개를 임베딩 1회 + 중요도 1회 배치로 저장한다. 순서를 보존한다."""
         if not items:
             return []
-        encoding_contexts = [EmbeddingEncodingContext(text=text) for text, _ in items]
-        encoder = self.embedding_encoder
-        if isinstance(encoder, BatchEmbeddingEncoder):
-            embeddings = encoder.encode_many(encoding_contexts)
-        else:
-            embeddings = [encoder.encode(c) for c in encoding_contexts]
+        embeddings = self._encode_texts([text for text, _ in items])
 
         scoring_contexts = [
             ImportanceScoringContext(
@@ -169,11 +187,7 @@ class MemoryManager:
             )
             for text, _ in items
         ]
-        scorer = self.importance_scorer
-        if isinstance(scorer, BatchImportanceScorer):
-            importances = scorer.score_many(scoring_contexts)
-        else:
-            importances = [scorer.score(c) for c in scoring_contexts]
+        importances = self._score_importances(scoring_contexts)
 
         return [
             self.create_observation(
@@ -199,37 +213,51 @@ class MemoryManager:
         embedding = self.embedding_encoder.encode(
             EmbeddingEncodingContext(text=insight.context)
         )
-
-        final_importance = importance
-        if final_importance is None:
-            scoring_context = ImportanceScoringContext(
-                observation=insight.context,
-                agent_name=context.agent_name,
-                identity_stable_set=context.identity_stable_set,
-                current_plan=context.current_plan,
-            )
-            final_importance = self.importance_scorer.score(scoring_context)
-        final_importance = clamp_importance(final_importance)
-
-        known_memory_ids = {memory.id for memory in self.memory_stream.memories}
-        filtered_citations: list[int] = []
-        for citation_memory_id in insight.citation_memory_ids:
-            if citation_memory_id not in known_memory_ids:
-                continue
-            if citation_memory_id in filtered_citations:
-                continue
-            filtered_citations.append(citation_memory_id)
-
-        self.memory_stream.add_memory(
-            node_type=NodeType.REFLECTION,
-            citations=filtered_citations,
-            content=insight.context,
+        return self._store_reflection(
+            insight,
             now=now,
-            importance=final_importance,
             embedding=embedding,
+            context=context,
+            importance=importance,
+            known_memory_ids=self._known_memory_ids(),
         )
 
-        return self.memory_stream.memories[-1]
+    def create_reflections(
+        self,
+        insights: list[InsightWithCitation],
+        *,
+        now: datetime.datetime,
+        context: ReflectionContext,
+    ) -> list[MemoryObject]:
+        """통찰 여러 개를 임베딩 1회 + 중요도 1회 배치로 저장한다. 입력 순서를 보존한다."""
+        if not insights:
+            return []
+        embeddings = self._encode_texts([i.context for i in insights])
+        importances = self._score_importances(
+            [
+                ImportanceScoringContext(
+                    observation=insight.context,
+                    agent_name=context.agent_name,
+                    identity_stable_set=context.identity_stable_set,
+                    current_plan=context.current_plan,
+                )
+                for insight in insights
+            ]
+        )
+        known_memory_ids = self._known_memory_ids()
+        return [
+            self._store_reflection(
+                insight,
+                now=now,
+                embedding=embedding,
+                context=context,
+                importance=importance,
+                known_memory_ids=known_memory_ids,
+            )
+            for insight, embedding, importance in zip(
+                insights, embeddings, importances, strict=True
+            )
+        ]
 
     def create_plan(
         self,
@@ -242,25 +270,85 @@ class MemoryManager:
         embedding = self.embedding_encoder.encode(
             EmbeddingEncodingContext(text=content)
         )
-
-        final_importance = importance
-        if final_importance is None:
-            scoring_context = ImportanceScoringContext(
-                observation=content,
-                agent_name=context.agent_name,
-                identity_stable_set=context.identity_stable_set,
-                current_plan=context.current_plan,
-            )
-            final_importance = self.importance_scorer.score(scoring_context)
-        final_importance = clamp_importance(final_importance)
-
-        self.memory_stream.add_memory(
+        return self._store_memory(
             node_type=NodeType.PLAN,
-            citations=None,
             content=content,
             now=now,
-            importance=final_importance,
             embedding=embedding,
+            importance=importance,
+            citations=None,
+            agent_name=context.agent_name,
+            identity_stable_set=context.identity_stable_set,
+            current_plan=context.current_plan,
         )
 
+    @staticmethod
+    def _filter_citations(citation_ids: list[int], known_ids: set[int]) -> list[int]:
+        """존재하는 id만, 중복 없이, 순서를 유지해 남긴다."""
+        filtered: list[int] = []
+        for citation_id in citation_ids:
+            if citation_id in known_ids and citation_id not in filtered:
+                filtered.append(citation_id)
+        return filtered
+
+    def _known_memory_ids(self) -> set[int]:
+        return {memory.id for memory in self.memory_stream.memories}
+
+    def _store_reflection(
+        self,
+        insight: InsightWithCitation,
+        *,
+        now: datetime.datetime,
+        embedding: np.ndarray,
+        context: ReflectionContext,
+        importance: int | None,
+        known_memory_ids: set[int],
+    ) -> MemoryObject:
+        filtered_citations = self._filter_citations(
+            insight.citation_memory_ids, known_memory_ids
+        )
+        return self._store_memory(
+            node_type=NodeType.REFLECTION,
+            content=insight.context,
+            now=now,
+            embedding=embedding,
+            importance=importance,
+            citations=filtered_citations,
+            agent_name=context.agent_name,
+            identity_stable_set=context.identity_stable_set,
+            current_plan=context.current_plan,
+        )
+
+    def _store_memory(
+        self,
+        *,
+        node_type: NodeType,
+        content: str,
+        now: datetime.datetime,
+        embedding: np.ndarray,
+        importance: int | None,
+        citations: list[int] | None,
+        agent_name: str,
+        identity_stable_set: list[str],
+        current_plan: str | None,
+    ) -> MemoryObject:
+        """임베딩이 준비된 기억을 중요도(없으면 채점) clamp 후 저장한다."""
+        final_importance = importance
+        if final_importance is None:
+            final_importance = self.importance_scorer.score(
+                ImportanceScoringContext(
+                    observation=content,
+                    agent_name=agent_name,
+                    identity_stable_set=identity_stable_set,
+                    current_plan=current_plan,
+                )
+            )
+        self.memory_stream.add_memory(
+            node_type=node_type,
+            citations=citations,
+            content=content,
+            now=now,
+            importance=clamp_importance(final_importance),
+            embedding=embedding,
+        )
         return self.memory_stream.memories[-1]
