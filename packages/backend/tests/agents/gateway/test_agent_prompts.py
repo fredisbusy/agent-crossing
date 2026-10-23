@@ -3,11 +3,11 @@ import datetime
 import numpy as np
 from agents.memory.memory_object import MemoryObject, NodeType
 from agents.planning.models import DayPlanItem, HourlyPlanItem
-from llm.prompt_builders import (
+from agents.memory.reflection_prompts import build_salient_questions_prompt
+from agents.planning.plan_prompts import (
     build_day_plan_prompt,
     build_hourly_plan_prompt,
     build_minute_plan_prompt,
-    build_salient_questions_prompt,
 )
 
 

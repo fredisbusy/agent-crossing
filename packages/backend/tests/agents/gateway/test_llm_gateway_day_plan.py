@@ -1,7 +1,7 @@
 import datetime
 import json
 
-from llm.llm_gateway import LlmGateway
+from agents.llm_gateway import LlmGateway
 from llm_gateway_helpers import (
     StubGenerationClient,
 )

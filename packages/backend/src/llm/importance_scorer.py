@@ -9,7 +9,7 @@ from .clients.types import (
     JsonObject,
     LlmGenerateOptions,
 )
-from .prompt_builders import (
+from .importance_prompts import (
     build_importance_batch_scoring_prompt,
     build_importance_scoring_prompt,
 )

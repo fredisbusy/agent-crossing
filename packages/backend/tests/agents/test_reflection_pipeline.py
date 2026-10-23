@@ -11,7 +11,7 @@ from agents.reflection import Reflection, ReflectionGraphRunner
 from agents.reflection.graph import REFLECTION_RETRIEVAL_TOP_K
 from llm import ImportanceScoringContext
 from llm.embedding_encoder import EmbeddingEncodingContext
-from llm.llm_gateway import InsightWithCitation, LlmGateway
+from agents.llm_gateway import InsightWithCitation, LlmGateway
 from settings import EMBEDDING_DIMENSION
 
 NOW = datetime.datetime(2026, 3, 9, 10, 0, 0)

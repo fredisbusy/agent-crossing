@@ -5,7 +5,7 @@ from typing import cast
 import numpy as np
 from agents.memory.memory_object import MemoryObject, NodeType
 from agents.planning.models import DayPlanItem, HourlyPlanItem
-from llm.llm_gateway import LlmGateway
+from agents.llm_gateway import LlmGateway
 from llm_gateway_helpers import (
     StubGenerationClient,
 )

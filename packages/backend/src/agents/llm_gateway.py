@@ -3,37 +3,18 @@ import json
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from agents.memory.memory_object import MemoryObject
-from agents.planning.graph import PlanningGraphRunner
-from agents.planning.models import (
+from llm.clients.types import JsonObject, LlmGenerateOptions
+from llm.embedding_encoder import EmbeddingEncoder
+
+from .memory.memory_object import MemoryObject
+from .planning.graph import PlanningGraphRunner
+from .planning.models import (
     DayPlanBroadStrokesRequest,
     DayPlanItem,
     HourlyPlanItem,
     MinutePlanItem,
 )
-from llm.clients.types import JsonObject, LlmGenerateOptions
-from llm.embedding_encoder import EmbeddingEncoder
-
-from . import prompt_builders
-
-DAY_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
-    temperature=0.0,
-    top_p=1.0,
-    num_predict=1024,
-)
-
-HOURLY_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
-    temperature=0.0,
-    top_p=1.0,
-    num_predict=1024,
-)
-
-MINUTE_PLAN_GENERATE_OPTIONS = LlmGenerateOptions(
-    temperature=0.0,
-    top_p=1.0,
-    num_predict=3072,
-)
-
+from .memory import reflection_prompts
 
 class GenerateClient(Protocol):
     def generate(
@@ -71,7 +52,7 @@ class LlmGateway:
         if not memories:
             return []
 
-        prompt = prompt_builders.build_salient_questions_prompt(
+        prompt = reflection_prompts.build_salient_questions_prompt(
             agent_name=agent_name,
             memories=memories,
         )
@@ -105,7 +86,7 @@ class LlmGateway:
         statement_to_memory_id = {
             index + 1: memory.id for index, memory in enumerate(memories)
         }
-        prompt = prompt_builders.build_insights_with_citation_prompt(
+        prompt = reflection_prompts.build_insights_with_citation_prompt(
             agent_name=agent_name,
             memories=memories,
         )
