@@ -66,3 +66,17 @@ def test_summary_prompts_avoid_simulation_jargon() -> None:
     asyncio.run(mind.next_action(ctx("isabella", MORNING)))
     prompt = _summary_prompts(client)[0]
     assert not any(word in prompt for word in ("NPC", "agent", "rule"))
+
+
+class _RaisingClient(ScriptedClient):
+    def generate(self, **kwargs: object) -> str:  # type: ignore[override]
+        raise RuntimeError("down")
+
+
+def test_summary_client_exception_falls_back_to_identity_sentences() -> None:
+    mind, _ = make_mind(_RaisingClient(lambda _: {}))
+    planner = FixedPlanner()
+    mind._planner = planner  # noqa: SLF001
+    asyncio.run(mind.next_action(ctx("isabella", MORNING)))
+    identity = "Loves making people feel welcome."
+    assert planner.requests[0].persona_background.count(identity) == 1

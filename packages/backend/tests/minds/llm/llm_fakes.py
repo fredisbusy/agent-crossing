@@ -129,7 +129,11 @@ class CountingReflection:
 
 
 def make_mind(
-    client: ScriptedClient, *, resident_id: str = "isabella", max_turns: int = 6
+    client: ScriptedClient,
+    *,
+    resident_id: str = "isabella",
+    max_turns: int = 6,
+    reflection: CountingReflection | None = None,
 ) -> tuple[LLMMind, ListMemory]:
     memory = ListMemory()
     persona = LlmPersona(
@@ -146,7 +150,7 @@ def make_mind(
         client=client,
         planner=FixedPlanner(),
         memory=memory,
-        reflection=CountingReflection(),
+        reflection=reflection or CountingReflection(),
         max_turns=max_turns,
     )
     return mind, memory
