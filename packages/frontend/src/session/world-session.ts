@@ -1,4 +1,3 @@
-import { DEFAULT_MOCK_SEED, loadTownWalkGrid, MockFeed } from "../mock";
 import { DEFAULT_TICK_INTERVAL_MS, WorldSocket, type WorldFeed } from "../net";
 import { useWorldStore } from "../stores";
 
@@ -8,11 +7,12 @@ function mockStartHour(params: URLSearchParams): number | undefined {
   return params.has("start_hour") && Number.isFinite(hour) && hour >= 0 && hour < 24 ? hour : undefined;
 }
 
-export function createFeed(search: string): WorldFeed {
+/** 가짜 월드는 `?mock=1`일 때만 동적으로 불러와, 실서비스 번들에 넣지 않는다. */
+export async function createFeed(search: string): Promise<WorldFeed> {
   const params = new URLSearchParams(search);
-  return params.get("mock") === "1"
-    ? new MockFeed(DEFAULT_MOCK_SEED, DEFAULT_TICK_INTERVAL_MS, loadTownWalkGrid, mockStartHour(params), params.get("scenario") ?? undefined)
-    : new WorldSocket();
+  if (params.get("mock") !== "1") return new WorldSocket();
+  const { DEFAULT_MOCK_SEED, loadTownWalkGrid, MockFeed } = await import("../mock");
+  return new MockFeed(DEFAULT_MOCK_SEED, DEFAULT_TICK_INTERVAL_MS, loadTownWalkGrid, mockStartHour(params), params.get("scenario") ?? undefined);
 }
 
 /** 피드를 시작해 스냅샷과 연결 상태를 스토어에 흘려 넣는다. */
