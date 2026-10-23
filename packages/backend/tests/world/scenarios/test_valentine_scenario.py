@@ -5,7 +5,12 @@ import datetime
 import json
 
 from agents.memory.memory_object import MemoryObject
-from agents.planning.models import DayPlanBroadStrokesRequest, DayPlanItem
+from agents.planning.models import (
+    DayPlanBroadStrokesRequest,
+    DayPlanItem,
+    HourlyPlanItem,
+    MinutePlanItem,
+)
 from llm.clients.types import LlmGenerateOptions
 from minds.llm import LLMMind
 from world.residents import (
@@ -46,6 +51,12 @@ class InvitingClient:
 
 
 class CafePlanner:
+    def generate_hourly_plan(self, **_: object) -> list[HourlyPlanItem]:
+        raise ValueError("시간 단위 계획 없음: 하루 계획 구간 그대로")
+
+    def generate_minute_plan(self, **_: object) -> list[MinutePlanItem]:
+        raise ValueError("분 단위 계획 없음: 하루 계획 구간 그대로")
+
     def generate_day_plan(
         self, request: DayPlanBroadStrokesRequest
     ) -> list[DayPlanItem]:
