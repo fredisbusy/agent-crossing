@@ -7,9 +7,14 @@ from collections.abc import Callable
 import numpy as np
 
 from agents.memory.memory_object import MemoryObject, NodeType
-from agents.planning.models import DayPlanBroadStrokesRequest, DayPlanItem
+from agents.planning.models import (
+    DayPlanBroadStrokesRequest,
+    DayPlanItem,
+    HourlyPlanItem,
+    MinutePlanItem,
+)
 from llm.clients.types import LlmGenerateOptions
-from minds.llm import LLMMind, LlmPersona
+from minds.llm import DayPlanner, LLMMind, LlmPersona
 from world.contracts import (
     BodyState,
     Holiday,
@@ -56,10 +61,32 @@ class ScriptedClient:
 
 
 class FixedPlanner:
-    """요청 날짜의 9~12시 공원 산책 하나를 계획한다."""
+    """요청 날짜의 9~12시 공원 산책 하나를 계획한다. 시간·분 단위는 늘 실패한다(하루 계획 구간으로 대체)."""
 
     def __init__(self) -> None:
         self.requests: list[DayPlanBroadStrokesRequest] = []
+        self.hourly_calls: list[tuple[datetime.datetime, DayPlanItem]] = []
+        self.minute_calls: list[tuple[datetime.datetime, HourlyPlanItem]] = []
+
+    def generate_hourly_plan(
+        self,
+        *,
+        agent_name: str,
+        current_time: datetime.datetime,
+        day_plan_item: DayPlanItem,
+    ) -> list[HourlyPlanItem]:
+        self.hourly_calls.append((current_time, day_plan_item))
+        raise ValueError("no hourly plan")
+
+    def generate_minute_plan(
+        self,
+        *,
+        agent_name: str,
+        current_time: datetime.datetime,
+        hourly_plan_item: HourlyPlanItem,
+    ) -> list[MinutePlanItem]:
+        self.minute_calls.append((current_time, hourly_plan_item))
+        raise ValueError("no minute plan")
 
     def generate_day_plan(
         self, request: DayPlanBroadStrokesRequest
@@ -134,6 +161,7 @@ def make_mind(
     resident_id: str = "isabella",
     max_turns: int = 6,
     reflection: CountingReflection | None = None,
+    planner: DayPlanner | None = None,
 ) -> tuple[LLMMind, ListMemory]:
     memory = ListMemory()
     persona = LlmPersona(
@@ -148,7 +176,7 @@ def make_mind(
     mind = LLMMind(
         persona=persona,
         client=client,
-        planner=FixedPlanner(),
+        planner=planner or FixedPlanner(),
         memory=memory,
         reflection=reflection or CountingReflection(),
         max_turns=max_turns,
