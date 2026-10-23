@@ -17,5 +17,7 @@
   },
   "seed_memories": [
     "Sam lives with his wife Jennifer."
-  ]
+  ],
+  "voice": "gruff",
+  "catchphrase": "에잉"
 }

@@ -6,7 +6,7 @@
 import random
 from typing import Literal
 
-from minds.social import SocialState, intent_for_slot
+from minds.social import SocialState, SpeechStyle, intent_for_slot
 from world.contracts import (
     ActionIntent,
     ConversationView,
@@ -33,13 +33,16 @@ class ScheduleMind:
         display_name: str,
         config: ScheduleConfig,
         rng: random.Random,
+        style: SpeechStyle | None = None,
     ) -> None:
         self.resident_id = resident_id
         self.display_name = display_name
         self.config = config
         self.social = SocialState(resident_id, Timetable(entries=tuple(config.entries)))
         self._rng = rng
-        self._rules = ReplyRules(social=self.social, config=config, rng=rng)
+        self._rules = ReplyRules(
+            social=self.social, config=config, rng=rng, style=style
+        )
 
     async def next_action(self, ctx: MindContext) -> ActionIntent:
         slot = self.social.agenda.slot_at(ctx.now)
@@ -73,7 +76,12 @@ def build_schedule_mind(
     display_name: str,
     config: ScheduleConfig,
     rng: random.Random,
+    style: SpeechStyle | None = None,
 ) -> ScheduleMind:
     return ScheduleMind(
-        resident_id=resident_id, display_name=display_name, config=config, rng=rng
+        resident_id=resident_id,
+        display_name=display_name,
+        config=config,
+        rng=rng,
+        style=style,
     )

@@ -7,6 +7,7 @@ from typing import Protocol
 from agents.memory.memory_object import MemoryObject
 from agents.planning.models import DayPlanBroadStrokesRequest, DayPlanItem
 from llm.clients.types import LlmGenerateOptions
+from minds.social import SpeechStyle
 from world.contracts import LocationPath, ResidentId
 
 
@@ -22,6 +23,8 @@ class LlmPersona:
     home: LocationPath
     known_places: tuple[LocationPath, ...]
     seed_memories: tuple[str, ...] = ()
+    speech: SpeechStyle | None = None
+    """말투. 규칙 마음과 같은 정의를 프롬프트에 싣는다."""
 
 
 class GenerateClient(Protocol):
@@ -50,9 +53,7 @@ class MemoryStore(Protocol):
         """기억을 저장하고 매긴 중요도를 돌려 준다. kind: observation | plan."""
         ...
 
-    def remember_many(
-        self, items: list[tuple[str, datetime.datetime]]
-    ) -> list[int]:
+    def remember_many(self, items: list[tuple[str, datetime.datetime]]) -> list[int]:
         """관찰 여러 개를 한 번에 저장하고 중요도를 입력 순서대로 돌려 준다."""
         ...
 

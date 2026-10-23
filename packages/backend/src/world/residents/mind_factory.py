@@ -57,4 +57,5 @@ class ResidentMindFactory:
             display_name=config.display_name,
             config=schedule,
             rng=random.Random(f"{self._seed}:{config.resident_id}"),
+            style=config.speech_style(),
         )

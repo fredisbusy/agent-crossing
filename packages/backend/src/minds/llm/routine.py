@@ -84,8 +84,11 @@ def resolve_place(text: str, persona: LlmPersona) -> LocationPath:
     wanted = text.strip().lower()
     places = persona.known_places
     for path in places:
-        if path.lower() == wanted:
+        if path.lower() == wanted or place_name(path).lower() == wanted:
             return path
+    korean = [p for p in places if place_name(p).lower() in wanted]
+    if korean:
+        return max(korean, key=lambda p: (len(place_name(p)), -len(p)))
     best: tuple[tuple[int, int, int], LocationPath] | None = None
     for path in places:
         segments = [seg.lower() for seg in path.split(LOCATION_SEPARATOR)[1:]]
@@ -142,7 +145,7 @@ def _plan_places(persona: LlmPersona) -> tuple[str, ...]:
     for path in persona.known_places:
         parts = path.split(LOCATION_SEPARATOR)
         if 2 <= len(parts) <= 3:
-            name = place_name(path) if len(parts) == 2 else f"{parts[1]} {parts[2]}"
+            name = place_name(path)
             if name not in names:
                 names.append(name)
     return tuple(names)

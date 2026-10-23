@@ -6,6 +6,7 @@
 import datetime
 from collections.abc import Sequence
 
+from minds.social import josa, place_name
 from world.contracts import LOCATION_SEPARATOR, Observation, Utterance
 from world.residents import Resident
 
@@ -50,7 +51,7 @@ def near_pairs(
 def sight_text(other: Resident) -> str:
     view = other.public_view()
     doing = view.action_description or "서 있다"
-    return f"{view.display_name}가 {view.location_path}에서 {doing}"
+    return f"{josa(view.display_name, '이', '가')} {place_name(view.location_path)}에서 {doing}"
 
 
 def sight_signature(other: Resident) -> tuple[str, str | None]:

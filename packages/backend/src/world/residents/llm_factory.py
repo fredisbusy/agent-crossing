@@ -25,6 +25,7 @@ def llm_persona(
         home=config.home_location,
         known_places=known_places,
         seed_memories=tuple(config.seed_memories),
+        speech=config.speech_style(),
     )
 
 

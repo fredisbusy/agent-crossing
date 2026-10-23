@@ -15,5 +15,7 @@
     "home": "Smallville > Isabella's Apartment > Bedroom",
     "bedroom": "Smallville > Isabella's Apartment > Bedroom"
   },
-  "seed_memories": []
+  "seed_memories": [],
+  "voice": "warm",
+  "catchphrase": "후후"
 }

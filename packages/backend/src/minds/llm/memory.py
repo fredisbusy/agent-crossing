@@ -33,9 +33,7 @@ class ManagedMemory:
             )
         return memory.importance
 
-    def remember_many(
-        self, items: list[tuple[str, datetime.datetime]]
-    ) -> list[int]:
+    def remember_many(self, items: list[tuple[str, datetime.datetime]]) -> list[int]:
         """관찰 여러 개를 배치로 저장하고 각 중요도를 입력 순서대로 돌려 준다."""
         memories = self._manager.create_observations_from_texts(
             items=items,

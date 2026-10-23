@@ -17,5 +17,7 @@
   },
   "seed_memories": [
     "John lives with his wife Mei and his son Eddy."
-  ]
+  ],
+  "voice": "calm",
+  "catchphrase": "허허"
 }

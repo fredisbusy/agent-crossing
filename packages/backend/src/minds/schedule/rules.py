@@ -10,6 +10,8 @@ from collections import deque
 
 from minds.social import (
     SocialState,
+    SpeechStyle,
+    Tone,
     event_act,
     must_end,
     my_turns,
@@ -44,8 +46,11 @@ class ReplyRules:
         social: SocialState,
         config: ScheduleConfig,
         rng: random.Random,
+        style: SpeechStyle | None = None,
     ) -> None:
         self._social = social
+        self._style = style
+        self._tone: Tone = style.tone if style is not None else config.tone
         self._me = social.resident_id
         self._config = config
         self._rng = rng
@@ -73,9 +78,11 @@ class ReplyRules:
         act = self._choose(ctx, conversation, other, last)
         if self._social.is_redundant(act, other, now):
             act = SpeechAct(kind="smalltalk")
-        avoid = {*self._recent, *(u.text for u in mine)}
+        avoid = [*self._recent, *(u.text for u in mine)]
         text = self._text(act, ctx, last, first=not mine, cid=cid, avoid=avoid)
         self._recent.append(text)
+        if self._style is not None:
+            text = self._style.decorate(text, self._rng)
         utterance = Utterance(
             speaker_id=self._me,
             listener_ids=(other,),
@@ -174,7 +181,7 @@ class ReplyRules:
         *,
         first: bool,
         cid: str,
-        avoid: set[str],
+        avoid: list[str],
     ) -> str:
         key: str = act.kind
         if act.kind == "greet" and first:
@@ -184,13 +191,15 @@ class ReplyRules:
                 greetings = [g for h in ctx.holidays for g in h.greetings]
                 if greetings:
                     return greetings[self._rng.randrange(len(greetings))]
+        if act.kind == "share_fact" and act.event and act.start_time:
+            key = "share_event"
         if act.kind == "smalltalk" and act.topic:
             key = "unknown"
         if act.kind == "smalltalk" and last is not None and _has_kind(last, "gift"):
             key = "thanks"
         return render(
             key,
-            self._config.tone,
+            self._tone,
             self._rng,
             now=ctx.now,
             topic=act.topic or "",
@@ -200,6 +209,7 @@ class ReplyRules:
             location_path=act.location_path,
             item=act.item or "",
             avoid=avoid,
+            voice=self._style.voice if self._style is not None else None,
         )
 
 

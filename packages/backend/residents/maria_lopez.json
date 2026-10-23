@@ -17,5 +17,7 @@
   },
   "seed_memories": [
     "Maria is studying for a physics exam."
-  ]
+  ],
+  "voice": "bright",
+  "catchphrase": "헤헤"
 }

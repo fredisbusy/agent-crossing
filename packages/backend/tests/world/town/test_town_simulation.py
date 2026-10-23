@@ -70,7 +70,7 @@ def test_sight_text_format_and_no_meta_words() -> None:
     asyncio.run(sim.run_minutes(4))
     sights = [o for o in watcher.observed if o.kind == "sight"]
     assert sights
-    assert any(o.text == f"Bob가 {CAFE}에서 책을 읽는다" for o in sights)
+    assert any(o.text == "Bob가 홉스 카페 홀에서 책을 읽는다" for o in sights)
     for observation in watcher.observed + reader.observed:
         assert not META_WORDS.search(observation.text)
 

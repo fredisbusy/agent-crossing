@@ -1,6 +1,6 @@
 """대사 템플릿: 화행 종류 x 말투별 한국어 문장을 주입된 rng로 고른다.
 
-`unknown`은 모르는 주제를 물었을 때의 `smalltalk` 문장이다.
+`share_event`는 행사 소문, `unknown`은 모르는 주제를 물었을 때의 `smalltalk` 문장이다.
 문장에는 마음 종류를 암시하는 단어를 쓰지 않는다 (SPEC §12 불가지 원칙).
 `greet_again`은 오랜만에 만난 상대 인사, `thanks`는 선물을 받았을 때의 말이다.
 채움 필드: {topic} {fact} {event} {day} {time} {place} {item}
@@ -8,12 +8,13 @@
 
 import datetime
 import random
-from collections.abc import Collection
+from collections.abc import Sequence
 
-from minds.social import format_day, format_time, place_name
+from minds.social import Voice, format_day, format_time, place_name
 from world.contracts import LocationPath
 
 from .config import Tone
+from .voices import VOICE_TEMPLATES
 
 _TEMPLATES: dict[tuple[str, Tone], tuple[str, ...]] = {
     ("greet", "polite"): (
@@ -53,6 +54,14 @@ _TEMPLATES: dict[tuple[str, Tone], tuple[str, ...]] = {
         "아, {topic} 말이야, {fact}",
         "있잖아, {topic}에 대해서 들었는데 {fact}",
     ),
+    ("share_event", "polite"): (
+        "{event} 소식 들으셨어요? {day} {time}에 {place}에서 열린대요.",
+        "참, {event} 말이에요. {day} {time}에 {place}에서 한대요.",
+    ),
+    ("share_event", "casual"): (
+        "{event} 얘기 들었어? {day} {time}에 {place}에서 한대!",
+        "있잖아, {day} {time}에 {place}에서 {event} 한대.",
+    ),
     ("ask", "polite"): ("{topic}에 대해 아시는 게 있나요?",),
     ("ask", "casual"): ("{topic}에 대해 아는 거 있어?",),
     ("unknown", "polite"): (
@@ -62,7 +71,7 @@ _TEMPLATES: dict[tuple[str, Tone], tuple[str, ...]] = {
     ("unknown", "casual"): ("{topic}? 잘 모르겠네.", "글쎄, {topic}은 못 들었어."),
     ("invite", "polite"): (
         "{day} {time}에 {place}에서 {event} 어떠세요?",
-        "{day} {time}에 {place}에서 {event}을(를) 해요. 꼭 와 주세요!",
+        "{day} {time}에 {place}에서 {event} 열어요. 꼭 와 주세요!",
     ),
     ("invite", "casual"): (
         "{day} {time}에 {place}에서 {event} 어때?",
@@ -110,11 +119,13 @@ def render(
     when: datetime.datetime | None = None,
     location_path: LocationPath | None = None,
     item: str = "",
-    avoid: Collection[str] = (),
+    avoid: Sequence[str] = (),
+    voice: Voice | None = None,
 ) -> str:
     """템플릿 하나를 rng로 골라 필드를 채운다. `key`는 화행 종류 또는 위 특수 키.
 
-    `avoid`에 있는 문장(최근에 한 말)은 다른 후보가 있으면 고르지 않는다.
+    `avoid`(오래된 순서의 최근 대사)에 있는 문장은 다른 후보가 있으면 고르지 않고,
+    모두 썼으면 가장 오래전에 한 말을 고른다.
     """
     filled = [
         template.format(
@@ -126,12 +137,25 @@ def render(
             place=place_name(location_path) if location_path else "",
             item=item,
         )
-        for template in _TEMPLATES[(key, tone)]
+        for template in _options(key, tone, voice)
     ]
-    fresh = [text for text in filled if text not in avoid] or filled
-    return fresh[rng.randrange(len(fresh))]
+    fresh = [text for text in filled if text not in avoid]
+    if fresh:
+        return fresh[rng.randrange(len(fresh))]
+    order = list(avoid)
+    return min(filled, key=lambda text: order.index(text) if text in order else -1)
+
+
+def _options(key: str, tone: Tone, voice: Voice | None) -> tuple[str, ...]:
+    """말투 템플릿을 앞세운다. 말투 문장이 하나뿐이면 존댓말·반말 템플릿을 섞어 되풀이를 줄인다."""
+    base = _TEMPLATES[(key, tone)]
+    voiced = VOICE_TEMPLATES.get((key, voice), ()) if voice is not None else ()
+    if len(voiced) >= 2:
+        return voiced
+    return (*voiced, *base)
 
 
 def all_templates() -> tuple[str, ...]:
     """테스트용: 모든 템플릿 문장."""
-    return tuple(t for options in _TEMPLATES.values() for t in options)
+    pools = (*_TEMPLATES.values(), *VOICE_TEMPLATES.values())
+    return tuple(t for options in pools for t in options)

@@ -1,17 +1,15 @@
 """ScheduleMind 설정 스키마 (SPEC §12)."""
 
 import re
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from minds.social import SlotAction
+from minds.social import SlotAction, Tone
 from world.contracts import LocationPath
 
 _HHMM = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 EntryAction = SlotAction
-Tone = Literal["polite", "casual"]
 
 
 class ScheduleEntry(BaseModel):

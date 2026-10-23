@@ -121,6 +121,8 @@ def _scene_vars(persona: LlmPersona, scene: Scene) -> dict[str, str]:
 def _persona_text(persona: LlmPersona) -> str:
     lines = [f"{persona.display_name} ({persona.age}세)"]
     lines += list(persona.identity)
+    if persona.speech is not None:
+        lines.append(persona.speech.describe())
     return "\n".join(lines)
 
 

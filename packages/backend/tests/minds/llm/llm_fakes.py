@@ -86,9 +86,7 @@ class ListMemory:
         self.stored.append((kind, content))
         return 3
 
-    def remember_many(
-        self, items: list[tuple[str, datetime.datetime]]
-    ) -> list[int]:
+    def remember_many(self, items: list[tuple[str, datetime.datetime]]) -> list[int]:
         return [self.remember(text, now) for text, now in items]
 
     def retrieve(

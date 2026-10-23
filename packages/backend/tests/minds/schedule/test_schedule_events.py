@@ -10,7 +10,7 @@ from minds.schedule import (
     ScheduleMind,
     build_schedule_mind,
 )
-from minds.social import SocialSeed, event_act
+from minds.social import SocialSeed, SpeechStyle, Voice, event_act
 from world.contracts import (
     BodyState,
     ConversationView,
@@ -95,7 +95,7 @@ def test_host_invites_and_guest_accepts_then_goes_to_party() -> None:
     kinds = [a.kind for u in history for a in u.acts]
     assert "invite" in kinds and "accept" in kinds
     invite = next(u for u in history if u.acts[0].kind == "invite")
-    assert "내일 오후 5시" in invite.text and "Seating" in invite.text
+    assert "내일 오후 5시" in invite.text and "홉스 카페 홀" in invite.text
     assert maria.social.agenda.is_committed(PARTY)
     before = PARTY.start_time - datetime.timedelta(minutes=20)
     away = _ctx("maria", before, where="Smallville > Town Square")
@@ -224,3 +224,26 @@ def test_recent_lines_are_not_repeated() -> None:
         assert reply is not None
         texts.append(reply.text)
     assert len(set(texts)) == len(texts)
+
+
+def test_residents_with_different_voices_answer_the_same_invite_differently() -> None:
+    def accept_text(voice: Voice) -> str:
+        config = ScheduleConfig(
+            entries=[
+                ScheduleEntry(start="08:00", location_path=CAFE, description="일한다")
+            ],
+        )
+        mind = build_schedule_mind(
+            resident_id="guest",
+            display_name="Guest",
+            config=config,
+            rng=random.Random(2),
+            style=SpeechStyle(voice=voice),
+        )
+        reply = _reply_to(mind, event_act("invite", PARTY))
+        assert reply is not None and reply.acts[0].kind == "accept"
+        return reply.text
+
+    texts = {accept_text(v) for v in ("bright", "cool", "gruff", "sporty", "dreamy")}
+    assert len(texts) == 5
+    assert all("Seating" not in t for t in texts)

@@ -105,7 +105,7 @@ def test_invite_accept_adds_commitment_and_moves_there() -> None:
     reply = _respond(mind, _said("초대", _invite()))
     assert reply is not None and reply.acts[0].kind == "accept"
     assert reply.acts[0].start_time == PARTY_START
-    assert "오후 5시" in reply.text and "Town Square" in reply.text
+    assert "오후 5시" in reply.text and "마을 광장" in reply.text
     ctx = _ctx(PARTY_START - datetime.timedelta(minutes=20))
     action = asyncio.run(mind.next_action(ctx))
     assert action.kind == "move" and action.location_path == SQUARE

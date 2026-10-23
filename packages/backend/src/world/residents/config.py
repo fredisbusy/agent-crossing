@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from minds.social import SpeechStyle, Voice
 from world.contracts import LocationPath, MindKind, ResidentId, SocialEvent
 
 DEFAULT_RESIDENTS_DIR = Path(__file__).resolve().parents[3] / "residents"
@@ -47,6 +48,15 @@ class ResidentConfig(BaseModel):
     seed_facts: list[SeedFact] = Field(default_factory=list)
     friendships: dict[ResidentId, int] = Field(default_factory=dict)
     """시작 우호도(0~100)."""
+    voice: Voice | None = None
+    """말투 유형. 두 마음이 같은 말투로 말한다(규칙 마음은 템플릿, LLM 마음은 프롬프트)."""
+    catchphrase: str | None = None
+    """말끝에 가끔 붙이는 말버릇."""
+
+    def speech_style(self) -> SpeechStyle | None:
+        if self.voice is None:
+            return None
+        return SpeechStyle(voice=self.voice, catchphrase=self.catchphrase)
 
 
 def load_resident_configs(directory: Path | None = None) -> list[ResidentConfig]:

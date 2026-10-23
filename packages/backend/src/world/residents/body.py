@@ -2,6 +2,7 @@
 
 import datetime
 
+from minds.social import place_name
 from world.contracts import (
     ActionIntent,
     BodyState,
@@ -86,7 +87,7 @@ class Body:
                 return None
             return Observation(
                 kind="event",
-                text=f"{intent.location_path}로 갈 수 없었다",
+                text=f"{place_name(intent.location_path)}에 갈 수 없었다",
                 observed_at=now,
                 location_path=self._location_path,
                 subject_id=self._resident_id,

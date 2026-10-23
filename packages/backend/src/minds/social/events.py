@@ -5,14 +5,9 @@
 
 import datetime
 
-from world.contracts import (
-    LOCATION_SEPARATOR,
-    LocationPath,
-    ResidentId,
-    SocialEvent,
-    SpeechAct,
-    SpeechActKind,
-)
+from world.contracts import ResidentId, SocialEvent, SpeechAct, SpeechActKind
+
+from .places import place_name
 
 DEFAULT_EVENT_DURATION = datetime.timedelta(minutes=60)
 """화행에 종료 시각이 없을 때 쓰는 기본 행사 길이 (SPEC §13)."""
@@ -41,11 +36,6 @@ def josa(word: str, with_final: str, without_final: str) -> str:
     last = word[-1] if word else ""
     has_final = "가" <= last <= "힣" and (ord(last) - ord("가")) % 28 != 0
     return word + (with_final if has_final else without_final)
-
-
-def place_name(location_path: LocationPath) -> str:
-    """위치 경로의 마지막 구성요소."""
-    return location_path.split(LOCATION_SEPARATOR)[-1]
 
 
 def describe_event(event: SocialEvent, now: datetime.datetime) -> str:

@@ -8,10 +8,11 @@ from .events import (
     format_day,
     format_time,
     josa,
-    place_name,
 )
+from .places import place_name, place_names
 from .facts import Fact, FactStore
 from .friendship import Friendship
+from .voice import VOICE_DESCRIPTION, VOICE_TONE, SpeechStyle, Tone, Voice
 from .state import HasSocialState, SocialSeed, SocialState
 
 __all__ = [
@@ -27,6 +28,11 @@ __all__ = [
     "SlotAction",
     "SocialSeed",
     "SocialState",
+    "SpeechStyle",
+    "Tone",
+    "VOICE_DESCRIPTION",
+    "VOICE_TONE",
+    "Voice",
     "describe_event",
     "event_act",
     "event_from_act",
@@ -38,5 +44,6 @@ __all__ = [
     "my_turns",
     "partner_of",
     "place_name",
+    "place_names",
     "should_stop",
 ]

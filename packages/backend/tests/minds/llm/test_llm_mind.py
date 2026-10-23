@@ -1,9 +1,10 @@
 import asyncio
 import datetime
+from dataclasses import replace
 
 from llm_fakes import CAFE, DAY, HOME, PARK, ScriptedClient, ctx, make_mind, view
 from minds.llm.routine import plan_request
-from minds.social import SocialSeed, event_act
+from minds.social import SocialSeed, SpeechStyle, event_act
 from world.contracts import (
     ConversationView,
     Observation,
@@ -85,7 +86,7 @@ def test_invite_times_come_from_the_known_event_not_the_model() -> None:
     assert mind.social.talking_points("maria", MORNING) == ()
     prompt = client.prompts[-1]
     assert "밸런타인데이 파티에 초대하기" in prompt and "Maria" in prompt
-    assert "Loves making people feel welcome." in prompt and "Seating" in prompt
+    assert "Loves making people feel welcome." in prompt and "홉스 카페 홀" in prompt
 
 
 def test_accepting_a_heard_invite_commits_through_shared_state() -> None:
@@ -203,3 +204,16 @@ def test_day_plan_is_requested_in_korean() -> None:
         mind.persona, MORNING, commitments=(), holidays=(), yesterday=""
     )
     assert "한국어" in request.persona_background
+
+
+def test_llm_prompt_carries_the_same_voice_definition() -> None:
+    reply = {"utterance": "안녕하세요!", "acts": [{"kind": "greet"}]}
+    client = ScriptedClient(lambda _: reply)
+    mind, _ = make_mind(client)
+    mind.persona = replace(
+        mind.persona, speech=SpeechStyle(voice="warm", catchphrase="후후")
+    )
+    asyncio.run(mind.respond(ctx("isabella", MORNING), _conv()))
+    assert (
+        SpeechStyle(voice="warm", catchphrase="후후").describe() in client.prompts[-1]
+    )

@@ -57,7 +57,7 @@ def test_heard_invite_teaches_event_with_host_and_accept_commits() -> None:
     maria.hear(_said("isabella", "maria", event_act("invite", PARTY)), NOW)
     known = maria.facts.get(PARTY.name)
     assert known is not None and known.event is not None
-    assert known.event.host_id == "isabella" and "Seating" in known.fact
+    assert known.event.host_id == "isabella" and "홉스 카페 홀" in known.fact
     maria.said(_said("maria", "isabella", event_act("accept", PARTY), minute=1), NOW)
     [commitment] = maria.agenda.commitments
     assert commitment.role == "guest" and commitment.event.host_id == "isabella"
