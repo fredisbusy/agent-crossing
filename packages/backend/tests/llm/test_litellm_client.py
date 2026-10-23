@@ -47,7 +47,7 @@ def test_generate_uses_litellm_completion_shape(monkeypatch) -> None:
     assert captured["api_base"] == "https://model.fredly.dev"
     assert captured["api_key"] == "test-key"
     assert captured["timeout"] == 7.0
-    assert captured["num_retries"] == 2
+    assert captured["num_retries"] == 1
     assert captured["messages"] == [
         {"role": "system", "content": "You are concise."},
         {"role": "user", "content": "Return JSON"},
@@ -111,7 +111,7 @@ def test_embed_reads_litellm_embedding_vector(monkeypatch) -> None:
     assert embedding == [0.1, 0.2, 0.3]
     assert captured["model"] == "ollama/bge-m3"
     assert captured["input"] == ["hello"]
-    assert captured["num_retries"] == 2
+    assert captured["num_retries"] == 1
     assert captured["dimensions"] == 3
 
 
@@ -197,3 +197,31 @@ def test_max_concurrency_caps_parallel_requests(monkeypatch) -> None:
         _ = list(pool.map(lambda _: client.generate(prompt="p"), range(6)))
 
     assert peak == 2
+
+
+def test_num_retries_is_forwarded(monkeypatch) -> None:
+    captured: list[dict[str, Any]] = []
+
+    def fake_completion(**kwargs: Any) -> dict[str, object]:
+        captured.append(kwargs)
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    def fake_embedding(**kwargs: Any) -> dict[str, object]:
+        captured.append(kwargs)
+        return {"data": [{"embedding": [0.0] * kwargs["dimensions"]}]}
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    monkeypatch.setattr(litellm, "embedding", fake_embedding)
+    client = LiteLlmClient(
+        default_generate_model="ollama_chat/x",
+        default_embedding_model="ollama/y",
+        num_retries=3,
+    )
+    client.generate(prompt="p")
+    client.embed_many(inputs=["a"], expected_dimension=4)
+    assert [c["num_retries"] for c in captured] == [3, 3]
+
+
+def test_num_retries_default_is_one() -> None:
+    client = LiteLlmClient(default_generate_model="a", default_embedding_model="b")
+    assert client.num_retries == 1

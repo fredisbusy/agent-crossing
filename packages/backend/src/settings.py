@@ -46,6 +46,8 @@ EMBEDDING_MODEL: Final[str] = os.getenv("EMBEDDING_MODEL", _default_embedding_mo
 LLM_TIMEOUT_SECONDS: Final[float] = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
 LLM_MAX_CONCURRENCY: Final[int] = int(os.getenv("LLM_MAX_CONCURRENCY", "8"))
 """LLM·임베딩 동시 요청 상한(클라이언트 하나 기준). 0이면 제한하지 않는다."""
+LLM_NUM_RETRIES: Final[int] = int(os.getenv("LLM_NUM_RETRIES", "1"))
+"""호출 실패 시 LiteLLM 재시도 횟수. 최악 소요 = timeout x (1 + 재시도)."""
 LLM_RESPONSE_CACHE: Final[str] = os.getenv("LLM_RESPONSE_CACHE", "")
 """LLM 응답 기록·재생 캐시 sqlite 파일 경로. 비우면 캐시를 끈다."""
 LLM_RESPONSE_CACHE_MODE: Final[str] = os.getenv("LLM_RESPONSE_CACHE_MODE", "readwrite")
