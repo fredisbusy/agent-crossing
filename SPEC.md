@@ -26,18 +26,18 @@ Agent Crossing은 NPC가 기억과 계획을 기반으로 자율 행동하는 2D
 ## 2. 시스템 아키텍처
 
 ```text
-Frontend (React 19 + Phaser 3)
+Frontend (React 19 + Phaser 4)
   - map rendering, inspector, user intervention
-        <-> WebSocket
+        <-> WebSocket (WorldSnapshot)
 Backend (FastAPI)
-  - AgentBrain (tick loop)
-  - Memory (PostgreSQL + pgvector)
-  - World clock/scheduler
+  - TownRuntime (tick loop, 시계·스케줄러, 스냅샷 구독)
+  - TownSimulation: 주민 = 몸 + 마음(LLMMind / ScheduleMind, §12)
+  - Memory stream (지금은 프로세스 안, 영속 저장은 §4.2)
 ```
 
 Backend 레이어 책임:
 
-- API 레이어: 요청/응답, websocket 브로드캐스트
+- API 레이어: 요청/응답, websocket 브로드캐스트(§9)
 - Service/UseCase: 인지 루프 오케스트레이션
 - Domain: MemoryObject, plan/reflection/ranking 규칙
 - Repository: PostgreSQL + pgvector I/O
@@ -195,6 +195,9 @@ react 정책:
 
 - 매 tick마다 “현재 계획 유지 vs 반응” 판정
 - 반응 필요 시, 하루 전체를 재생성하지 않고 **현재 시점 이후 계획만** 재수립
+- 마을 LLMMind(§12, §14): 마음은 깨어날 때만 판정한다. 그 깨움에 새로 전달된 `sight`·`event` 관찰(내 것 제외)이 있을 때 LLM 1회(요약 설명, 지금 하는 일, 번호 붙인 관찰, 관찰로 검색한 관련 기억 5개)로 `{"react", "reason", "reaction": {description, location, minutes}}`을 받는다. 발화만 있을 때, 잠·약속 구간일 때는 판정하지 않는다(약속은 Agenda가 항상 우선한다)
+- 반응하면 [지금, 지금 + clamp(minutes, 5, 120)] 반응 구간(그날 자정에서 자름, 장소는 아는 장소일 때만)을 넣고, 반응이 끝난 뒤의 남은 하루를 하루 계획기로 1회 다시 만든다. 지난 구간은 보존하고 걸친 구간은 지금에서 자르며, 구간 겹침은 정규화한다. 재계획이 실패하면 기존 계획에서 반응 구간과 겹치는 부분만 잘라 낸다. 지금 이후의 분해 캐시를 비우고, 반응 구간은 다시 분해하지 않는다. 결정은 plan 기억("…을 보고 …하기로 했다")으로 남긴다
+- 판정 기록(시각, react, reason, 관찰)은 마음의 진단 버퍼(`LLMMind.reaction_log`, 최근 20개)에만 남기고 행동 결과에는 섞지 않는다
 
 ---
 
@@ -216,17 +219,20 @@ react 정책:
 
 ---
 
-## 9. API / 이벤트 계약 (초안)
+## 9. API / 이벤트 계약
 
-WebSocket 이벤트 최소 단위:
+백엔드는 `TownRuntime`(`world/town/runtime.py`) 하나를 서비스한다. 틱은 락 하나로 직렬화하고, 밖으로 내는 상태는 마지막으로 완결된 틱의 스냅샷이다(틱 도중의 반쪽 상태는 내지 않는다). 스케줄러 중지는 틱 경계에서만 한다.
 
-- `agent_id`
-- `position`
-- `current_action`
-- `current_plan_item`
-- `dialogue`
-- `emoji`
-- `timestamp`
+- `GET /world/state`: `{"snapshot": WorldSnapshot, "scheduler_running": bool, "tick_interval_seconds": float, "last_error": str | null}`
+- `GET /world/text`: QA용 짧은 JSON 상태(§15)
+- `POST /world/advance?minutes=N`(1..1440): N틱 진행 후 `WorldSnapshot`
+- `POST /world/tick/start`, `POST /world/tick/stop`: 스케줄러(틱 → 알림 → `WORLD_TICK_INTERVAL_SECONDS` 대기)
+- `WS /ws/world`: 접속 즉시 1회, 이후 틱마다 `{"type": "snapshot", "snapshot": WorldSnapshot}`. 구독자별로 최신 스냅샷 하나만 보관해 느린 클라이언트가 틱을 막지 않는다
+- `WorldSnapshot`(`world/contracts.py` = `packages/shared/src/world.ts`): `tick`, `sim_time`(ISO), `residents[]`(`resident_id`, `display_name`, `tile`, `location_path`, `action_description`, `emoji`, `utterance_text`, `mind_kind`)
+- 마을 구성 설정: `TOWN_SCENARIO`(기본 `valentine`), `TOWN_AGENTS`(쉼표 id), `TOWN_AGENT_COUNT`(기본 0 = LLM 없이 기동), `TOWN_SEED`. CLI(`run_town_scenario.py`)와 같은 `build_town`으로 조립한다
+- 시작 시 DB 초기화가 실패해도 경고만 남기고 기동한다(마을은 아직 DB를 쓰지 않는다)
+
+남은 것: 변경분(delta) 메시지, 스냅샷의 `current_plan_item`.
 
 God mode 입력:
 

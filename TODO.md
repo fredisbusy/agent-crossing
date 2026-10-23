@@ -72,7 +72,7 @@
     - [x] reaction 첫 시도를 의도+발화 결합 1회 호출로 받고, 실패·빈 발화면 2단계로 폴백한다
     - [x] retrieve 점수를 증분 임베딩 행렬과 numpy 벡터 연산으로 계산한다 (참조 구현과 순서까지 동등)
     - [x] LLM·임베딩 동시 요청 상한 `LLM_MAX_CONCURRENCY`를 둔다
-    - [ ] 실제 모델로 결합 reaction의 should_react 비율과 배치 중요도 형식 준수를 main과 비교한다
+    - [ ] 실제 모델로 배치 중요도 형식 준수를 확인한다 (결합 reaction은 옛 2인 스택과 함께 삭제)
 
 - [x] `P1` LLM 직렬 대기를 줄인다 (2026-10-23, SPEC §3·§6·§14)
   - DoD:
@@ -141,6 +141,8 @@
 
 ### 2-D. Reaction 생성 파이프라인 안정화
 
+> 2026-10-23: 아래 2-D와 4)의 옛 2인 대화 스택(AgentBrain·reaction graph·guardrails·engine/session/runtime·persona)은 마을 LLMMind로 대체되어 삭제했다. 기록으로만 남긴다.
+
 - [x] `P1` reaction 생성을 2-call(판단/문장생성)로 분리한다
   - Depends on: Reflection Loop 핵심 완료
   - DoD:
@@ -190,17 +192,18 @@
 
 ### 3-B. Tick react 판정과 부분 재계획
 
-- [ ] `P1` tick마다 이벤트-계획 충돌 판정기를 구현한다
+- [x] `P1` tick마다 이벤트-계획 충돌 판정기를 구현한다 (2026-10-23, SPEC §7)
   - Depends on: minute plan 생성기 구현
   - DoD:
-    - [ ] 관찰 이벤트가 현재 계획을 방해/우선하는지 판정한다
-    - [ ] 판정 결과(reason/code)를 로그 가능 형태로 남긴다
+    - [x] 관찰 이벤트가 현재 계획을 방해/우선하는지 판정한다(깨움마다 새 시야·사건 관찰이 있으면 LLM 1회, 잠·약속 중 생략)
+    - [x] 판정 결과(reason/code)를 로그 가능 형태로 남긴다(`LLMMind.reaction_log`, 최근 20개)
+    - [ ] 실제 모델로 하루당 판정·반응 횟수와 반응 내용 품질을 잰다
 
-- [ ] `P1` react 발생 시 이후 구간만 재수립한다
+- [x] `P1` react 발생 시 이후 구간만 재수립한다
   - Depends on: tick 충돌 판정기 구현
   - DoD:
-    - [ ] 현재 시점 이전 계획은 보존한다
-    - [ ] 현재 시점 이후 계획만 재생성한다
+    - [x] 현재 시점 이전 계획은 보존한다
+    - [x] 현재 시점 이후 계획만 재생성한다(반응 구간 + 반응 끝 이후 하루 계획 1회, 실패 시 겹침만 잘라 냄)
 
 ### 3-C. 대화 연계 planning
 
@@ -274,8 +277,9 @@
 - [ ] `P1` WebSocket state broadcast를 구현한다
   - Depends on: world clock + tick scheduler 연동
   - DoD:
-    - [ ] `position`, `action`, `dialogue`, `emoji`, `current_plan`을 브로드캐스트한다
-    - [ ] 누락 필드 없이 클라이언트에서 파싱 가능하다
+    - [x] `position`, `action`, `dialogue`, `emoji`를 브로드캐스트한다(`WS /ws/world`, 2026-10-23, SPEC §9)
+    - [ ] `current_plan`을 스냅샷에 싣는다
+    - [x] 누락 필드 없이 클라이언트에서 파싱 가능하다(프런트 파서 통과, 브라우저에서 연결 확인)
 
 ### 4-B. Frontend 시각화
 
@@ -406,7 +410,7 @@
   - DoD:
     - [x] `window.render_game_to_text` / `window.advanceTime`이 개발 빌드에서 동작한다
 - [x] `P2` 구조 정책 기준선 줄이기: `llm/` 큰 파일 분할, `tests/` 소스 구조 미러링
-- [ ] `P2` 남은 기준선: `agents/` brain·planning·reaction graph, planning state 분할
+- [ ] `P2` 남은 기준선: `agents/planning/graph.py` 분할 (brain·reaction graph·planning state는 옛 스택 삭제로 해소)
 
 ### 6-B. 2차: 통합
 
@@ -431,6 +435,10 @@
     - [ ] 실제 LLM으로 마을 하루를 돌려 대화 품질을 확인한다(`live_*`)
 - [ ] `P1` 실제 공간 + 두 마음으로 마을 하루 돌리기(텍스트 로그)
 - [ ] `P1` WebSocket 스냅샷·변경분 브로드캐스트, `/world/text`·`/world/advance`
+  - DoD:
+    - [x] API가 `TownRuntime`을 서비스한다: `/world/state`·`/world/text`·`/world/advance`·`/world/tick/start|stop`·`WS /ws/world` (2026-10-23, SPEC §9)
+    - [x] CLI와 API가 `build_town` 하나로 마을을 조립한다
+    - [ ] 변경분(delta) 메시지
 - [ ] `P2` 밸런타인 파티 시나리오: 전원 LLM 대 하이브리드 비교 리포트
   - DoD:
     - [x] 시나리오 실행기·지표(확산·약속·참석·마음 호출 수)와 CLI(`run_town_scenario.py`)
