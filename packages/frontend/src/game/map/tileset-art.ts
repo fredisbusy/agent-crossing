@@ -1,4 +1,5 @@
 import { TILE, TILE_SIZE } from "../../tiled";
+import { type Painter, rect } from "../draw";
 import { TILE_COUNT } from "./fallback-map";
 
 /** 아늑한 마을 팔레트. */
@@ -21,13 +22,6 @@ export const PALETTE = {
   leaf: "#4aa564",
   leafDark: "#378a50",
 } as const;
-
-type Painter = Pick<CanvasRenderingContext2D, "fillStyle" | "fillRect">;
-
-function rect(ctx: Painter, color: string, x: number, y: number, w: number, h: number): void {
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, w, h);
-}
 
 const TILE_PAINTERS: Record<number, (ctx: Painter, o: number) => void> = {
   [TILE.grass]: (ctx, o) => {

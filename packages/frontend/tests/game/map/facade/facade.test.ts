@@ -11,9 +11,9 @@ import {
   type FacadePlan,
   hasWindow,
   paintFacade,
-  type Painter,
   planFacades,
 } from "../../../../src/game/map/facade";
+import type { Painter } from "../../../../src/game/draw";
 import { extractMapSprites } from "../../../../src/game/map/objects";
 
 interface RawLayer {

@@ -1,10 +1,8 @@
+import { type Painter, rect } from "../../draw";
 import { TILE_SIZE } from "../../../tiled";
 import { FACADE_HEIGHT, type FacadePlan } from "./facade-plan";
 import { DOOR_TOP, doorGlass, facadeSeed, type GlassRect, hasWindow, WINDOW_GLASS } from "./facade-glass";
 import type { FacadeStyle } from "./facade-style";
-
-/** 그리기에 쓰는 캔버스 2D 일부(테스트에서 가짜로 바꾼다). */
-export type Painter = Pick<CanvasRenderingContext2D, "fillStyle" | "fillRect">;
 
 // 정면 세로 구역(px, 위에서부터). 처마(간판 자리) → 벽(창·문) → 주춧돌.
 export const EAVE_BOTTOM = 14;
@@ -39,11 +37,6 @@ export function shade(hex: string, amount: number): string {
     return Math.max(0, Math.min(255, Math.round(t)));
   };
   return `#${((channel(16) << 16) | (channel(8) << 8) | channel(0)).toString(16).padStart(6, "0")}`;
-}
-
-function rect(ctx: Painter, color: string, x: number, y: number, w: number, h: number): void {
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, w, h);
 }
 
 const SHINGLE_ROW = 3;
