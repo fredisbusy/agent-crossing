@@ -1,8 +1,7 @@
 import { reconnectDelayMs } from "./reconnect";
 import { parseWorldMessage } from "./parse-message";
 import type { FeedHandlers, WorldFeed } from "./feed";
-
-export const WORLD_SOCKET_URL = "ws://localhost:8000/ws/world";
+import { resolveWorldSocketUrl } from "./world-socket-url";
 
 export interface SocketLike {
   onopen: (() => void) | null;
@@ -33,7 +32,7 @@ export class WorldSocket implements WorldFeed {
   private handlers: FeedHandlers | null = null;
 
   constructor(
-    private readonly url: string = WORLD_SOCKET_URL,
+    private readonly url: string = resolveWorldSocketUrl(import.meta.env.VITE_WORLD_SOCKET_URL, globalThis.location),
     private readonly createSocket: SocketFactory = browserSocket,
   ) {}
 
