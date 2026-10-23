@@ -22,7 +22,7 @@ from minds.social import Slot
 from world.contracts import LOCATION_SEPARATOR, LocationPath
 
 from ..contracts import DayPlanner, LlmPersona
-from .routine import resolve_place
+from .routine import find_place
 
 HOURLY_CALLS_PER_DAY_ITEM = 1
 """하루 계획 항목 하나를 시간 단위로 쪼개는 호출 수."""
@@ -32,7 +32,7 @@ MAX_MINUTE_CALLS_PER_HOURLY_ITEM = 3
 """한 시간 단위 항목에서 분 계획을 만드는 호출 수의 상한. 넘으면 하루 계획 구간으로 대체한다."""
 BUILDING_DEPTH = 2
 """같은 건물로 보는 위치 경로 앞부분 단계 수 (마을 > 건물)."""
-_PlanItemT = TypeVar("_PlanItemT", HourlyPlanItem, MinutePlanItem)
+_NaiveT = TypeVar("_NaiveT", DayPlanItem, HourlyPlanItem, MinutePlanItem)
 _RECOVERABLE = (RuntimeError, TimeoutError, ValueError)
 
 
@@ -54,6 +54,8 @@ class Decomposer:
 
     def refine(self, slot: Slot, item: DayPlanItem, now: datetime.datetime) -> Slot:
         """하루 계획 구간을 지금의 분 단위 행동 구간으로 좁힌다. 못 하면 구간 그대로."""
+        item = _naive(item)
+        self._drop_before(now.date())
         block = select_hourly_plan(
             self._hourly_items(item, now), current_time=now
         ).current
@@ -66,7 +68,7 @@ class Decomposer:
         step = selection.active
         if step is None:
             nxt = selection.next
-            return _until(slot, nxt.start_time) if nxt else slot
+            return _until(slot, nxt.start_time if nxt else block.end_time)
         return Slot(
             self._place(step.location, slot),
             step.action_content.strip(),
@@ -81,6 +83,7 @@ class Decomposer:
 
         계획을 다시 세운 뒤(`PlannedRoutine.replace_from`) 낡은 분해를 버릴 때 쓴다.
         """
+        since = since.replace(tzinfo=None) if since else None
         if since is None:
             self._hourly.clear()
             self._minutes.clear()
@@ -146,7 +149,14 @@ class Decomposer:
             )
         except _RECOVERABLE:
             made = []
-        items = sorted((_naive(m) for m in made), key=lambda m: m.start_time)
+        items = sorted(
+            (
+                m
+                for m in map(_naive, made)
+                if m.end_time > block.start_time and m.start_time < block.end_time
+            ),
+            key=lambda m: m.start_time,
+        )
         covered = max((m.end_time for m in items), default=block.end_time)
         if covered <= at:
             covered = block.end_time
@@ -156,10 +166,19 @@ class Decomposer:
 
     def _place(self, text: str, slot: Slot) -> LocationPath:
         """분 단위 장소가 하루 계획 구간과 같은 건물 안의 아는 장소일 때만 쓴다."""
-        found = resolve_place(text, self._persona)
-        if _building(found) == _building(slot.location_path):
+        found = find_place(text, self._persona)
+        if found is not None and _building(found) == _building(slot.location_path):
             return found
         return slot.location_path
+
+    def _drop_before(self, day: datetime.date) -> None:
+        """지난 날짜 항목의 캐시를 버린다."""
+        self._hourly = {
+            k: v for k, v in self._hourly.items() if k.end_time.date() >= day
+        }
+        self._minutes = {
+            k: v for k, v in self._minutes.items() if k.end_time.date() >= day
+        }
 
 
 def _building(path: LocationPath) -> str:
@@ -171,7 +190,7 @@ def _until(slot: Slot, limit: datetime.datetime) -> Slot:
     return replace(slot, end=min(slot.end, limit)) if limit > slot.start else slot
 
 
-def _naive(item: _PlanItemT) -> _PlanItemT:
+def _naive(item: _NaiveT) -> _NaiveT:
     return replace(
         item,
         start_time=item.start_time.replace(tzinfo=None),

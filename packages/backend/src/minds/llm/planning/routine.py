@@ -131,6 +131,11 @@ class PlannedRoutine:
 
 def resolve_place(text: str, persona: LlmPersona) -> LocationPath:
     """계획의 장소 문장을 아는 위치 경로로. 가장 구체적으로 맞는 경로, 없으면 집."""
+    return find_place(text, persona) or persona.home
+
+
+def find_place(text: str, persona: LlmPersona) -> LocationPath | None:
+    """`resolve_place`와 같되 아는 장소를 못 찾으면 집 대신 None."""
     wanted = text.strip().lower()
     places = persona.known_places
     for path in places:
@@ -148,7 +153,7 @@ def resolve_place(text: str, persona: LlmPersona) -> LocationPath:
         score = (len(hits), max(hits), -len(segments))
         if best is None or score > best[0]:
             best = (score, path)
-    return best[1] if best else persona.home
+    return best[1] if best else None
 
 
 def slot_action(content: str) -> SlotAction:

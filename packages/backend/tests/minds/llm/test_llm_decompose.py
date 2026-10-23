@@ -3,13 +3,18 @@
 import asyncio
 import datetime
 
-from agents.planning.models import DayPlanItem
-from llm_fakes import DAY, HOME, PARK, ScriptedClient, ctx, make_mind
+from agents.planning.models import (
+    DayPlanItem,
+    HourlyPlanItem,
+    MinutePlanItem,
+)
+from llm_fakes import CAFE, DAY, HOME, PARK, ScriptedClient, ctx, make_mind
 from minds.llm import LLMMind
 from minds.llm.planning import (
     HOURLY_CALLS_PER_DAY_ITEM,
     MAX_MINUTE_CALLS_PER_HOURLY_ITEM,
     MINUTE_CALLS_PER_HOURLY_ITEM,
+    find_place,
 )
 from minds.social import SocialSeed
 from plan_fakes import LayeredPlanner
@@ -86,14 +91,19 @@ def test_hourly_failure_falls_back_to_the_day_slot_without_retry_storm() -> None
     assert len(planner.hourly_calls) == 1 and planner.minute_calls == []
 
 
-def test_minute_failure_falls_back_once_per_hourly_item() -> None:
+def test_minute_failure_falls_back_to_the_hourly_item_end() -> None:
     planner = LayeredPlanner(fail_minutes=True)
     mind = _mind(planner)
-    for now in (at(9, 10), at(9, 20), at(9, 50), at(10, 10), at(10, 20)):
+    ends: list[datetime.datetime] = []
+    now = at(9, 10)
+    while now < at(12):
         action = _act(mind, now)
-        assert action.description == "공원을 산책한다" and action.until == at(12)
+        assert action.description == "공원을 산책한다"
+        ends.append(action.until)
+        now = action.until
+    assert ends == [at(10), at(11), at(12)]
     assert len(planner.hourly_calls) == 1
-    assert len(planner.minute_calls) == 2
+    assert len(planner.minute_calls) == 3
 
 
 def test_other_building_location_is_ignored() -> None:
@@ -142,11 +152,104 @@ def test_minute_calls_per_hourly_item_are_capped() -> None:
     planner = LayeredPlanner(horizon_minutes=5)
     mind = _mind(planner)
     now = at(9)
-    while now < at(10):
-        now = _act(mind, now).until
-    calls = [b.start_time for _, b in planner.minute_calls]
-    assert len(calls) == MAX_MINUTE_CALLS_PER_HOURLY_ITEM
-    assert set(calls) == {at(9)}
+    last = _act(mind, now)
+    while last.until < at(10):
+        last = _act(mind, last.until)
+    assert [b.start_time for _, b in planner.minute_calls] == [at(9)] * (
+        MAX_MINUTE_CALLS_PER_HOURLY_ITEM
+    )
+    assert last.description == "공원을 산책한다" and last.until == at(10)
+    _act(mind, at(10))
+    assert planner.minute_calls[-1][1].start_time == at(10)
+
+
+def test_timezone_aware_plans_do_not_break_comparisons() -> None:
+    utc = datetime.timezone.utc
+
+    class AwarePlanner(LayeredPlanner):
+        def generate_day_plan(self, request):  # type: ignore[no-untyped-def]
+            return [
+                DayPlanItem(
+                    start_time=at(9).replace(tzinfo=utc),
+                    end_time=at(12).replace(tzinfo=utc),
+                    location="Johnson Park Garden",
+                    action_content="공원을 산책한다",
+                )
+            ]
+
+        def generate_hourly_plan(self, **kwargs):  # type: ignore[no-untyped-def]
+            return [
+                HourlyPlanItem(
+                    start_time=h.start_time.replace(tzinfo=utc),
+                    end_time=h.end_time.replace(tzinfo=utc),
+                    location=h.location,
+                    action_content=h.action_content,
+                )
+                for h in super().generate_hourly_plan(**kwargs)
+            ]
+
+        def generate_minute_plan(self, **kwargs):  # type: ignore[no-untyped-def]
+            return [
+                MinutePlanItem(
+                    start_time=m.start_time.replace(tzinfo=utc),
+                    end_time=m.end_time.replace(tzinfo=utc),
+                    location=m.location,
+                    action_content=m.action_content,
+                )
+                for m in super().generate_minute_plan(**kwargs)
+            ]
+
+    mind = _mind(AwarePlanner())
+    action = _act(mind, at(9, 20))
+    assert action.description == "09:20 걷는다" and action.until == at(9, 35)
+    mind._decomposer.invalidate(at(9, 30).replace(tzinfo=utc))  # noqa: SLF001
+    assert _act(mind, at(9, 40)).description == "09:40 걷는다"
+
+
+def test_unknown_minute_place_does_not_become_home() -> None:
+    class CounterPlanner(LayeredPlanner):
+        def generate_day_plan(self, request):  # type: ignore[no-untyped-def]
+            return [
+                DayPlanItem(
+                    start_time=at(9),
+                    end_time=at(12),
+                    location="Hobbs Cafe Seating",
+                    action_content="손님을 맞는다",
+                )
+            ]
+
+    mind = _mind(CounterPlanner(minute_location="부엌 싱크대"))
+    action = _act(mind, at(9, 20), where=CAFE)
+    assert action.description == "09:20 걷는다" and action.location_path == CAFE
+
+
+def test_find_place_returns_none_for_unknown_text() -> None:
+    mind = _mind(LayeredPlanner())
+    assert find_place("부엌 싱크대", mind.persona) is None
+    assert find_place("Johnson Park Garden", mind.persona) == PARK
+
+
+def test_minute_items_outside_the_hourly_block_are_ignored() -> None:
+    class FarFuturePlanner(LayeredPlanner):
+        def generate_minute_plan(self, **kwargs):  # type: ignore[no-untyped-def]
+            items = super().generate_minute_plan(**kwargs)
+            later = datetime.timedelta(days=3)
+            return [
+                *items[:1],
+                MinutePlanItem(
+                    start_time=items[0].start_time + later,
+                    end_time=items[0].end_time + later,
+                    location="Johnson Park Garden",
+                    action_content="먼 훗날",
+                ),
+            ]
+
+    planner = FarFuturePlanner()
+    mind = _mind(planner)
+    first = _act(mind, at(9, 5))
+    again = _act(mind, first.until)
+    assert again.description != "먼 훗날"
+    assert len(planner.minute_calls) == 2
 
 
 def test_routine_replace_from_keeps_past_and_swaps_future() -> None:

@@ -4,7 +4,7 @@ from .decompose import (
     MINUTE_CALLS_PER_HOURLY_ITEM,
     Decomposer,
 )
-from .routine import PlannedRoutine, plan_request, resolve_place
+from .routine import PlannedRoutine, find_place, plan_request, resolve_place
 
 __all__ = [
     "HOURLY_CALLS_PER_DAY_ITEM",
@@ -12,6 +12,7 @@ __all__ = [
     "MINUTE_CALLS_PER_HOURLY_ITEM",
     "Decomposer",
     "PlannedRoutine",
+    "find_place",
     "plan_request",
     "resolve_place",
 ]
