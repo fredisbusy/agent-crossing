@@ -70,3 +70,24 @@ def test_websocket_sends_initial_and_advance_snapshots(client: TestClient) -> No
         while ticks[-1] < 2:
             ticks.append(ws.receive_json()["snapshot"]["tick"])
         assert ticks[-1] == 2
+
+
+def test_state_exposes_last_error_null(client: TestClient) -> None:
+    assert client.get("/world/state").json()["last_error"] is None
+
+
+def test_websocket_ignores_binary_frames(client: TestClient) -> None:
+    with client.websocket_connect("/ws/world") as ws:
+        ws.receive_json()
+        ws.send_bytes(b"\x00\x01")
+        client.post("/world/advance", params={"minutes": 1})
+        assert ws.receive_json()["snapshot"]["tick"] == 1
+
+
+def test_startup_survives_init_db_failure() -> None:
+    def broken() -> None:
+        raise RuntimeError("no db")
+
+    app = create_app(runtime_factory=_rule_runtime, init_database=broken)
+    with TestClient(app) as test_client:
+        assert test_client.get("/world/state").status_code == 200

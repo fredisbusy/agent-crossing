@@ -11,6 +11,7 @@ class WorldStateResponse(BaseModel):
     snapshot: WorldSnapshot
     scheduler_running: bool
     tick_interval_seconds: float
+    last_error: str | None = None
 
 
 class WorldSchedulerResponse(BaseModel):

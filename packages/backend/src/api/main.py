@@ -1,6 +1,7 @@
 """마을 시뮬레이션 API (SPEC §15): 백엔드가 단일 권한, 프런트는 스냅샷만 받는다."""
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import cast
@@ -20,6 +21,7 @@ from world.contracts import WorldSnapshot
 from world.scenarios import build_town, load_scenario
 from world.town import TownRuntime
 
+logger = logging.getLogger(__name__)
 MAX_ADVANCE_MINUTES = 1440
 
 RuntimeFactory = Callable[[], Awaitable[TownRuntime]]
@@ -50,7 +52,10 @@ def create_app(
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        init_database()
+        try:
+            await asyncio.to_thread(init_database)
+        except Exception:
+            logger.warning("DB 초기화 실패 - 마을은 DB를 쓰지 않으므로 계속 기동한다", exc_info=True)
         runtime = await runtime_factory()
         app.state.town_runtime = runtime
         try:
@@ -81,6 +86,7 @@ def create_app(
             snapshot=runtime.snapshot(),
             scheduler_running=runtime.scheduler_running,
             tick_interval_seconds=runtime.tick_interval_seconds,
+            last_error=runtime.last_error,
         )
 
     @app.get("/world/text")
@@ -146,7 +152,9 @@ async def _wait_disconnect(websocket: WebSocket) -> None:
     """클라이언트가 보내는 프레임은 버리고, 끊김만 기다린다."""
     try:
         while True:
-            await websocket.receive_text()
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                return
     except (WebSocketDisconnect, RuntimeError):
         return
 
