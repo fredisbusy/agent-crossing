@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { facadeGlassRects, type FacadePlan } from "../map/facade";
-import type { LocationArea } from "../map/locations";
+import type { LocationArea } from "../../tiled";
 import { LIGHT_OBJECT_NAME, type MapSprite } from "../map/objects";
 import { hasPixelKit, PIXEL_KIT_ATLAS_KEY } from "../map/pixel-kit";
 import { indoorAreas } from "./indoor-areas";

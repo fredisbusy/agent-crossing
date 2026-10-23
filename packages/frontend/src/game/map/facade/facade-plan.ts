@@ -1,4 +1,4 @@
-import { TILE_SIZE } from "../../../town-layout";
+import { TILE_SIZE } from "../../../tiled";
 import type { MapSprite } from "../objects";
 import { DEFAULT_FACADE_STYLE, FACADE_STYLES, type FacadeStyle } from "./facade-style";
 

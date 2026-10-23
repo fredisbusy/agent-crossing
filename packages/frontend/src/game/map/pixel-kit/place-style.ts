@@ -1,4 +1,4 @@
-import type { LocationArea } from "../locations";
+import { PATH_SEPARATOR, rectContains, smallestAreaAt, type LocationArea } from "../../../tiled";
 
 /** 한 칸의 바닥·벽 모양. 벽은 `<wall>_m<mask>` 프레임 이름의 접두사다. */
 export interface PlaceStyle {
@@ -17,7 +17,6 @@ const DEFAULT_STYLE: PlaceStyle = { floor: "floor_wood", wall: "wall" };
 const BEDROOM_FLOOR = "floor_carpet";
 /** 방(location_path 3단계) 중 카펫을 까는 곳. */
 const CARPET_ROOMS: ReadonlySet<string> = new Set(["Bedroom", "Klaus's Room", "Maria's Room"]);
-const PATH_SEPARATOR = " > ";
 const SQUARE_PATH = "Smallville > Town Square";
 
 const HOUSE: BuildingStyle = { floor: "floor_wood", wall: "wall", icon: "sign_icon_house" };
@@ -45,18 +44,9 @@ export function buildingNameOf(area: LocationArea): string | null {
   return segments.length === 2 && segments[1] in BUILDING_STYLES ? segments[1] : null;
 }
 
-function contains(area: LocationArea, px: number, py: number): boolean {
-  return px >= area.x && py >= area.y && px < area.x + area.width && py < area.y + area.height;
-}
-
 /** 칸 중심을 덮는 가장 작은 장소(방 > 건물 > 구역). */
 export function areaAt(areas: readonly LocationArea[], px: number, py: number): LocationArea | null {
-  let best: LocationArea | null = null;
-  for (const area of areas) {
-    if (!contains(area, px, py)) continue;
-    if (best === null || area.width * area.height < best.width * best.height) best = area;
-  }
-  return best;
+  return smallestAreaAt(areas, px, py, (area) => area);
 }
 
 /** 칸 중심 좌표(px)가 속한 장소의 바닥·벽 스타일. 어느 건물도 아니면 기본(마루·기존 벽). */
@@ -73,5 +63,5 @@ export function placeStyleAt(areas: readonly LocationArea[], px: number, py: num
 
 /** 칸 중심 좌표(px)가 Town Square 사각형 안인지(흙길을 포석으로 바꾼다). */
 export function isInSquare(areas: readonly LocationArea[], px: number, py: number): boolean {
-  return areas.some((area) => area.location_path === SQUARE_PATH && contains(area, px, py));
+  return areas.some((area) => area.location_path === SQUARE_PATH && rectContains(area, px, py));
 }

@@ -1,4 +1,4 @@
-import { TILE_SIZE } from "../../../town-layout";
+import { TILE_SIZE } from "../../../tiled";
 import type { FacadePlan } from "./facade-plan";
 import type { FacadeKind } from "./facade-style";
 

@@ -1,11 +1,9 @@
 import Phaser from "phaser";
-import { TILE_SIZE } from "../../town-layout";
+import { extractLocationAreas, GROUND_LAYER, LOCATIONS_LAYER, TILE, TILE_SIZE, TILESET_NAME, type LocationArea } from "../../tiled";
 import { drawFacades, FACADE_LAYER, type FacadePlan, planFacades } from "./facade";
-import { buildFallbackMap, TILE } from "./fallback-map";
-import { extractLocationAreas, type LocationArea } from "./locations";
+import { buildFallbackMap } from "./fallback-map";
 import { DECOR_LAYER, extractMapSprites, FURNITURE_LAYER, type MapSprite } from "./objects";
 import { drawPixelKit, hasPixelKit, planPixelKit, preloadPixelKit, type SignRect } from "./pixel-kit";
-import { GROUND_LAYER, LOCATIONS_LAYER, TILESET_NAME } from "./tiled-types";
 import { paintTileset, TILESET_PIXEL_HEIGHT, TILESET_PIXEL_WIDTH } from "./tileset-art";
 
 export const TOWN_MAP_KEY = "town";

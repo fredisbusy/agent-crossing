@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { ResidentSnapshot } from "@agent-crossing/shared";
-import { TILE_SIZE } from "../../town-layout";
+import { TILE_SIZE } from "../../tiled";
+import { stringHash } from "../draw";
 import { hasPixelKit, PIXEL_KIT_ATLAS_KEY } from "../map/pixel-kit";
 import { NameTag, SpeechBubble, type TagBox, type TagOffset } from "./labels";
 import { choosePose, classifyAction, type ActionKind, type Pose, type SpotMap } from "./pose";
@@ -8,7 +9,8 @@ import { VillagerFigure } from "./villager-figure";
 
 const BODY_COLORS = [0xf4a261, 0x8ecae6, 0xe9c46a, 0xb8a1e3, 0xf28fad, 0x95d5b2] as const;
 const BODY_RADIUS = 6;
-const TEXT_RESOLUTION = 4;
+/** 머리 위 이모지 글자 해상도. 이름표·말풍선(`labels/style.ts`의 `TEXT_RESOLUTION` 2)과 일부러 다르다. */
+const EMOJI_TEXT_RESOLUTION = 4;
 const SELECT_COLOR = 0xffffff;
 /** 픽셀 팩 주민(16×32): 발밑은 칸 가운데보다 7px 아래, 머리 꼭대기는 그보다 약 28px 위. */
 const VILLAGER_FOOT_Y = 7;
@@ -31,9 +33,7 @@ const SLEEP_DEPTH_BIAS = 1;
 
 /** id에서 항상 같은 몸 색을 고른다. */
 export function bodyColorFor(id: string): number {
-  let hash = 0;
-  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return BODY_COLORS[hash % BODY_COLORS.length];
+  return BODY_COLORS[stringHash(id) % BODY_COLORS.length];
 }
 
 function drawCircleBody(scene: Phaser.Scene, id: string): Phaser.GameObjects.Graphics {
@@ -116,7 +116,7 @@ export class ResidentView {
     const hasIcons = usePixelKit && scene.textures.get(PIXEL_KIT_ATLAS_KEY).has("act_bubble");
     this.iconBack = hasIcons ? scene.add.image(0, 0, PIXEL_KIT_ATLAS_KEY, "act_bubble").setOrigin(0.5, 1) : null;
     this.iconImage = hasIcons ? scene.add.image(0, 0, PIXEL_KIT_ATLAS_KEY, "act_work").setOrigin(0.5, 1) : null;
-    this.emojiText = scene.add.text(0, 0, "", { fontSize: "9px", resolution: TEXT_RESOLUTION }).setOrigin(0.5, 1);
+    this.emojiText = scene.add.text(0, 0, "", { fontSize: "9px", resolution: EMOJI_TEXT_RESOLUTION }).setOrigin(0.5, 1);
     this.iconLayer = scene.add.container(0, this.topY - HEAD_GAP, [
       ...(this.iconBack && this.iconImage ? [this.iconBack, this.iconImage] : []),
       this.emojiText,

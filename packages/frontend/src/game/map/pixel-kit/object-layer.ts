@@ -1,4 +1,6 @@
 import type Phaser from "phaser";
+import { LABEL_FONT } from "../../draw";
+import { PIXEL_KIT_ATLAS_KEY } from "./atlas-key";
 import { BIRD_ORIGIN, birdPose, BUTTERFLY_ORIGIN, butterflyPose, type CritterPlan } from "./critters";
 import type { ObjectSprite } from "./object-plan";
 import {
@@ -13,13 +15,11 @@ import {
   type SignPlan,
 } from "./signs";
 
-const ATLAS_KEY = "pixel-kit";
 /** Phaser `Scenes.Events`와 같은 문자열(런타임 import를 피해 순수 테스트가 Phaser를 읽지 않게 한다). */
 const UPDATE_EVENT = "update";
 const SHUTDOWN_EVENT = "shutdown";
 /** 화면 기준 글자 크기(px). 주민 이름표(`residents/labels/style.ts`)와 같은 11px. */
 const SIGN_FONT_PX = 11;
-const SIGN_FONT = '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", system-ui, sans-serif';
 /** 판자 그림 1px = 화면 2px (이름표와 같은 배율). */
 const SIGN_ART_SCALE = 2;
 /** 화면 1:1로 놓으므로 2배 그려 선형 축소한다(`Phaser.Textures.FilterMode.LINEAR` = 0). */
@@ -49,7 +49,7 @@ export interface SignRect {
 /** 애니 스프라이트는 프레임을 직접 바꾼다: Phaser 애니는 프레임을 바꿀 때마다 아틀라스 pivot으로 origin을 되돌린다. */
 function drawSprites(scene: Phaser.Scene, sprites: readonly ObjectSprite[], ticks: Tick[]): void {
   for (const sprite of sprites) {
-    const image = scene.add.image(sprite.x, sprite.y, ATLAS_KEY, sprite.frame).setOrigin(0, 0).setDepth(sprite.depth);
+    const image = scene.add.image(sprite.x, sprite.y, PIXEL_KIT_ATLAS_KEY, sprite.frame).setOrigin(0, 0).setDepth(sprite.depth);
     const frames = sprite.anim ? ANIM_FRAMES[sprite.anim] : undefined;
     if (!frames) continue;
     ticks.push((time) => {
@@ -62,7 +62,7 @@ function drawSprites(scene: Phaser.Scene, sprites: readonly ObjectSprite[], tick
 function drawSign(scene: Phaser.Scene, sign: SignPlan, ticks: Tick[]): () => SignRect {
   const text = scene.add
     .text(0, 0, sign.label, {
-      fontFamily: SIGN_FONT,
+      fontFamily: LABEL_FONT,
       fontSize: `${SIGN_FONT_PX}px`,
       fontStyle: "bold",
       color: SIGN_TEXT_COLOR,
@@ -77,7 +77,7 @@ function drawSign(scene: Phaser.Scene, sign: SignPlan, ticks: Tick[]): () => Sig
   // 아래로 걸 때는 판자 그림 위끝(프레임 위에서 PLANK_TOP_OFFSET 아래)이 가장자리에 오게 내린다.
   const frameTop = sign.below ? -PLANK_TOP_OFFSET * s : -PLANK_CELL * s;
   const piece = (frame: string, x: number, y = frameTop): Phaser.GameObjects.Image =>
-    scene.add.image(x, y, ATLAS_KEY, frame).setOrigin(0, 0).setScale(s);
+    scene.add.image(x, y, PIXEL_KIT_ATLAS_KEY, frame).setOrigin(0, 0).setScale(s);
   const children: Phaser.GameObjects.GameObject[] = [piece("sign_plank_l", left)];
   for (let i = 0; i < layout.middleCount; i += 1) {
     children.push(piece("sign_plank_m", left + (PLANK_END_WIDTH + i * PLANK_MIDDLE_WIDTH) * s));
@@ -110,14 +110,14 @@ function drawCritters(scene: Phaser.Scene, critters: CritterPlan, ticks: Tick[])
   const birds = critters.birds.map((bird) => ({
     bird,
     image: scene.add
-      .image(bird.x, bird.y, ATLAS_KEY, "bird_idle_0")
+      .image(bird.x, bird.y, PIXEL_KIT_ATLAS_KEY, "bird_idle_0")
       .setOrigin(BIRD_ORIGIN.x, BIRD_ORIGIN.y)
       .setDepth(bird.y),
   }));
   const butterflies = critters.butterflies.map((butterfly) => ({
     butterfly,
     image: scene.add
-      .image(butterfly.x, butterfly.y, ATLAS_KEY, "butterfly_0")
+      .image(butterfly.x, butterfly.y, PIXEL_KIT_ATLAS_KEY, "butterfly_0")
       .setOrigin(BUTTERFLY_ORIGIN.x, BUTTERFLY_ORIGIN.y)
       .setDepth(butterfly.y + FLY_DEPTH_LIFT),
   }));

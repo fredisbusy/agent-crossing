@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { LocationArea } from "./locations";
+import type { LocationArea } from "../../tiled";
 
 const OVERLAY_DEPTH = 100_000;
 const OUTLINE_COLOR = 0xff6b9d;
