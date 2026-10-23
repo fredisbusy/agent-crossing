@@ -1,128 +1,157 @@
-from pathlib import Path
+"""마을 시뮬레이션 API (SPEC §15): 백엔드가 단일 권한, 프런트는 스냅샷만 받는다."""
+
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import cast
 
-from agents.persona_loader import PersonaLoader
-from api.schemas import (
-    StatusResponse,
-    WorldSchedulerResponse,
-    WorldStateResponse,
-    WorldStepResponse,
-)
+from api.schemas import StatusResponse, WorldSchedulerResponse, WorldStateResponse
 from db import init_db
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Query, Request, Response, WebSocket
+from fastapi.websockets import WebSocketDisconnect
 from settings import (
-    EMBEDDING_MODEL,
-    GOOGLE_AI_STUDIO_API_KEY,
-    LLM_API_KEY,
-    LLM_BASE_URL,
-    LLM_MODEL,
-    LLM_TIMEOUT_SECONDS,
+    TOWN_AGENT_COUNT,
+    TOWN_AGENTS,
+    TOWN_SCENARIO,
+    TOWN_SEED,
     WORLD_TICK_INTERVAL_SECONDS,
 )
-from world.runtime import WorldRuntime, WorldRuntimeConfig, build_world_runtime
+from world.contracts import WorldSnapshot
+from world.scenarios import build_town, load_scenario
+from world.town import TownRuntime
 
-app = FastAPI(title="Agent Crossing API")
+MAX_ADVANCE_MINUTES = 1440
+
+RuntimeFactory = Callable[[], Awaitable[TownRuntime]]
 
 
-@app.on_event("startup")
-def on_startup() -> None:
-    init_db()
-    persona_dir = Path(__file__).resolve().parents[2] / "persona"
-    app.state.persona_loader = PersonaLoader(persona_dir)
-    app.state.agent_personas = app.state.persona_loader.load_all()
-    persona_names = [persona.agent.id for persona in app.state.agent_personas]
-    app.state.world_runtime = None
-    if len(persona_names) >= 2:
-        app.state.world_runtime = build_world_runtime(
-            config=WorldRuntimeConfig(
-                agent_persona_names=persona_names[:2],
-                base_url=LLM_BASE_URL,
-                api_key=LLM_API_KEY or GOOGLE_AI_STUDIO_API_KEY,
-                llm_model=LLM_MODEL,
-                embedding_model=EMBEDDING_MODEL,
-                timeout_seconds=LLM_TIMEOUT_SECONDS,
-                persona_dir=str(persona_dir),
-                tick_interval_seconds=WORLD_TICK_INTERVAL_SECONDS,
-            )
+async def build_default_runtime() -> TownRuntime:
+    """환경 설정(TOWN_*)으로 마을을 조립한다. 무거운 조립은 스레드에서 한다."""
+    agent_ids = [i.strip() for i in TOWN_AGENTS.split(",") if i.strip()] or None
+
+    def _build() -> TownRuntime:
+        town = build_town(
+            load_scenario(TOWN_SCENARIO),
+            agent_ids=agent_ids,
+            agent_count=TOWN_AGENT_COUNT,
+            seed=TOWN_SEED,
+        )
+        return TownRuntime(
+            town.simulation, tick_interval_seconds=WORLD_TICK_INTERVAL_SECONDS
         )
 
-
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
-    runtime = cast(WorldRuntime | None, getattr(app.state, "world_runtime", None))
-    if runtime is not None:
-        await runtime.stop_scheduler()
+    return await asyncio.to_thread(_build)
 
 
-@app.get("/", response_model=StatusResponse)
-async def get_status():
-    return {"status": "online", "version": "0.1.0"}
+def create_app(
+    *,
+    runtime_factory: RuntimeFactory = build_default_runtime,
+    init_database: Callable[[], None] = init_db,
+) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        init_database()
+        runtime = await runtime_factory()
+        app.state.town_runtime = runtime
+        try:
+            yield
+        finally:
+            await runtime.stop()
+
+    app = FastAPI(title="Agent Crossing API", lifespan=lifespan)
+
+    def runtime_of(source: Request | WebSocket) -> TownRuntime:
+        return cast(TownRuntime, source.app.state.town_runtime)
+
+    def scheduler_response(runtime: TownRuntime) -> WorldSchedulerResponse:
+        return WorldSchedulerResponse(
+            running=runtime.scheduler_running,
+            tick=runtime.snapshot().tick,
+            tick_interval_seconds=runtime.tick_interval_seconds,
+        )
+
+    @app.get("/", response_model=StatusResponse)
+    async def get_status() -> StatusResponse:
+        return StatusResponse(status="online", version="0.1.0")
+
+    @app.get("/world/state", response_model=WorldStateResponse)
+    async def get_world_state(request: Request) -> WorldStateResponse:
+        runtime = runtime_of(request)
+        return WorldStateResponse(
+            snapshot=runtime.snapshot(),
+            scheduler_running=runtime.scheduler_running,
+            tick_interval_seconds=runtime.tick_interval_seconds,
+        )
+
+    @app.get("/world/text")
+    async def get_world_text(request: Request) -> Response:
+        """QA 훅 (SPEC §15): `TownSimulation.text_state()` JSON 그대로."""
+        return Response(
+            content=runtime_of(request).text_state(), media_type="application/json"
+        )
+
+    @app.post("/world/advance", response_model=WorldSnapshot)
+    async def post_world_advance(
+        request: Request,
+        minutes: int = Query(ge=1, le=MAX_ADVANCE_MINUTES),
+    ) -> WorldSnapshot:
+        return await runtime_of(request).advance(minutes)
+
+    @app.post("/world/tick/start", response_model=WorldSchedulerResponse)
+    async def post_world_tick_start(request: Request) -> WorldSchedulerResponse:
+        runtime = runtime_of(request)
+        await runtime.start()
+        return scheduler_response(runtime)
+
+    @app.post("/world/tick/stop", response_model=WorldSchedulerResponse)
+    async def post_world_tick_stop(request: Request) -> WorldSchedulerResponse:
+        runtime = runtime_of(request)
+        await runtime.stop()
+        return scheduler_response(runtime)
+
+    @app.websocket("/ws/world")
+    async def ws_world(websocket: WebSocket) -> None:
+        runtime = runtime_of(websocket)
+        await websocket.accept()
+        queue = runtime.subscribe()
+        disconnected = asyncio.create_task(_wait_disconnect(websocket))
+        try:
+            await _send_snapshot(websocket, runtime.snapshot())
+            while True:
+                next_snapshot = asyncio.ensure_future(queue.get())
+                done, _ = await asyncio.wait(
+                    {next_snapshot, disconnected},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if next_snapshot not in done:
+                    next_snapshot.cancel()
+                    break
+                await _send_snapshot(websocket, next_snapshot.result())
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        finally:
+            disconnected.cancel()
+            runtime.unsubscribe(queue)
+
+    return app
 
 
-def _require_runtime() -> WorldRuntime:
-    runtime = cast(WorldRuntime | None, app.state.world_runtime)
-    if runtime is None:
-        raise HTTPException(status_code=503, detail="world runtime is not initialized")
-    return runtime
-
-
-@app.get("/world/state", response_model=WorldStateResponse)
-async def get_world_state() -> WorldStateResponse:
-    runtime = _require_runtime()
-    state = runtime.state()
-    return WorldStateResponse(
-        available=True,
-        turn=state.turn,
-        current_time=state.current_time.isoformat(),
-        history_size=state.history_size,
-        agent_names=[agent.name for agent in runtime.agents],
-        scheduler_running=state.scheduler_running,
-        tick_interval_seconds=state.tick_interval_seconds,
+async def _send_snapshot(websocket: WebSocket, snapshot: WorldSnapshot) -> None:
+    await websocket.send_json(
+        {"type": "snapshot", "snapshot": snapshot.model_dump(mode="json")}
     )
 
 
-@app.post("/world/step", response_model=WorldStepResponse)
-async def post_world_step() -> WorldStepResponse:
-    runtime = _require_runtime()
-    step_result = runtime.step()
-    metrics = runtime.metrics()
-    return WorldStepResponse(
-        turn=runtime.turn,
-        speaker_name=step_result.speaker_name,
-        reply=step_result.reply,
-        silent_reason=step_result.silent_reason,
-        trace=step_result.trace,
-        plan_diagnostics=step_result.plan_diagnostics,
-        parse_failure_rate=metrics.parse_failure_rate,
-        silent_rate=metrics.silent_rate,
-        semantic_repeat_rate=metrics.semantic_repeat_rate,
-        topic_progress_rate=metrics.topic_progress_rate,
-    )
+async def _wait_disconnect(websocket: WebSocket) -> None:
+    """클라이언트가 보내는 프레임은 버리고, 끊김만 기다린다."""
+    try:
+        while True:
+            await websocket.receive_text()
+    except (WebSocketDisconnect, RuntimeError):
+        return
 
 
-def _scheduler_response(runtime: WorldRuntime) -> WorldSchedulerResponse:
-    state = runtime.state()
-    return WorldSchedulerResponse(
-        running=state.scheduler_running,
-        turn=state.turn,
-        current_time=state.current_time.isoformat(),
-        tick_interval_seconds=state.tick_interval_seconds,
-    )
-
-
-@app.post("/world/tick/start", response_model=WorldSchedulerResponse)
-async def post_world_tick_start() -> WorldSchedulerResponse:
-    runtime = _require_runtime()
-    await runtime.start_scheduler()
-    return _scheduler_response(runtime)
-
-
-@app.post("/world/tick/stop", response_model=WorldSchedulerResponse)
-async def post_world_tick_stop() -> WorldSchedulerResponse:
-    runtime = _require_runtime()
-    await runtime.stop_scheduler()
-    return _scheduler_response(runtime)
-
+app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
