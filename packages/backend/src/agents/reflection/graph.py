@@ -4,7 +4,8 @@ from typing import Literal, Protocol, cast
 
 from typing_extensions import TypedDict
 
-from llm.llm_gateway import InsightWithCitation, LlmGateway
+from ..llm_gateway import LlmGateway
+from ..memory.contracts import InsightWithCitation
 
 from ..graph_support import GRAPH_END, GRAPH_START, GRAPH_STATE_FACTORY
 from ..memory.memory_manager import MemoryManager, ReflectionContext

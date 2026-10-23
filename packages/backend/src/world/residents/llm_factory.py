@@ -7,7 +7,7 @@ from agents.reflection import Reflection, ReflectionGraphRunner
 from llm.clients.provider_factory import ProviderClient
 from llm.embedding_encoder import LlmEmbeddingEncoder
 from llm.importance_scorer import LlmImportanceScorer
-from llm.llm_gateway import LlmGateway
+from agents.llm_gateway import LlmGateway
 from minds.llm import LLMMind, LlmPersona, ManagedMemory
 from world.contracts import LocationPath
 

@@ -6,8 +6,7 @@ from typing import Protocol
 import numpy as np
 from llm import BatchImportanceScorer, ImportanceScorer, ImportanceScoringContext, clamp_importance
 from llm.embedding_encoder import BatchEmbeddingEncoder, EmbeddingEncodingContext
-from llm.llm_gateway import InsightWithCitation
-
+from .contracts import InsightWithCitation
 from .memory_object import MemoryObject, NodeType
 from .memory_stream import MemoryStream
 

@@ -2,10 +2,10 @@ import datetime
 from dataclasses import dataclass
 from typing import Callable, TypeVar, cast
 
-from agents.planning.models import DayPlanItem, HourlyPlanItem, MinutePlanItem
 from llm.clients.types import JsonObject
 
 from .json_utils import attempt_json_repair_once, parse_json_object
+from .models import DayPlanItem, HourlyPlanItem, MinutePlanItem
 
 
 @dataclass(frozen=True)

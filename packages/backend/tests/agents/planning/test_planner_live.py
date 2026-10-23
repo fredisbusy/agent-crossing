@@ -17,7 +17,7 @@ from agents.planning.models import (
 )
 from agents.planning.planner import Planner
 from llm.clients.provider_factory import build_provider_client
-from llm.llm_gateway import LlmGateway
+from agents.llm_gateway import LlmGateway
 from settings import EMBEDDING_MODEL, LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
 
 TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))

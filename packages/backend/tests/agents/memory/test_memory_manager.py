@@ -9,7 +9,7 @@ from agents.memory.memory_object import NodeType
 from agents.memory.memory_stream import MemoryStream
 from llm import ImportanceScoringContext
 from llm.embedding_encoder import EmbeddingEncodingContext
-from llm.llm_gateway import InsightWithCitation
+from agents.llm_gateway import InsightWithCitation
 from settings import EMBEDDING_DIMENSION
 
 

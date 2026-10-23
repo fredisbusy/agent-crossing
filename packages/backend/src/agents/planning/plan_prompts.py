@@ -1,14 +1,60 @@
 import datetime
 
-from agents.planning.models import DayPlanItem, HourlyPlanItem
+from llm.template_loader import render_template
 
-from ..template_loader import render_template
-from .formatting import format_date_text, format_datetime_text, format_plan_line
-from .shapes import (
-    DAY_PLAN_JSON_SHAPE,
-    HOURLY_PLAN_JSON_SHAPE,
-    MINUTE_PLAN_JSON_SHAPE,
+from .models import DayPlanItem, HourlyPlanItem
+
+_PLAN_JSON_SHAPE = (
+    '{"items": ['
+    '{"start_time": "<ISO-8601 datetime%s>", "end_time": "<ISO-8601 datetime %s>", '
+    '"location": "<location>", "action_content": "<action text>"}'
+    "]}"
 )
+DAY_PLAN_JSON_SHAPE = _PLAN_JSON_SHAPE % ("", "later than start_time")
+HOURLY_PLAN_JSON_SHAPE = _PLAN_JSON_SHAPE % ("", "later than start_time")
+MINUTE_PLAN_JSON_SHAPE = _PLAN_JSON_SHAPE % (
+    " to minute precision",
+    "5-15 minutes after start_time",
+)
+
+
+def format_date_text(value: datetime.datetime, *, include_year: bool = True) -> str:
+    format_string = "%A %B %d %Y" if include_year else "%A %B %d"
+    return value.strftime(format_string).replace(" 0", " ")
+
+
+def format_time_text(value: datetime.datetime) -> str:
+    return value.strftime("%I:%M %p").lstrip("0")
+
+
+def format_datetime_text(value: datetime.datetime, *, include_year: bool = True) -> str:
+    return (
+        f"{format_date_text(value, include_year=include_year)} "
+        f"at {format_time_text(value)}"
+    )
+
+
+def format_time_span_text(
+    start_time: datetime.datetime, end_time: datetime.datetime
+) -> str:
+    if start_time.date() == end_time.date():
+        return (
+            f"From {format_date_text(start_time)} at {format_time_text(start_time)} "
+            f"to {format_time_text(end_time)}"
+        )
+    return (
+        f"From {format_datetime_text(start_time)} to {format_datetime_text(end_time)}"
+    )
+
+
+def format_plan_line(
+    *,
+    start_time: datetime.datetime,
+    end_time: datetime.datetime,
+    location: str,
+    action_content: str,
+) -> str:
+    return f"- {format_time_span_text(start_time, end_time)} | {location} | {action_content}"
 
 
 def build_day_plan_prompt(
