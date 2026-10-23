@@ -17,7 +17,7 @@ export function nextTickIntervalMs(previousMs: number, sampleMs: number): number
   return clampInterval(blended);
 }
 
-/** 스냅샷이 도착한 시각들로 틱 간격을 추정한다. 시각은 호출자가 주입한다(결정론). */
+/** 스냅샷이 도착한 시각들로 틱 간격을 추정한다. 시각은 호출자가 주입한다(결정론, 실서비스는 `performance.now()`). */
 export class TickIntervalEstimator {
   private lastArrivalMs: number | null = null;
   private estimateMs: number;
@@ -31,6 +31,11 @@ export class TickIntervalEstimator {
     if (this.lastArrivalMs !== null) this.estimateMs = nextTickIntervalMs(this.estimateMs, nowMs - this.lastArrivalMs);
     this.lastArrivalMs = nowMs;
     return this.estimateMs;
+  }
+
+  /** 이 도착은 표본으로 쓰지 않는다(탭이 숨겨져 있었던 경우). 다음 도착부터 간격을 다시 잰다. */
+  discard(): void {
+    this.lastArrivalMs = null;
   }
 
   get intervalMs(): number {

@@ -43,7 +43,7 @@ function ensureTilesetTexture(scene: Phaser.Scene): void {
   texture.refresh();
 }
 
-function drawCodeTileLayer(scene: Phaser.Scene, tilemap: Phaser.Tilemaps.Tilemap): Phaser.Tilemaps.TilemapLayer | null {
+function drawCodeTileLayer(scene: Phaser.Scene, tilemap: Phaser.Tilemaps.Tilemap): Phaser.Tilemaps.TilemapLayer | Phaser.Tilemaps.TilemapGPULayer | null {
   ensureTilesetTexture(scene);
   const tileset = tilemap.addTilesetImage(TILESET_NAME, TILESET_TEXTURE_KEY, TILE_SIZE, TILE_SIZE, 0, 0, 1);
   if (!tileset) return null;

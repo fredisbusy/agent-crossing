@@ -1,6 +1,5 @@
 import Phaser from "phaser";
 import type { ResidentSnapshot } from "@agent-crossing/shared";
-import { TickIntervalEstimator } from "../../net";
 import { useWorldStore } from "../../stores";
 import { DaylightLayer } from "../daylight/layer";
 import { buildTownMap, LocationOverlay, preloadTownMap } from "../map";
@@ -21,7 +20,6 @@ export class TownScene extends Phaser.Scene {
   private manualClock = false;
   private readonly motion = new MotionTracker();
   private readonly bubbles = new BubbleTracker();
-  private readonly tickInterval = new TickIntervalEstimator();
   private readonly tagLayout = new TagLayoutCache();
   private readonly views = new Map<string, ResidentView>();
   private residents: readonly ResidentSnapshot[] = [];
@@ -88,8 +86,8 @@ export class TownScene extends Phaser.Scene {
 
   private applyResidents(residents: readonly ResidentSnapshot[]): void {
     this.residents = residents;
-    // 보간 길이는 스냅샷 도착 간격의 이동평균이다(백엔드 틱 간격은 설정으로 바뀐다).
-    this.motion.observe(residents, this.clockMs, this.tickInterval.observe(this.clockMs));
+    // 보간 길이는 네트워크 계층이 스냅샷 도착 간격으로 추정해 스토어에 넣어 둔다.
+    this.motion.observe(residents, this.clockMs, useWorldStore.getState().tickIntervalMs);
     this.bubbles.observe(residents, this.clockMs);
     const alive = new Set(residents.map((resident) => resident.resident_id));
     for (const [id, view] of this.views) {

@@ -39,4 +39,12 @@ describe("TickIntervalEstimator", () => {
     }
     expect(last).toBeCloseTo(250, 0);
   });
+
+  it("버린 도착 다음 표본은 간격으로 치지 않는다", () => {
+    const estimator = new TickIntervalEstimator();
+    estimator.observe(0);
+    estimator.discard();
+    expect(estimator.observe(60_000)).toBe(1000);
+    expect(estimator.observe(60_250)).toBeLessThan(1000);
+  });
 });
