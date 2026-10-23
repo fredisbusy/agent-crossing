@@ -1,6 +1,9 @@
 from typing import Protocol
 
+from settings import LLM_RESPONSE_CACHE, LLM_RESPONSE_CACHE_MODE
+
 from .litellm_client import LiteLlmClient
+from .response_cache import CachingProviderClient, ResponseCache, parse_cache_mode
 from .types import LlmGenerateOptions
 
 
@@ -35,8 +38,10 @@ def build_provider_client(
     embedding_base_url: str | None = None,
     embedding_api_key: str | None = None,
     reasoning_effort: str | None = None,
+    cache_path: str | None = LLM_RESPONSE_CACHE,
+    cache_mode: str = LLM_RESPONSE_CACHE_MODE,
 ) -> ProviderClient:
-    return LiteLlmClient(
+    client = LiteLlmClient(
         base_url=base_url,
         api_key=api_key,
         embedding_base_url=embedding_base_url,
@@ -46,6 +51,10 @@ def build_provider_client(
         default_generate_model=generation_model,
         default_embedding_model=embedding_model,
     )
+    mode = parse_cache_mode(cache_mode)
+    if not cache_path or mode == "off":
+        return client
+    return CachingProviderClient(client, ResponseCache(cache_path), mode)
 
 
 __all__ = [
