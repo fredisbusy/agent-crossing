@@ -88,8 +88,13 @@ function drawSign(scene: Phaser.Scene, sign: SignPlan, ticks: Tick[]): () => Sig
   children.push(text);
   const container = scene.add.container(sign.centerX, sign.edgeY, children).setDepth(SIGN_DEPTH);
   let rect: SignRect = { left: sign.centerX, right: sign.centerX, top: sign.edgeY, bottom: sign.edgeY };
+  let appliedZoom = Number.NaN;
   ticks.push(() => {
-    const zoomScale = 1 / scene.cameras.main.zoom;
+    const zoom = scene.cameras.main.zoom;
+    // 줌이 같으면 배율·사각형도 그대로다(위치는 줌에만 달린다).
+    if (zoom === appliedZoom) return;
+    appliedZoom = zoom;
+    const zoomScale = 1 / zoom;
     const scale = sign.maxScale === null ? zoomScale : Math.min(zoomScale, sign.maxScale);
     const width = layout.width * s * scale;
     container.setScale(scale);

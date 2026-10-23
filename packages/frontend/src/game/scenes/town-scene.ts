@@ -1,10 +1,10 @@
 import Phaser from "phaser";
 import type { ResidentSnapshot } from "@agent-crossing/shared";
-import { DEFAULT_TICK_INTERVAL_MS } from "../../net";
+import { TickIntervalEstimator } from "../../net";
 import { useWorldStore } from "../../stores";
 import { DaylightLayer } from "../daylight";
 import { buildTownMap, LocationOverlay, preloadTownMap } from "../map";
-import { BubbleTracker, MotionTracker, ResidentView, resolveTagOffsets, SpotMap, type TagObstacle } from "../residents";
+import { BubbleTracker, MotionTracker, ResidentView, SpotMap, TagLayoutCache, type TagObstacle } from "../residents";
 import { attachCameraControls } from "./camera-controls";
 
 export const TOWN_SCENE_KEY = "TownScene";
@@ -21,6 +21,8 @@ export class TownScene extends Phaser.Scene {
   private manualClock = false;
   private readonly motion = new MotionTracker();
   private readonly bubbles = new BubbleTracker();
+  private readonly tickInterval = new TickIntervalEstimator();
+  private readonly tagLayout = new TagLayoutCache();
   private readonly views = new Map<string, ResidentView>();
   private residents: readonly ResidentSnapshot[] = [];
   private overlay: LocationOverlay | null = null;
@@ -86,7 +88,8 @@ export class TownScene extends Phaser.Scene {
 
   private applyResidents(residents: readonly ResidentSnapshot[]): void {
     this.residents = residents;
-    this.motion.observe(residents, this.clockMs, DEFAULT_TICK_INTERVAL_MS);
+    // 보간 길이는 스냅샷 도착 간격의 이동평균이다(백엔드 틱 간격은 설정으로 바뀐다).
+    this.motion.observe(residents, this.clockMs, this.tickInterval.observe(this.clockMs));
     this.bubbles.observe(residents, this.clockMs);
     const alive = new Set(residents.map((resident) => resident.resident_id));
     for (const [id, view] of this.views) {
@@ -113,12 +116,13 @@ export class TownScene extends Phaser.Scene {
       view.placeAtTile(position.x, position.y);
       view.update(resident, this.bubbles.textAt(resident.resident_id, this.clockMs), resident.resident_id === selected);
     }
-    // 가까운 주민의 이름표가 서로·건물 간판을 덮지 않게 매 프레임 비킨다.
+    // 가까운 주민의 이름표가 서로·건물 간판을 덮지 않게 비킨다. 위치·줌·간판이 그대로면 직전 결과를 쓴다.
     const boxes = this.residents.flatMap((r) => {
       const view = this.views.get(r.resident_id);
       return view ? [view.tagBox(r.resident_id, r.resident_id === selected)] : [];
     });
-    const offsets = resolveTagOffsets(boxes, this.signRects());
+    const { offsets, changed } = this.tagLayout.resolve(boxes, this.signRects());
+    if (!changed) return;
     for (const [id, offset] of offsets) this.views.get(id)?.setTagOffset(offset);
   }
 }
