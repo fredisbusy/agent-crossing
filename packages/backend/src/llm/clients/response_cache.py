@@ -42,6 +42,7 @@ def generate_key(
     options: LlmGenerateOptions,
     format_json: bool,
     reasoning_effort: str | None,
+    base_url: str | None = None,
 ) -> str:
     return _hash(
         {
@@ -57,13 +58,22 @@ def generate_key(
             "presence_penalty": options.presence_penalty,
             "frequency_penalty": options.frequency_penalty,
             "reasoning_effort": reasoning_effort,
+            "base_url": base_url,
         }
     )
 
 
-def embedding_key(*, model: str, dimensions: int, text: str) -> str:
+def embedding_key(
+    *, model: str, dimensions: int, text: str, base_url: str | None = None
+) -> str:
     return _hash(
-        {"kind": "embed", "model": model, "dimensions": dimensions, "text": text}
+        {
+            "kind": "embed",
+            "model": model,
+            "dimensions": dimensions,
+            "text": text,
+            "base_url": base_url,
+        }
     )
 
 
@@ -91,17 +101,35 @@ class ResponseCache:
             ).fetchone()
         return None if row is None else str(row[0])
 
-    def put(self, key: str, value: str) -> None:
+    def put(self, key: str, value: str) -> str:
+        """먼저 쓴 값이 이긴다. 실제로 저장된 값을 돌려준다."""
         with self._lock:
             self._conn.execute(
-                "INSERT OR REPLACE INTO responses (key, value) VALUES (?, ?)",
+                "INSERT OR IGNORE INTO responses (key, value) VALUES (?, ?)",
                 (key, value),
             )
             self._conn.commit()
+            row = self._conn.execute(
+                "SELECT value FROM responses WHERE key = ?", (key,)
+            ).fetchone()
+        return str(row[0])
+
+    def __enter__(self) -> "ResponseCache":
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
 
     def close(self) -> None:
         with self._lock:
             self._conn.close()
+
+
+def _is_storable(text: str, format_json: bool) -> bool:
+    """쓸 수 없는 응답(빈 문자열, JSON을 요구했는데 `{`가 없는 응답)은 고정하지 않는다."""
+    if not text.strip():
+        return False
+    return not (format_json and "{" not in text)
 
 
 class CachingProviderClient:
@@ -145,6 +173,7 @@ class CachingProviderClient:
             options=options or LlmGenerateOptions(),
             format_json=format_json,
             reasoning_effort=getattr(self._inner, "reasoning_effort", None),
+            base_url=getattr(self._inner, "base_url", None),
         )
         hit = self._cache.get(key)
         if hit is not None:
@@ -152,8 +181,9 @@ class CachingProviderClient:
         if self._mode == "replay":
             raise LiteLlmClientError(f"LLM response cache miss (replay): {key[:12]}")
         text = self._call_generate(prompt, system, options, format_json, model)
-        self._cache.put(key, text)
-        return text
+        if not _is_storable(text, format_json):
+            return text
+        return self._cache.put(key, text)
 
     def _call_generate(
         self,
@@ -201,8 +231,11 @@ class CachingProviderClient:
             else EMBEDDING_DIMENSION
         )
         selected = model or str(getattr(self._inner, "default_embedding_model", ""))
+        emb_url = getattr(self._inner, "embedding_base_url", None) or getattr(
+            self._inner, "base_url", None
+        )
         keys = [
-            embedding_key(model=selected, dimensions=dims, text=text)
+            embedding_key(model=selected, dimensions=dims, text=text, base_url=emb_url)
             for text in inputs
         ]
         found: dict[int, list[float]] = {}
@@ -224,6 +257,6 @@ class CachingProviderClient:
                 expected_dimension=expected_dimension,
             )
             for index, vector in zip(missing, fetched, strict=True):
-                found[index] = vector
-                self._cache.put(keys[index], json.dumps(vector))
+                stored = self._cache.put(keys[index], json.dumps(vector))
+                found[index] = [float(v) for v in json.loads(stored)]
         return [found[i] for i in range(len(inputs))]

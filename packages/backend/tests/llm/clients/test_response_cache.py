@@ -134,6 +134,95 @@ def test_factory_wraps_only_when_path_set(tmp_path: Path) -> None:
     )
 
 
+def test_default_model_and_options_normalize(tmp_path: Path) -> None:
+    inner, _, client = make(tmp_path)
+    client.generate(prompt="p")
+    client.generate(prompt="p", model="m-gen", options=LlmGenerateOptions())
+    assert inner.generate_calls == 1
+
+
+def test_inner_settings_change_key(tmp_path: Path) -> None:
+    inner, cache, client = make(tmp_path)
+    client.generate(prompt="p")
+    client.embed_many(inputs=["t"])
+    for attr, value in (
+        ("default_generate_model", "m2"),
+        ("reasoning_effort", "low"),
+        ("base_url", "http://other"),
+    ):
+        inner2 = FakeInner()
+        setattr(inner2, attr, value)
+        CachingProviderClient(inner2, cache).generate(prompt="p")
+        assert inner2.generate_calls == 1, attr
+    inner3 = FakeInner()
+    inner3.default_embedding_model = "e2"
+    CachingProviderClient(inner3, cache).embed_many(inputs=["t"])
+    assert inner3.embed_inputs == [["t"]]
+    inner4 = FakeInner()
+    inner4.embedding_base_url = "http://emb"
+    CachingProviderClient(inner4, cache).embed_many(inputs=["t"])
+    assert inner4.embed_inputs == [["t"]]
+
+
+def test_is_batch_embedding_client(tmp_path: Path) -> None:
+    from llm.embedding_encoder import BatchEmbeddingClient
+
+    _, _, client = make(tmp_path)
+    assert isinstance(client, BatchEmbeddingClient)
+
+
+def test_concurrent_same_prompt_returns_stored_value(tmp_path: Path) -> None:
+    import threading
+
+    class Racy(FakeInner):
+        def __init__(self) -> None:
+            super().__init__()
+            self.barrier = threading.Barrier(6)
+
+        def generate(self, **kwargs):
+            self.barrier.wait()
+            return super().generate(**kwargs)
+
+    inner = Racy()
+    cache = ResponseCache(tmp_path / "c.sqlite")
+    client = CachingProviderClient(inner, cache)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(lambda _: client.generate(prompt="p"), range(6)))
+    assert len(set(results)) == 1
+    replay = CachingProviderClient(FakeInner(), cache, "replay")
+    assert replay.generate(prompt="p") == results[0]
+
+
+def test_unusable_responses_not_stored(tmp_path: Path) -> None:
+    class Bad(FakeInner):
+        def generate(self, **kwargs):
+            self.generate_calls += 1
+            return "   " if not kwargs["format_json"] else "no json here"
+
+    inner = Bad()
+    client = CachingProviderClient(inner, ResponseCache(tmp_path / "c.sqlite"))
+    assert client.generate(prompt="p") == "   "
+    assert client.generate(prompt="p", format_json=True) == "no json here"
+    client.generate(prompt="p")
+    client.generate(prompt="p", format_json=True)
+    assert inner.generate_calls == 4
+
+
+def test_import_llm_does_not_load_litellm() -> None:
+    import subprocess
+    import sys
+
+    src = Path(__file__).resolve().parents[3] / "src"
+    out = subprocess.run(
+        [sys.executable, "-c", "import llm, sys; print('litellm' in sys.modules)"],
+        cwd=src,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout.strip() == "False"
+
+
 def test_parse_cache_mode_rejects_unknown() -> None:
     with pytest.raises(ValueError):
         parse_cache_mode("bogus")
