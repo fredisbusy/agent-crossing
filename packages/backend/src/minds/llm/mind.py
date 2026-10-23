@@ -44,6 +44,7 @@ from .prompts import (
     describe_events,
     describe_point,
 )
+from .recall import MemoryWriter
 from .routine import PlannedRoutine, plan_request, resolve_place
 
 DEFAULT_MAX_TURNS = 6
@@ -73,6 +74,7 @@ class LLMMind:
         self._planner = planner
         self._memory = memory
         self._reflection = reflection
+        self._writer = MemoryWriter(memory, reflection)
         self._max_turns = max_turns
         self._seeded = False
 
@@ -136,7 +138,7 @@ class LLMMind:
                 for s in slots
             ]
             summary = "; ".join(lines)
-            self._store(
+            self._writer.store(
                 f"{self.persona.display_name}의 오늘 계획: {summary}", ctx.now, "plan"
             )
 
@@ -146,10 +148,10 @@ class LLMMind:
             return
         self._seeded = True
         for text in self.persona.seed_memories:
-            self._store(text, now)
+            self._writer.store(text, now)
         for fact in self.social.facts.all():
             if fact.source_resident_id == self.persona.resident_id:
-                self._store(f"{fact.topic}: {fact.fact}", now)
+                self._writer.store(f"{fact.topic}: {fact.fact}", now)
 
     def _yesterday(self, now: datetime.datetime) -> str:
         found = self._memory.retrieve("어제 한 일", now, RETRIEVE_TOP_K)
@@ -225,7 +227,7 @@ class LLMMind:
         )
         self.social.said(utterance, ctx.now)
         partner = names.get(other, other)
-        self._store(
+        self._writer.store(
             f'{self.persona.display_name}가 {partner}에게 말했다: "{draft.text}"',
             ctx.now,
         )
@@ -260,16 +262,9 @@ class LLMMind:
             if spoken is not None and spoken.speaker_id == self.persona.resident_id:
                 continue
             items.append((obs.text, obs.observed_at))
-        for importance in self._memory.remember_many(items) if items else []:
-            self._reflection.record_observation_importance(importance)
+        self._writer.store_many(items)
         if observations and self._reflection.should_reflect():
             self._reflection.reflect(now=observations[-1].observed_at)
-
-    def _store(
-        self, text: str, now: datetime.datetime, kind: str = "observation"
-    ) -> None:
-        importance = self._memory.remember(text, now, kind=kind)
-        self._reflection.record_observation_importance(importance)
 
     def _generate(self, prompt: str, options: LlmGenerateOptions) -> str:
         try:
