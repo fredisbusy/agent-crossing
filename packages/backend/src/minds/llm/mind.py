@@ -9,8 +9,10 @@ import asyncio
 import datetime
 from typing import Literal
 
+from agents.planning.models import DayPlanBroadStrokesRequest
 from llm.clients.types import LlmGenerateOptions
 from minds.social import (
+    Slot,
     SocialState,
     intent_for_slot,
     must_end,
@@ -46,7 +48,14 @@ from .prompts import (
 )
 from .recall import MemoryWriter
 from .summary import build_summary, identity_text
-from .planning import Decomposer, PlannedRoutine, plan_request, resolve_place
+from .planning import (
+    Decomposer,
+    PlannedRoutine,
+    Reactor,
+    ReactionRecord,
+    plan_request,
+    resolve_place,
+)
 
 DEFAULT_MAX_TURNS = 6
 """한 대화에서 내가 말하는 최대 횟수. 마지막 말은 작별이다."""
@@ -77,6 +86,15 @@ class LLMMind:
         self._memory = memory
         self._reflection = reflection
         self._writer = MemoryWriter(memory, reflection)
+        self._reactor = Reactor(
+            persona=persona,
+            client=client,
+            planner=planner,
+            memory=memory,
+            writer=self._writer,
+            routine=self.routine,
+            decomposer=self._decomposer,
+        )
         self._max_turns = max_turns
         self._seeded = False
         self._summary = ""
@@ -88,8 +106,14 @@ class LLMMind:
         await self._flush()
         await asyncio.to_thread(self._prepare_day, ctx)
         slot = self.social.agenda.slot_at(ctx.now)
+        if await asyncio.to_thread(self._react, ctx, slot):
+            slot = self.social.agenda.slot_at(ctx.now)
         item = self.routine.item_for(slot)
-        if item is not None and slot.action != "sleep":
+        if (
+            item is not None
+            and slot.action != "sleep"
+            and item not in self._reactor.items
+        ):
             slot = await asyncio.to_thread(self._decomposer.refine, slot, item, ctx.now)
         return intent_for_slot(slot, ctx.self_state.location_path)
 
@@ -128,15 +152,23 @@ class LLMMind:
         if self._writer.has_pending:
             await asyncio.to_thread(self._writer.flush)
 
+    @property
+    def reaction_log(self) -> tuple[ReactionRecord, ...]:
+        """최근 반응 판정 기록(진단용). 행동 결정에는 쓰지 않는다."""
+        return self._reactor.log
+
     # --- 계획 -----------------------------------------------------------------
 
-    def _prepare_day(self, ctx: MindContext) -> None:
-        self._remember_seed(ctx.now)
-        today = ctx.now.date()
-        self._refresh_summary(ctx.now)
-        if self.routine.has_plan(today):
-            return
-        request = plan_request(
+    def _react(self, ctx: MindContext, slot: Slot) -> bool:
+        return self._reactor.react(
+            ctx,
+            slot,
+            summary=self._summary or identity_text(self.persona),
+            make_request=lambda: self._plan_request(ctx),
+        )
+
+    def _plan_request(self, ctx: MindContext) -> DayPlanBroadStrokesRequest:
+        return plan_request(
             self.persona,
             ctx.now,
             commitments=self.social.agenda.upcoming(ctx.now),
@@ -144,8 +176,15 @@ class LLMMind:
             yesterday=self._yesterday(ctx.now),
             summary=self._summary,
         )
+
+    def _prepare_day(self, ctx: MindContext) -> None:
+        self._remember_seed(ctx.now)
+        today = ctx.now.date()
+        self._refresh_summary(ctx.now)
+        if self.routine.has_plan(today):
+            return
         try:
-            items = self._planner.generate_day_plan(request)
+            items = self._planner.generate_day_plan(self._plan_request(ctx))
         except (RuntimeError, TimeoutError, ValueError):
             items = []
         slots = self.routine.set_plan(today, items)
