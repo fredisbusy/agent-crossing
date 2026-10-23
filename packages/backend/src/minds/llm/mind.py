@@ -45,6 +45,7 @@ from .prompts import (
     describe_point,
 )
 from .recall import MemoryWriter
+from .summary import build_summary, identity_text
 from .routine import PlannedRoutine, plan_request, resolve_place
 
 DEFAULT_MAX_TURNS = 6
@@ -77,6 +78,8 @@ class LLMMind:
         self._writer = MemoryWriter(memory, reflection)
         self._max_turns = max_turns
         self._seeded = False
+        self._summary = ""
+        self._summary_day: datetime.date | None = None
 
     # --- Mind 프로토콜 --------------------------------------------------------
 
@@ -126,6 +129,7 @@ class LLMMind:
     def _prepare_day(self, ctx: MindContext) -> None:
         self._remember_seed(ctx.now)
         today = ctx.now.date()
+        self._refresh_summary(ctx.now)
         if self.routine.has_plan(today):
             return
         request = plan_request(
@@ -134,6 +138,7 @@ class LLMMind:
             commitments=self.social.agenda.upcoming(ctx.now),
             holidays=ctx.holidays,
             yesterday=self._yesterday(ctx.now),
+            summary=self._summary,
         )
         try:
             items = self._planner.generate_day_plan(request)
@@ -149,6 +154,14 @@ class LLMMind:
             self._writer.store(
                 f"{self.persona.display_name}의 오늘 계획: {summary}", ctx.now, "plan"
             )
+
+    def _refresh_summary(self, now: datetime.datetime) -> None:
+        """에이전트 요약 설명을 하루에 한 번만 만든다 (논문 부록 A)."""
+        if self._summary_day == now.date():
+            return
+        self._writer.flush()
+        self._summary = build_summary(self.persona, self._memory, self._client, now)
+        self._summary_day = now.date()
 
     def _remember_seed(self, now: datetime.datetime) -> None:
         """시작 기억과 시작 사실(여는 행사 포함)을 기억 스트림에 한 번 넣는다."""
@@ -182,6 +195,7 @@ class LLMMind:
             friendship=self.social.friendship.score(partner_id),
             last_met=self.social.friendship.last_talk(partner_id),
             memories=self._memory.retrieve(query, ctx.now, RETRIEVE_TOP_K),
+            summary=self._summary or identity_text(self.persona),
         )
 
     def _ask_encounter(self, ctx: MindContext, other: ResidentPublicView) -> bool:

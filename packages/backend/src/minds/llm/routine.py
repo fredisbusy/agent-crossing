@@ -113,9 +113,11 @@ def plan_request(
     commitments: Sequence[Commitment],
     holidays: Sequence[Holiday],
     yesterday: str,
+    summary: str = "",
 ) -> DayPlanBroadStrokesRequest:
     """하루 계획 요청. 갈 수 있는 장소·오늘 약속·기념일을 배경에 함께 싣는다."""
-    lines = list(persona.identity)
+    lines = [summary] if summary and summary != " ".join(persona.identity) else []
+    lines += persona.identity
     places = ", ".join(_plan_places(persona))
     lines.append(
         f"Use exactly one of these place names as each item's location: {places}."

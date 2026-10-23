@@ -31,6 +31,8 @@ class Scene:
     friendship: int
     last_met: datetime.datetime | None
     memories: Sequence[MemoryObject]
+    summary: str = ""
+    """에이전트 요약 설명(하루 한 번 만든 캐시). 비면 정체성 문장만 싣는다."""
 
 
 def build_speech_prompt(
@@ -105,7 +107,7 @@ def _scene_vars(persona: LlmPersona, scene: Scene) -> dict[str, str]:
     if scene.last_met is not None:
         last_met = f"마지막 대화: {format_day(scene.last_met, scene.now)} {format_time(scene.last_met)}"
     return {
-        "persona": _persona_text(persona),
+        "persona": persona_text(persona, scene.summary),
         "name": persona.display_name,
         "now": f"{scene.now.month}월 {scene.now.day}일 {format_time(scene.now)}",
         "place": place_name(scene.place),
@@ -118,8 +120,11 @@ def _scene_vars(persona: LlmPersona, scene: Scene) -> dict[str, str]:
     }
 
 
-def _persona_text(persona: LlmPersona) -> str:
+def persona_text(persona: LlmPersona, summary: str = "") -> str:
+    """이름·나이, 요약(있으면), 정체성 문장, 말투. 요약이 정체성 문장과 같으면 한 번만."""
     lines = [f"{persona.display_name} ({persona.age}세)"]
+    if summary and summary != " ".join(persona.identity):
+        lines.append(summary)
     lines += list(persona.identity)
     if persona.speech is not None:
         lines.append(persona.speech.describe())
