@@ -91,3 +91,10 @@ def test_startup_survives_init_db_failure() -> None:
     app = create_app(runtime_factory=_rule_runtime, init_database=broken)
     with TestClient(app) as test_client:
         assert test_client.get("/world/state").status_code == 200
+
+
+def test_uvicorn_can_serve_websockets() -> None:
+    """TestClient는 uvicorn을 거치지 않는다. 실제 서버가 `/ws/world`를 받으려면 WS 구현이 깔려 있어야 한다."""
+    from uvicorn.protocols.websockets.auto import AutoWebSocketsProtocol
+
+    assert AutoWebSocketsProtocol is not None
