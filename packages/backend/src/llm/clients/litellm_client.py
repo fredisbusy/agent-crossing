@@ -3,7 +3,6 @@ from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-import litellm
 from settings import EMBEDDING_DIMENSION, LLM_MAX_CONCURRENCY, LLM_NUM_RETRIES
 
 from .types import LlmGenerateOptions
@@ -11,6 +10,13 @@ from .types import LlmGenerateOptions
 
 class LiteLlmClientError(RuntimeError):
     pass
+
+
+def _litellm() -> Any:
+    """litellm은 import 비용이 커서 첫 호출 때 불러온다."""
+    import litellm
+
+    return litellm
 
 
 def _coerce_text(value: object) -> str | None:
@@ -119,7 +125,7 @@ class LiteLlmClient:
 
         try:
             with self._slot():
-                response = litellm.completion(**kwargs)
+                response = _litellm().completion(**kwargs)
         except Exception as exc:
             raise LiteLlmClientError(f"LiteLLM completion failed: {exc}") from exc
 
@@ -181,7 +187,7 @@ class LiteLlmClient:
 
         try:
             with self._slot():
-                response = litellm.embedding(**kwargs)
+                response = _litellm().embedding(**kwargs)
         except Exception as exc:
             raise LiteLlmClientError(f"LiteLLM embedding failed: {exc}") from exc
 
