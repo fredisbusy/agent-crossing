@@ -36,6 +36,8 @@ class _Talk:
     partner_id: ResidentId
     partner_name: str
     lines: list[str] = field(default_factory=list)
+    seen: set[tuple[ResidentId, datetime.datetime, str]] = field(default_factory=set)
+    """대화 기록에 이미 들어간 발화(화자, 시각, 문장)."""
 
 
 class ConversationNotes:
@@ -62,6 +64,7 @@ class ConversationNotes:
             partner_id=partner_id,
             partner_name=names.get(partner_id, partner_id),
             lines=[f"{names.get(u.speaker_id, u.speaker_id)}: {u.text}" for u in said],
+            seen={(u.speaker_id, u.spoken_at, u.text) for u in said},
         )
 
     def heard(self, utterance: Utterance) -> None:
@@ -69,9 +72,10 @@ class ConversationNotes:
         talk = self._talk
         if talk is None or utterance.speaker_id != talk.partner_id:
             return
-        line = f"{talk.partner_name}: {utterance.text}"
-        if line not in talk.lines:
-            talk.lines.append(line)
+        key = (utterance.speaker_id, utterance.spoken_at, utterance.text)
+        if key not in talk.seen:
+            talk.seen.add(key)
+            talk.lines.append(f"{talk.partner_name}: {utterance.text}")
 
     def digest(
         self,
@@ -80,6 +84,7 @@ class ConversationNotes:
         current_conversation_id: str | None,
         summary: str,
         remaining: Sequence[Slot],
+        events: Sequence[str] = (),
     ) -> None:
         """끝난 대화가 있으면 한 번 정리한다. 대화 중이거나 정리할 게 없으면 아무것도 하지 않는다."""
         talk = self._talk
@@ -88,7 +93,7 @@ class ConversationNotes:
         self._talk = None
         if len(talk.lines) < MIN_TRANSCRIPT_LINES:
             return
-        memo, plan_note = self._ask(talk, now, summary, remaining)
+        memo, plan_note = self._ask(talk, now, summary, remaining, events)
         name = self._persona.display_name
         if memo:
             self._writer.store(f"{name}의 {talk.partner_name}와의 대화 메모: {memo}", now)
@@ -114,11 +119,18 @@ class ConversationNotes:
         now: datetime.datetime,
         summary: str,
         remaining: Sequence[Slot],
+        events: Sequence[str],
     ) -> tuple[str, str]:
+        """`events`는 이미 잡힌 약속·아는 행사 줄. 모델이 같은 약속을 새 계획으로 다시 내지 않게 싣는다."""
         plans = "\n".join(
-            f"- {format_time(s.start)}~{format_time(s.end)} "
-            f"{place_name(s.location_path)}: {s.description}"
-            for s in remaining
+            [
+                *(
+                    f"- {format_time(s.start)}~{format_time(s.end)} "
+                    f"{place_name(s.location_path)}: {s.description}"
+                    for s in remaining
+                ),
+                *(f"- {line}" for line in events),
+            ]
         )
         prompt = render_template(
             "town_talk_notes.md",

@@ -80,3 +80,15 @@ def test_move_description_names_the_place_once_when_names_match() -> None:
     assert inside.description == "홉스 카페 홀 안에서 자리를 옮긴다"
     outside = intent_for_slot(slot, SQUARE)
     assert outside.description == "홉스 카페 홀 쪽으로 이동한다"
+
+
+def test_peek_reads_the_same_slot_without_dropping_finished_commitments() -> None:
+    agenda = Agenda(FixedRoutine())
+    agenda.commit(party(), "guest")
+
+    assert agenda.peek(at(15, 30)).is_commitment
+    assert agenda.peek(at(17)).location_path == CAFE
+    assert len(agenda.commitments) == 1
+
+    assert agenda.slot_at(at(17)) == agenda.peek(at(17))
+    assert agenda.commitments == []

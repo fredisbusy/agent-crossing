@@ -109,13 +109,18 @@ class Agenda:
         return tuple(c for c in self.commitments if c.event.end_time > now)
 
     def slot_at(self, now: datetime.datetime) -> Slot:
-        """약속 구간이면 약속, 아니면 다음 약속 전까지로 자른 일과."""
+        """약속 구간이면 약속, 아니면 다음 약속 전까지로 자른 일과. 끝난 약속은 지운다."""
         self.commitments = list(self.upcoming(now))
-        for commitment in self.commitments:
+        return self.peek(now)
+
+    def peek(self, now: datetime.datetime) -> Slot:
+        """`slot_at`과 같은 구간을 약속 목록을 바꾸지 않고 읽는다(스냅샷·진단용)."""
+        upcoming = self.upcoming(now)
+        for commitment in upcoming:
             if commitment.arrive_at <= now < commitment.event.end_time:
                 return commitment.slot_at(now)
         slot = self.routine.slot_at(now)
-        later = [c.arrive_at for c in self.commitments if c.arrive_at > now]
+        later = [c.arrive_at for c in upcoming if c.arrive_at > now]
         if later and min(later) < slot.end:
             slot = Slot(
                 slot.location_path,

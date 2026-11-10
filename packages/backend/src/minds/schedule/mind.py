@@ -59,7 +59,7 @@ class ScheduleMind:
 
     def plan_item_at(self, now: datetime.datetime) -> str | None:
         """지금 속한 일정표·약속 구간의 서술(읽기 전용)."""
-        return self.social.agenda.slot_at(now).description
+        return self.social.agenda.peek(now).description
 
     async def on_encounter(
         self, ctx: MindContext, other: ResidentPublicView

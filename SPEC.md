@@ -203,7 +203,7 @@ react 정책:
 
 대화 연계 계획(LLMMind, `minds/llm/planning/conversation_notes.py`):
 
-- 대화가 끝난 뒤 처음 깨어날 때 LLM 1회(요약 설명, 남은 오늘 계획, 대화 전문)로 `{"memo", "plan_note"}`를 받는다. 말이 2마디 미만인 대화는 정리하지 않고, 형식이 틀리면 아무것도 남기지 않는다
+- 대화가 끝난 뒤 처음 깨어날 때 LLM 1회(요약 설명, 남은 오늘 계획과 이미 잡힌 약속·아는 행사, 대화 전문)로 `{"memo", "plan_note"}`를 받는다. 말이 2마디 미만인 대화는 정리하지 않고, 형식이 틀리면 아무것도 남기지 않는다
 - `memo`(새로 알게 된 사실·상대 인상)는 관찰 기억으로, `plan_note`(새로 하거나 바꿀 일)는 plan 기억("<이름>은/는 <상대>와/과 이야기한 뒤 이렇게 하기로 했다: …")으로 저장한다
 - `plan_note`는 게임 시간 24시간(`PLAN_NOTE_LIFETIME`) 동안, 최근 5개(`MAX_PLAN_NOTES`)까지 하루 계획·재계획 요청의 배경에 "대화에서 정한 일"로 싣는다. 대화 직후에 하루를 다시 짜지는 않는다(연속 재계획 방지). 행사 초대 수락은 지금처럼 화행(§13)이 약속으로 바로 반영한다
 - 우호도가 10(`CLOSE_FRIEND_SCORE`) 이상인 상대를 높은 순으로 3명(`CLOSE_FRIEND_LIMIT`)까지 계획 요청 배경에 "가까운 사람"으로 싣는다. 관계가 깊어지면 다음 계획에서 그 사람과 보내는 시간이 후보가 된다
@@ -238,7 +238,7 @@ react 정책:
 - `POST /world/tick/start`, `POST /world/tick/stop`: 스케줄러(틱 → 알림 → `WORLD_TICK_INTERVAL_SECONDS` 대기)
 - `WS /ws/world`: 접속 즉시 전체 `{"type": "snapshot", "snapshot": WorldSnapshot}` 1회, 이후 틱마다 `{"type": "delta", "tick", "sim_time", "residents": ResidentSnapshot[]}`(`WorldDelta`). `residents`에는 그 연결에 마지막으로 보낸 상태와 달라진 주민만 주민 한 명의 전체 `ResidentSnapshot`으로 싣고(필드 단위 diff 아님), 달라진 주민이 없어도 `tick`·`sim_time` 갱신을 위해 빈 배열로 보낸다. 구독자별로 최신 스냅샷 하나만 보관해 느린 클라이언트가 틱을 막지 않으며, delta는 틱을 건너뛰어도 연결별 마지막 전송본 기준(`world/town/delta.py` `diff_snapshots`)이라 일관된다. 프런트는 받은 전체 스냅샷에 delta를 합쳐 상위에는 항상 전체 스냅샷을 넘기고, 스냅샷 전에 온 delta는 버린다(재연결하면 서버가 전체 스냅샷을 다시 보낸다)
 - `WorldSnapshot`(`world/contracts.py` = `packages/shared/src/world.ts`): `tick`, `sim_time`(ISO), `residents[]`(`resident_id`, `display_name`, `tile`, `location_path`, `action_description`, `emoji`, `utterance_text`, `mind_kind`, `current_plan_item`)
-  - `current_plan_item`: 주민이 지금 속한 일과·약속 구간(하루 단위 항목)의 서술. `Mind.plan_item_at(now)`가 읽기 전용으로 채우며, 구간이 없거나 계획이 아직 없으면 null. `action_description`(분 단위 행동)보다 한 단계 위다
+  - `current_plan_item`: 주민이 지금 속한 일과·약속 구간(하루 단위 항목)의 서술. `Mind.plan_item_at(now)`가 읽기 전용(`Agenda.peek`, 끝난 약속을 지우지 않는다)으로 채우며, 구간이 없거나 계획이 아직 없으면 null. `action_description`(분 단위 행동)보다 한 단계 위다
 - 마을 구성 설정: `TOWN_SCENARIO`(기본 `valentine`), `TOWN_AGENTS`(쉼표 id), `TOWN_AGENT_COUNT`(기본 0 = LLM 없이 기동), `TOWN_SEED`. CLI(`run_town_scenario.py`)와 같은 `build_town`으로 조립한다
 - 시작 시 DB 초기화가 실패해도 경고만 남기고 기동한다(마을은 아직 DB를 쓰지 않는다)
 

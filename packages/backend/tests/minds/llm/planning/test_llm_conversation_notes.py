@@ -153,3 +153,26 @@ def test_plan_request_omits_relationship_lines_when_empty() -> None:
     request = plan_request(mind.persona, MORNING, commitments=(), holidays=(), yesterday="")
     assert "가까운 사람" not in request.persona_background
     assert "대화에서 정한 일" not in request.persona_background
+
+
+def test_repeated_partner_words_and_known_events_reach_the_prompt() -> None:
+    client = ScriptedClient(lambda _: NOTE_REPLY)
+    notes, _ = _notes(client)
+    first = _said("maria", "isabella", "네")
+    notes.track(_conv(first), "maria", NAMES, _said("isabella", "maria", "내일 봐요", 1))
+    last = _said("maria", "isabella", "네", 2)
+    notes.heard(last)
+    notes.heard(last)
+
+    notes.digest(
+        MORNING + datetime.timedelta(minutes=5),
+        current_conversation_id=None,
+        summary="",
+        remaining=[],
+        events=["내가 여는 행사: 밸런타인데이 파티"],
+    )
+
+    [prompt] = client.prompts
+    assert "- Maria: 네\n- Isabella: 내일 봐요\n- Maria: 네" in prompt
+    assert prompt.count("- Maria: 네") == 2
+    assert "- 내가 여는 행사: 밸런타인데이 파티" in prompt

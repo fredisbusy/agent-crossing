@@ -115,8 +115,8 @@ class LLMMind:
 
     async def next_action(self, ctx: MindContext) -> ActionIntent:
         await self._flush()
-        await asyncio.to_thread(self._prepare_day, ctx)
         await asyncio.to_thread(self._digest_talk, ctx)
+        await asyncio.to_thread(self._prepare_day, ctx)
         slot = self.social.agenda.slot_at(ctx.now)
         if await asyncio.to_thread(self._react, ctx, slot):
             slot = self.social.agenda.slot_at(ctx.now)
@@ -176,7 +176,7 @@ class LLMMind:
 
     def plan_item_at(self, now: datetime.datetime) -> str | None:
         """지금 속한 일과·약속 구간의 서술(읽기 전용). 계획이 없으면 None."""
-        slot = self.social.agenda.slot_at(now)
+        slot = self.social.agenda.peek(now)
         if slot.is_commitment or self.routine.has_plan(now.date()):
             return slot.description
         return None
@@ -224,6 +224,7 @@ class LLMMind:
             current_conversation_id=ctx.self_state.conversation_id,
             summary=self._summary or identity_text(self.persona),
             remaining=[slot for slot in today if slot.end > ctx.now],
+            events=event_lines(self.social, ctx.now),
         )
 
     def _prepare_day(self, ctx: MindContext) -> None:
