@@ -13,6 +13,10 @@ CONVERSATION_COOLDOWN = datetime.timedelta(hours=3)
 """같은 상대와 다시 대화를 시작하기까지의 게임 시간."""
 LONG_TIME = datetime.timedelta(days=3)
 """이만큼 못 봤으면 오랜만에 만난 것으로 본다."""
+CLOSE_FRIEND_SCORE = 10
+"""이 우호도부터 가까운 사람으로 본다(대화 5번, 또는 선물 2번에 해당)."""
+CLOSE_FRIEND_LIMIT = 3
+"""계획에 싣는 가까운 사람 수 상한."""
 
 
 class Friendship:
@@ -22,6 +26,12 @@ class Friendship:
 
     def score(self, other: ResidentId) -> int:
         return self._scores.get(other, 0)
+
+    def closest(self) -> tuple[tuple[ResidentId, int], ...]:
+        """우호도가 `CLOSE_FRIEND_SCORE` 이상인 상대를 높은 순으로 `CLOSE_FRIEND_LIMIT`명까지."""
+        close = [(o, s) for o, s in self._scores.items() if s >= CLOSE_FRIEND_SCORE]
+        close.sort(key=lambda pair: (-pair[1], pair[0]))
+        return tuple(close[:CLOSE_FRIEND_LIMIT])
 
     def add(self, other: ResidentId, amount: int) -> int:
         value = max(0, min(MAX_FRIENDSHIP, self.score(other) + amount))

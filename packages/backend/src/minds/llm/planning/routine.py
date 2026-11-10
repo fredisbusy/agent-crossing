@@ -169,8 +169,13 @@ def plan_request(
     holidays: Sequence[Holiday],
     yesterday: str,
     summary: str = "",
+    talk_notes: Sequence[str] = (),
+    close_friends: Sequence[tuple[str, int]] = (),
 ) -> DayPlanBroadStrokesRequest:
-    """하루 계획 요청. 갈 수 있는 장소·오늘 약속·기념일을 배경에 함께 싣는다."""
+    """하루 계획 요청. 갈 수 있는 장소·오늘 약속·기념일을 배경에 함께 싣는다.
+
+    `talk_notes`는 대화 뒤에 정한 일, `close_friends`는 (이름, 우호도)로 가까운 사람이다(TODO 3-C).
+    """
     lines = [summary] if summary and summary != " ".join(persona.identity) else []
     lines += persona.identity
     places = ", ".join(_plan_places(persona))
@@ -185,6 +190,13 @@ def plan_request(
     for commitment in today:
         role = "연다" if commitment.role == "host" else "참석하기로 했다"
         lines.append(f"약속: {describe_event(commitment.event, now)} ({role})")
+    for note in talk_notes:
+        lines.append(f"대화에서 정한 일: {note}")
+    if close_friends:
+        friends = ", ".join(f"{name}(친밀도 {score}/100)" for name, score in close_friends)
+        lines.append(
+            f"가까운 사람: {friends}. 시간이 맞으면 이들과 보내는 시간을 계획에 넣어도 좋다."
+        )
     return DayPlanBroadStrokesRequest(
         agent_name=persona.display_name,
         age=persona.age,

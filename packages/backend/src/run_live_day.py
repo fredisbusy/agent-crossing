@@ -38,6 +38,7 @@ _RESPONSE_KINDS: tuple[tuple[str, str], ...] = (
     ('"converse"', "encounter"),
     ('"utterance"', "speech"),
     ('"summary"', "summary"),
+    ('"memo"', "talk:notes"),
 )
 """`## 인물`로 시작하는 마을 프롬프트는 응답의 키로 나눈다."""
 

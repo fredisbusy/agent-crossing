@@ -50,10 +50,12 @@ from .prompts import (
     describe_point,
     event_lines,
     participant_names,
+    title_name,
 )
 from .recall import MemoryWriter
 from .summary import build_summary, identity_text
 from .planning import (
+    ConversationNotes,
     Decomposer,
     PlannedRoutine,
     Reactor,
@@ -101,6 +103,9 @@ class LLMMind:
             decomposer=self._decomposer,
         )
         self._encounters = EncounterLog()
+        self._talks = ConversationNotes(
+            persona=persona, client=client, writer=self._writer
+        )
         self._max_turns = max_turns
         self._seeded = False
         self._summary = ""
@@ -111,6 +116,7 @@ class LLMMind:
     async def next_action(self, ctx: MindContext) -> ActionIntent:
         await self._flush()
         await asyncio.to_thread(self._prepare_day, ctx)
+        await asyncio.to_thread(self._digest_talk, ctx)
         slot = self.social.agenda.slot_at(ctx.now)
         if await asyncio.to_thread(self._react, ctx, slot):
             slot = self.social.agenda.slot_at(ctx.now)
@@ -143,17 +149,24 @@ class LLMMind:
         await self._flush()
         me = self.persona.resident_id
         other = partner_of(me, conversation)
-        if other is None or should_stop(me, conversation):
+        if other is None:
+            return None
+        names = participant_names(ctx, conversation)
+        self._talks.track(conversation, other, names)
+        if should_stop(me, conversation):
             return None
         self.social.join_conversation(conversation.conversation_id, other, ctx.now)
         if conversation.history:
             self.social.hear(conversation.history[-1], ctx.now)
-        return await asyncio.to_thread(self._speak, ctx, conversation, other)
+        said = await asyncio.to_thread(self._speak, ctx, conversation, other)
+        self._talks.track(conversation, other, names, said)
+        return said
 
     async def observe(self, observations: tuple[Observation, ...]) -> None:
         for obs in observations:
             if obs.kind == "utterance" and obs.utterance is not None:
                 self.social.hear(obs.utterance, obs.observed_at)
+                self._talks.heard(obs.utterance)
         await asyncio.to_thread(self._remember_all, observations)
 
     async def _flush(self) -> None:
@@ -196,6 +209,21 @@ class LLMMind:
             holidays=ctx.holidays,
             yesterday=self._yesterday(ctx.now),
             summary=self._summary,
+            talk_notes=self._talks.plan_lines(ctx.now),
+            close_friends=[
+                (title_name(other), score)
+                for other, score in self.social.friendship.closest()
+            ],
+        )
+
+    def _digest_talk(self, ctx: MindContext) -> None:
+        """끝난 대화를 정리해 기억과 다음 계획 요청에 반영한다 (TODO 3-C)."""
+        today = self.routine.slots(ctx.now.date())
+        self._talks.digest(
+            ctx.now,
+            current_conversation_id=ctx.self_state.conversation_id,
+            summary=self._summary or identity_text(self.persona),
+            remaining=[slot for slot in today if slot.end > ctx.now],
         )
 
     def _prepare_day(self, ctx: MindContext) -> None:
@@ -352,4 +380,3 @@ class LLMMind:
             )
         except (RuntimeError, TimeoutError, ValueError):
             return ""
-

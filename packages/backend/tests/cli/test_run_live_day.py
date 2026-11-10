@@ -31,6 +31,7 @@ def test_call_kind_reads_template_headings_then_response_keys() -> None:
         ("## 인물", '{"converse": true}'): "encounter",
         ("## 인물", '{"utterance": "안녕"}'): "speech",
         ("## 인물", '{"summary": "요약"}'): "summary",
+        ("## 인물", '{"memo": "메모", "plan_note": ""}'): "talk:notes",
         ("처음 보는 프롬프트", "{}"): "other",
     }
     for (prompt, response), kind in cases.items():
