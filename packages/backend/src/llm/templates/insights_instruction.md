@@ -1,7 +1,8 @@
-## Task
+## 지시
 
-What 5 high-level insights can you infer from the above statements? Use statement numbers as evidence references.
+위 진술에서 끌어낼 수 있는 상위 수준 통찰 5개를 쓴다. 근거가 된 진술의 번호를 함께 적는다.
+통찰은 반드시 한국어 평서문("…다")으로 쓴다. 사람 이름과 장소 이름은 진술에 적힌 표기를 그대로 쓴다.
 
-## Output Contract
+## 출력
 
-Return strict JSON only with this exact shape and no extra text: $json_shape
+다른 글 없이 이 모양의 JSON만 출력한다: $json_shape

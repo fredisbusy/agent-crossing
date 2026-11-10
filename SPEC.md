@@ -154,6 +154,7 @@ Backend 레이어 책임:
 규칙:
 
 - reflection memory도 retrieval 후보에 포함
+- 성찰 프롬프트(진술 머리말·지시)는 한국어로 쓰고, 질문·insight도 한국어 문장으로 받는다(다른 기억과 같은 언어)
 - insight는 반드시 근거 memory id를 citations에 보존(존재하는 id만, 중복 제거, 순서 유지)
 - 성찰 중 LLM 오류는 tick을 멈추지 않는다. 질문 하나의 insight 생성이 실패하면 그 질문만 비운다
 

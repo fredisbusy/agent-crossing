@@ -1,7 +1,8 @@
-## Task
+## 지시
 
-Given only the information above, what are 3 most salient high-level questions we can answer about the subjects in the statements?
+위 진술만 보고, 진술에 나오는 사람·일에 대해 답할 수 있는 가장 중요한 상위 수준 질문 3개를 쓴다.
+질문은 반드시 한국어 문장으로 쓴다. 사람 이름과 장소 이름은 진술에 적힌 표기를 그대로 쓴다.
 
-## Output Contract
+## 출력
 
-Return strict JSON only with this exact shape and no extra text: $json_shape
+다른 글 없이 이 모양의 JSON만 출력한다: $json_shape
