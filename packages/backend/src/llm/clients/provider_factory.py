@@ -3,6 +3,7 @@ from typing import Protocol
 from settings import LLM_NUM_RETRIES, LLM_RESPONSE_CACHE, LLM_RESPONSE_CACHE_MODE
 
 from .litellm_client import LiteLlmClient
+from .local_embedding import LocalEmbeddingClient, is_local_embedding_model
 from .response_cache import CachingProviderClient, ResponseCache, parse_cache_mode
 from .types import LlmGenerateOptions
 
@@ -53,10 +54,13 @@ def build_provider_client(
         default_embedding_model=embedding_model,
         num_retries=num_retries,
     )
+    provider: ProviderClient = client
+    if is_local_embedding_model(embedding_model):
+        provider = LocalEmbeddingClient(client, embedding_model)
     mode = parse_cache_mode(cache_mode)
     if not cache_path or mode == "off":
-        return client
-    return CachingProviderClient(client, ResponseCache(cache_path), mode)
+        return provider
+    return CachingProviderClient(provider, ResponseCache(cache_path), mode)
 
 
 __all__ = [
