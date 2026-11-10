@@ -388,6 +388,13 @@ def test_minutes_accept_floats_and_numeric_strings() -> None:
     assert parsed("곧") == 0 and parsed(True) == 0 and parsed(None) == 0
 
 
+def test_broken_verdict_is_no_reaction_but_keeps_the_reason() -> None:
+    verdict = parse_verdict('{"react":false,"reason":"하던 일을 바꿀 필요가 없다.","reaction":}')
+    assert (verdict.react, verdict.reason) == (False, "하던 일을 바꿀 필요가 없다.")
+    assert parse_verdict('{"react":true,"reaction":}').react is False
+    assert parse_verdict("모르겠다").reason == ""
+
+
 def test_stale_reaction_items_are_dropped_on_a_new_day() -> None:
     mind, _ = make_mind(_by_minutes(30), planner=ReplanPlanner([]))
     _start(mind)

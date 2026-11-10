@@ -8,6 +8,7 @@
 import datetime
 import json
 import math
+import re
 from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -268,7 +269,7 @@ def parse_verdict(raw: str) -> Verdict:
     """응답을 판정으로. 깨졌거나 반응 내용이 비면 반응 없음."""
     data = _load(raw)
     if data is None:
-        return Verdict(False, "", None)
+        return Verdict(False, _loose_reason(raw), None)
     reason = _text(data, "reason")
     body = data.get("reaction")
     if data.get("react") is not True or not isinstance(body, dict):
@@ -308,6 +309,21 @@ def _load(raw: str) -> dict[str, object] | None:
     except json.JSONDecodeError:
         return None
     return cast(dict[str, object], data) if isinstance(data, dict) else None
+
+
+_REASON = re.compile(r'"reason"\s*:\s*("(?:[^"\\]|\\.)*")')
+
+
+def _loose_reason(raw: str) -> str:
+    """JSON이 깨진 응답(예: `"reaction":}`)에서 판정 이유만 건진다. 진단 기록용."""
+    found = _REASON.search(raw)
+    if found is None:
+        return ""
+    try:
+        value = cast(object, json.loads(found.group(1)))
+    except json.JSONDecodeError:
+        return ""
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _text(data: dict[str, object], key: str) -> str:
