@@ -47,8 +47,9 @@ from .prompts import (
     Scene,
     build_encounter_prompt,
     build_speech_prompt,
-    describe_events,
     describe_point,
+    event_lines,
+    participant_names,
 )
 from .recall import MemoryWriter
 from .summary import build_summary, identity_text
@@ -278,7 +279,7 @@ class LLMMind:
     def _speak(
         self, ctx: MindContext, conversation: ConversationView, other: str
     ) -> Utterance | None:
-        names = _names(ctx, conversation)
+        names = participant_names(ctx, conversation)
         history = conversation.history
         query = f"{names.get(other, other)} {history[-1].text if history else ''}"
         scene = self._scene(ctx, other, names.get(other, other), query)
@@ -286,7 +287,7 @@ class LLMMind:
         prompt = build_speech_prompt(
             self.persona,
             scene,
-            events=self._event_lines(ctx.now),
+            events=event_lines(self.social, ctx.now),
             partner_notes=self.social.partner_notes(other, ctx.now),
             talking_points=[
                 describe_point(p, ctx.now)
@@ -323,18 +324,6 @@ class LLMMind:
         )
         return utterance
 
-    def _event_lines(self, now: datetime.datetime) -> list[str]:
-        upcoming = self.social.agenda.upcoming(now)
-        hosting = [c.event for c in upcoming if c.role == "host"]
-        attending = [c.event for c in upcoming if c.role == "guest"]
-        mine = {(e.name, e.start_time) for e in hosting + attending}
-        heard = [
-            e
-            for e in self.social.facts.events(now)
-            if (e.name, e.start_time) not in mine
-        ]
-        return describe_events(hosting, attending, heard, now)
-
     def _resolver(self, ctx: MindContext) -> ActResolver:
         gifts = [h.gift_item for h in ctx.holidays if h.gift_item]
         return ActResolver(
@@ -364,10 +353,3 @@ class LLMMind:
         except (RuntimeError, TimeoutError, ValueError):
             return ""
 
-
-def _names(ctx: MindContext, conversation: ConversationView) -> dict[str, str]:
-    names = {view.resident_id: view.display_name for view in ctx.nearby}
-    names[ctx.self_state.resident_id] = ctx.self_state.display_name
-    for resident_id in conversation.participant_ids:
-        names.setdefault(resident_id, resident_id.replace("_", " ").title())
-    return names

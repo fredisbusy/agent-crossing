@@ -6,8 +6,21 @@ from dataclasses import dataclass
 
 from agents.memory.memory_object import MemoryObject
 from llm.template_loader import render_template
-from minds.social import describe_event, format_day, format_time, place_name
-from world.contracts import Holiday, SocialEvent, SpeechAct
+from minds.social import (
+    SocialState,
+    describe_event,
+    format_day,
+    format_time,
+    place_name,
+)
+from world.contracts import (
+    ConversationView,
+    Holiday,
+    MindContext,
+    ResidentId,
+    SocialEvent,
+    SpeechAct,
+)
 
 from .contracts import LlmPersona
 
@@ -133,3 +146,28 @@ def persona_text(persona: LlmPersona, summary: str = "") -> str:
 
 def _bullets(lines: Sequence[str]) -> str:
     return "\n".join(f"- {line}" for line in lines) if lines else _NONE
+
+
+def event_lines(social: SocialState, now: datetime.datetime) -> list[str]:
+    """내가 여는·가기로 한·소문으로 들은 행사를 프롬프트 줄로."""
+    upcoming = social.agenda.upcoming(now)
+    hosting = [c.event for c in upcoming if c.role == "host"]
+    attending = [c.event for c in upcoming if c.role == "guest"]
+    mine = {(e.name, e.start_time) for e in hosting + attending}
+    heard = [e for e in social.facts.events(now) if (e.name, e.start_time) not in mine]
+    return describe_events(hosting, attending, heard, now)
+
+
+def participant_names(
+    ctx: MindContext, conversation: ConversationView
+) -> dict[ResidentId, str]:
+    """대화 참가자 id -> 표시 이름. 근처에 없는 참가자는 id로 이름을 만든다."""
+    names = {view.resident_id: view.display_name for view in ctx.nearby}
+    names[ctx.self_state.resident_id] = ctx.self_state.display_name
+    for resident_id in conversation.participant_ids:
+        names.setdefault(resident_id, title_name(resident_id))
+    return names
+
+
+def title_name(resident_id: ResidentId) -> str:
+    return resident_id.replace("_", " ").title()
