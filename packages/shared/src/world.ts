@@ -35,4 +35,14 @@ export interface WorldSnapshot {
   residents: ResidentSnapshot[];
 }
 
-export type WorldMessage = { type: "snapshot"; snapshot: WorldSnapshot };
+/** 이 연결에 마지막으로 보낸 상태와 달라진 주민만 담은 변경분. 주민은 전체 `ResidentSnapshot`. */
+export interface WorldDelta {
+  tick: number;
+  /** ISO 8601 시뮬레이션 시각. */
+  sim_time: string;
+  residents: ResidentSnapshot[];
+}
+
+export type WorldMessage =
+  | { type: "snapshot"; snapshot: WorldSnapshot }
+  | ({ type: "delta" } & WorldDelta);

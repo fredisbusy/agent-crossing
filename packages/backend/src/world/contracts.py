@@ -267,3 +267,10 @@ class WorldSnapshot(_Frozen):
     sim_time: datetime.datetime
     residents: tuple[ResidentSnapshot, ...] = Field(default_factory=tuple)
 
+
+class WorldDelta(_Frozen):
+    """직전에 보낸 스냅샷과 달라진 주민만 담은 변경분. 주민은 전체 `ResidentSnapshot`."""
+
+    tick: int
+    sim_time: datetime.datetime
+    residents: tuple[ResidentSnapshot, ...] = Field(default_factory=tuple)

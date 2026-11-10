@@ -229,13 +229,11 @@ react 정책:
 - `GET /world/text`: QA용 짧은 JSON 상태(§15)
 - `POST /world/advance?minutes=N`(1..1440): N틱 진행 후 `WorldSnapshot`
 - `POST /world/tick/start`, `POST /world/tick/stop`: 스케줄러(틱 → 알림 → `WORLD_TICK_INTERVAL_SECONDS` 대기)
-- `WS /ws/world`: 접속 즉시 1회, 이후 틱마다 `{"type": "snapshot", "snapshot": WorldSnapshot}`. 구독자별로 최신 스냅샷 하나만 보관해 느린 클라이언트가 틱을 막지 않는다
+- `WS /ws/world`: 접속 즉시 전체 `{"type": "snapshot", "snapshot": WorldSnapshot}` 1회, 이후 틱마다 `{"type": "delta", "tick", "sim_time", "residents": ResidentSnapshot[]}`(`WorldDelta`). `residents`에는 그 연결에 마지막으로 보낸 상태와 달라진 주민만 주민 한 명의 전체 `ResidentSnapshot`으로 싣고(필드 단위 diff 아님), 달라진 주민이 없어도 `tick`·`sim_time` 갱신을 위해 빈 배열로 보낸다. 구독자별로 최신 스냅샷 하나만 보관해 느린 클라이언트가 틱을 막지 않으며, delta는 틱을 건너뛰어도 연결별 마지막 전송본 기준(`world/town/delta.py` `diff_snapshots`)이라 일관된다. 프런트는 받은 전체 스냅샷에 delta를 합쳐 상위에는 항상 전체 스냅샷을 넘기고, 스냅샷 전에 온 delta는 버린다(재연결하면 서버가 전체 스냅샷을 다시 보낸다)
 - `WorldSnapshot`(`world/contracts.py` = `packages/shared/src/world.ts`): `tick`, `sim_time`(ISO), `residents[]`(`resident_id`, `display_name`, `tile`, `location_path`, `action_description`, `emoji`, `utterance_text`, `mind_kind`, `current_plan_item`)
   - `current_plan_item`: 주민이 지금 속한 일과·약속 구간(하루 단위 항목)의 서술. `Mind.plan_item_at(now)`가 읽기 전용으로 채우며, 구간이 없거나 계획이 아직 없으면 null. `action_description`(분 단위 행동)보다 한 단계 위다
 - 마을 구성 설정: `TOWN_SCENARIO`(기본 `valentine`), `TOWN_AGENTS`(쉼표 id), `TOWN_AGENT_COUNT`(기본 0 = LLM 없이 기동), `TOWN_SEED`. CLI(`run_town_scenario.py`)와 같은 `build_town`으로 조립한다
 - 시작 시 DB 초기화가 실패해도 경고만 남기고 기동한다(마을은 아직 DB를 쓰지 않는다)
-
-남은 것: 변경분(delta) 메시지.
 
 God mode 입력:
 

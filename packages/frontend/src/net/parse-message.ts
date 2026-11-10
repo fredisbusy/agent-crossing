@@ -45,5 +45,15 @@ export function parseWorldMessage(raw: string): WorldMessage | null {
   if (isRecord(parsed) && parsed.type === "snapshot" && isSnapshot(parsed.snapshot)) {
     return { type: "snapshot", snapshot: parsed.snapshot };
   }
+  if (
+    isRecord(parsed) &&
+    parsed.type === "delta" &&
+    typeof parsed.tick === "number" &&
+    typeof parsed.sim_time === "string" &&
+    Array.isArray(parsed.residents) &&
+    parsed.residents.every(isResident)
+  ) {
+    return { type: "delta", tick: parsed.tick, sim_time: parsed.sim_time, residents: parsed.residents };
+  }
   return null;
 }

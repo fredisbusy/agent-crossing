@@ -17,9 +17,9 @@ from settings import (
     TOWN_SEED,
     WORLD_TICK_INTERVAL_SECONDS,
 )
-from world.contracts import WorldSnapshot
+from world.contracts import WorldDelta, WorldSnapshot
 from world.scenarios import build_town, load_scenario
-from world.town import TownRuntime
+from world.town import TownRuntime, diff_snapshots
 
 logger = logging.getLogger(__name__)
 MAX_ADVANCE_MINUTES = 1440
@@ -122,7 +122,8 @@ def create_app(
         queue = runtime.subscribe()
         disconnected = asyncio.create_task(_wait_disconnect(websocket))
         try:
-            await _send_snapshot(websocket, runtime.snapshot())
+            last_sent = runtime.snapshot()
+            await _send_snapshot(websocket, last_sent)
             while True:
                 next_snapshot = asyncio.ensure_future(queue.get())
                 done, _ = await asyncio.wait(
@@ -132,7 +133,9 @@ def create_app(
                 if next_snapshot not in done:
                     next_snapshot.cancel()
                     break
-                await _send_snapshot(websocket, next_snapshot.result())
+                latest = next_snapshot.result()
+                await _send_delta(websocket, diff_snapshots(last_sent, latest))
+                last_sent = latest
         except (WebSocketDisconnect, RuntimeError):
             pass
         finally:
@@ -146,6 +149,11 @@ async def _send_snapshot(websocket: WebSocket, snapshot: WorldSnapshot) -> None:
     await websocket.send_json(
         {"type": "snapshot", "snapshot": snapshot.model_dump(mode="json")}
     )
+
+
+async def _send_delta(websocket: WebSocket, delta: WorldDelta) -> None:
+    payload = delta.model_dump(mode="json")
+    await websocket.send_json({"type": "delta", **payload})
 
 
 async def _wait_disconnect(websocket: WebSocket) -> None:
