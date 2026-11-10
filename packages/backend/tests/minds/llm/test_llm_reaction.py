@@ -176,7 +176,8 @@ def test_reacting_replaces_only_the_rest_of_the_day() -> None:
         and "공원을 산책한다" in note
     )
     assert any(
-        kind == "plan" and "광장이 소란스럽다" in text and "보고" in text
+        kind == "plan"
+        and text == "Isabella는 Maria를 보고 이렇게 하기로 했다: 광장에서 소란을 살핀다"
         for kind, text in memory.stored
     )
     (record,) = mind.reaction_log

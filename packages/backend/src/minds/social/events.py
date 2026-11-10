@@ -47,7 +47,7 @@ def has_final(word: str) -> bool:
     끝나거나 모음 뒤 b·k·p(ck 포함)로 끝나면 받침이 있고, 나머지(모음, s·z·r·t·d 등은
     보통 "스·즈·르·트·드"로 풀어 적는다)는 받침이 없다. 숫자는 읽는 소리로 판정한다.
     """
-    text = word.rstrip(" .,!?\"')")
+    text = word.rstrip(" .,!?…\"')")
     if not text:
         return False
     last = text[-1]

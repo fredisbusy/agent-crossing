@@ -15,13 +15,14 @@ from typing import cast
 from agents.planning.models import DayPlanBroadStrokesRequest, DayPlanItem
 from llm.clients.types import LlmGenerateOptions
 from llm.template_loader import render_template
-from minds.social import Slot, format_time, josa, place_name
+from minds.social import Slot, format_time, place_name
 from world.contracts import MindContext, Observation
 
 from ..contracts import DayPlanner, GenerateClient, LlmPersona, MemoryStore
 from ..prompts import persona_text
 from ..recall import MemoryWriter
 from .decompose import Decomposer
+from .reaction_notes import decision_memory
 from .routine import PlannedRoutine, find_place
 
 REACTION_TOP_K = 5
@@ -31,7 +32,7 @@ MAX_REACTION_MINUTES = 120
 REACTION_LOG_SIZE = 20
 """진단 버퍼에 남기는 최근 판정 수."""
 SUMMARY_MAX_CHARS = 120
-"""기억·진단에 남기는 관찰 요약의 최대 길이."""
+"""진단에 남기는 관찰 요약의 최대 길이."""
 REACTION_OPTIONS = LlmGenerateOptions(temperature=0.0, top_p=1.0, num_predict=256)
 _JUDGED_KINDS = ("sight", "event")
 _RECOVERABLE = (RuntimeError, TimeoutError, ValueError)
@@ -117,7 +118,7 @@ class Reactor:
         self._log.append(ReactionRecord(ctx.now, verdict.react, verdict.reason, digest))
         if not verdict.react or verdict.reaction is None:
             return False
-        self._apply(ctx, verdict.reaction, digest, make_request)
+        self._apply(ctx, verdict.reaction, seen, make_request)
         return True
 
     # --- 판정 -------------------------------------------------------------------
@@ -153,7 +154,7 @@ class Reactor:
         self,
         ctx: MindContext,
         reaction: Reaction,
-        digest: str,
+        seen: Sequence[Observation],
         make_request: Callable[[], DayPlanBroadStrokesRequest],
     ) -> None:
         now = ctx.now
@@ -171,13 +172,11 @@ class Reactor:
         self.items.add(item)
         self._routine.replace_from(now, _without_overlap([item, *later]))
         self._decomposer.invalidate(since=now)
-        name = self._persona.display_name
-        self._writer.store(
-            f"{josa(name, '은', '는')} {josa(digest, '을', '를')} 보고 "
-            f"{reaction.description}하기로 했다",
-            now,
-            "plan",
+        names = {view.resident_id: view.display_name for view in ctx.nearby}
+        note = decision_memory(
+            self._persona.display_name, seen, names, reaction.description
         )
+        self._writer.store(note, now, "plan")
 
     def _replan(
         self,
