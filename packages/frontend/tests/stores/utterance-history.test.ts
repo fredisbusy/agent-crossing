@@ -16,6 +16,7 @@ function snapshot(tick: number, text: string | null): WorldSnapshot {
         emoji: null,
         utterance_text: text,
         mind_kind: null,
+        current_plan_item: null,
       },
     ],
   };

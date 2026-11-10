@@ -280,11 +280,11 @@
     - [x] 단일 기준 시계로 tick이 안정적으로 증가한다
     - [x] tick loop에서 perceive-plan-act 순서가 유지된다
 
-- [ ] `P1` WebSocket state broadcast를 구현한다
+- [x] `P1` WebSocket state broadcast를 구현한다
   - Depends on: world clock + tick scheduler 연동
   - DoD:
     - [x] `position`, `action`, `dialogue`, `emoji`를 브로드캐스트한다(`WS /ws/world`, 2026-10-23, SPEC §9)
-    - [ ] `current_plan`을 스냅샷에 싣는다
+    - [x] `current_plan`을 스냅샷에 싣는다(`current_plan_item`, 2026-11-10, SPEC §9)
     - [x] 누락 필드 없이 클라이언트에서 파싱 가능하다(프런트 파서 통과, 브라우저에서 연결 확인)
 
 ### 4-B. Frontend 시각화

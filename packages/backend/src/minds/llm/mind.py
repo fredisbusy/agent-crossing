@@ -153,6 +153,13 @@ class LLMMind:
         if self._writer.has_pending:
             await asyncio.to_thread(self._writer.flush)
 
+    def plan_item_at(self, now: datetime.datetime) -> str | None:
+        """지금 속한 일과·약속 구간의 서술(읽기 전용). 계획이 없으면 None."""
+        slot = self.social.agenda.slot_at(now)
+        if slot.is_commitment or self.routine.has_plan(now.date()):
+            return slot.description
+        return None
+
     @property
     def reaction_log(self) -> tuple[ReactionRecord, ...]:
         """최근 반응 판정 기록(진단용). 행동 결정에는 쓰지 않는다."""

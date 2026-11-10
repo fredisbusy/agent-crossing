@@ -13,6 +13,7 @@ function resident(id: string, x: number, y: number, text: string | null = null):
     emoji: null,
     utterance_text: text,
     mind_kind: null,
+    current_plan_item: null,
   };
 }
 

@@ -18,6 +18,7 @@ const SNAPSHOT_JSON = JSON.stringify({
         emoji: null,
         utterance_text: "hi",
         mind_kind: "llm",
+        current_plan_item: null,
       },
     ],
   },

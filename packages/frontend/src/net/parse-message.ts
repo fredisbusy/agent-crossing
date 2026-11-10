@@ -19,7 +19,8 @@ function isResident(value: unknown): value is ResidentSnapshot {
     isNullableString(value.action_description) &&
     isNullableString(value.emoji) &&
     isNullableString(value.utterance_text) &&
-    isNullableString(value.mind_kind)
+    isNullableString(value.mind_kind) &&
+    isNullableString(value.current_plan_item)
   );
 }
 
