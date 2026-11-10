@@ -7,7 +7,14 @@ import datetime
 import random
 from typing import Literal
 
-from minds.social import SocialState, SpeechStyle, intent_for_slot
+from minds.social import (
+    EncounterLog,
+    EncounterRecord,
+    SocialState,
+    SpeechStyle,
+    intent_for_slot,
+    rule_choice,
+)
 from world.contracts import (
     ActionIntent,
     ConversationView,
@@ -41,6 +48,7 @@ class ScheduleMind:
         self.config = config
         self.social = SocialState(resident_id, Timetable(entries=tuple(config.entries)))
         self._rng = rng
+        self._encounters = EncounterLog()
         self._rules = ReplyRules(
             social=self.social, config=config, rng=rng, style=style
         )
@@ -56,13 +64,24 @@ class ScheduleMind:
     async def on_encounter(
         self, ctx: MindContext, other: ResidentPublicView
     ) -> EncounterChoice:
-        if self.social.friendship.in_cooldown(other.resident_id, ctx.now):
-            return "pass_by"
-        if self.social.talking_points(other.resident_id, ctx.now, ctx.holidays):
-            return "converse"
-        if self._rng.random() < self.config.talkativeness:
-            return "converse"
-        return "pass_by"
+        other_id = other.resident_id
+        ruled = rule_choice(self.social, other_id, ctx.now, ctx.holidays)
+        if ruled is not None:
+            return self._encounters.add(self.social, other_id, ctx.now, *ruled)
+        talkative = self._rng.random() < self.config.talkativeness
+        return self._encounters.add(
+            self.social,
+            other_id,
+            ctx.now,
+            "converse" if talkative else "pass_by",
+            "chance",
+            f"수다 확률 {self.config.talkativeness:.2f}",
+        )
+
+    @property
+    def encounter_log(self) -> tuple[EncounterRecord, ...]:
+        """최근 조우 판정 기록(진단용). 행동 결정에는 쓰지 않는다."""
+        return self._encounters.records
 
     async def respond(
         self, ctx: MindContext, conversation: ConversationView

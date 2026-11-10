@@ -12,6 +12,8 @@ from typing import Literal
 from agents.planning.models import DayPlanBroadStrokesRequest
 from llm.clients.types import LlmGenerateOptions
 from minds.social import (
+    EncounterLog,
+    EncounterRecord,
     Slot,
     SocialState,
     intent_for_slot,
@@ -19,6 +21,7 @@ from minds.social import (
     must_end,
     partner_of,
     place_name,
+    rule_choice,
     should_stop,
 )
 from world.contracts import (
@@ -96,6 +99,7 @@ class LLMMind:
             routine=self.routine,
             decomposer=self._decomposer,
         )
+        self._encounters = EncounterLog()
         self._max_turns = max_turns
         self._seeded = False
         self._summary = ""
@@ -122,12 +126,15 @@ class LLMMind:
         self, ctx: MindContext, other: ResidentPublicView
     ) -> EncounterChoice:
         await self._flush()
-        if self.social.friendship.in_cooldown(other.resident_id, ctx.now):
-            return "pass_by"
-        if self.social.talking_points(other.resident_id, ctx.now, ctx.holidays):
-            return "converse"
-        converse = await asyncio.to_thread(self._ask_encounter, ctx, other)
-        return "converse" if converse else "pass_by"
+        other_id = other.resident_id
+        ruled = rule_choice(self.social, other_id, ctx.now, ctx.holidays)
+        if ruled is not None:
+            return self._encounters.add(self.social, other_id, ctx.now, *ruled)
+        converse, reason = await asyncio.to_thread(self._ask_encounter, ctx, other)
+        choice: EncounterChoice = "converse" if converse else "pass_by"
+        return self._encounters.add(
+            self.social, other_id, ctx.now, choice, "judged", reason
+        )
 
     async def respond(
         self, ctx: MindContext, conversation: ConversationView
@@ -159,6 +166,11 @@ class LLMMind:
         if slot.is_commitment or self.routine.has_plan(now.date()):
             return slot.description
         return None
+
+    @property
+    def encounter_log(self) -> tuple[EncounterRecord, ...]:
+        """최근 조우 판정 기록(진단용). 행동 결정에는 쓰지 않는다."""
+        return self._encounters.records
 
     @property
     def reaction_log(self) -> tuple[ReactionRecord, ...]:
@@ -249,7 +261,9 @@ class LLMMind:
             summary=self._summary or identity_text(self.persona),
         )
 
-    def _ask_encounter(self, ctx: MindContext, other: ResidentPublicView) -> bool:
+    def _ask_encounter(
+        self, ctx: MindContext, other: ResidentPublicView
+    ) -> tuple[bool, str]:
         scene = self._scene(
             ctx, other.resident_id, other.display_name, other.display_name
         )

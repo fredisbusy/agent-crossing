@@ -22,12 +22,23 @@ from .facts import Fact, FactStore
 from .friendship import Friendship
 from .voice import VOICE_DESCRIPTION, VOICE_TONE, SpeechStyle, Tone, Voice
 from .state import HasSocialState, SocialSeed, SocialState
+from .encounters import (
+    ENCOUNTER_LOG_SIZE,
+    EncounterBasis,
+    EncounterLog,
+    EncounterRecord,
+    rule_choice,
+)
 
 __all__ = [
     "DEFAULT_EVENT_DURATION",
+    "ENCOUNTER_LOG_SIZE",
     "MOVING_WITHIN",
     "Agenda",
     "Commitment",
+    "EncounterBasis",
+    "EncounterLog",
+    "EncounterRecord",
     "Fact",
     "FactStore",
     "Friendship",
@@ -54,5 +65,6 @@ __all__ = [
     "partner_of",
     "place_name",
     "place_names",
+    "rule_choice",
     "should_stop",
 ]

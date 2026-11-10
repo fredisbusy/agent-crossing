@@ -58,9 +58,12 @@ def parse_speech(raw: str, resolver: ActResolver) -> SpeechDraft | None:
     return SpeechDraft(text.strip(), tuple(acts), end)
 
 
-def parse_encounter(raw: str) -> bool:
+def parse_encounter(raw: str) -> tuple[bool, str]:
+    """(말을 걸지, 모델이 쓴 이유). 형식이 틀리면 말을 걸지 않는다."""
     payload = _load(raw)
-    return payload is not None and payload.get("converse") is True
+    if payload is None:
+        return False, "판정 응답을 읽지 못했다"
+    return payload.get("converse") is True, _text(payload, "reason") or ""
 
 
 def _act(item: dict[str, object], resolver: ActResolver) -> SpeechAct | None:

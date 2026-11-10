@@ -213,11 +213,11 @@
 
 ### 3-C. 대화 연계 planning
 
-- [ ] `P2` 조우 시 pass-by vs converse 결정을 구현한다
+- [x] `P2` 조우 시 pass-by vs converse 결정을 구현한다 (2026-11-10, SPEC §12)
   - Depends on: react 발생 시 이후 구간만 재수립
   - DoD:
-    - [ ] 조우 이벤트 입력으로 행동 선택(pass-by/converse)을 반환한다
-    - [ ] 결정 근거(관계/맥락)를 추적 가능하게 남긴다
+    - [x] 조우 이벤트 입력으로 행동 선택(pass-by/converse)을 반환한다(`Mind.on_encounter`: 공통 규칙 `rule_choice` 뒤 규칙 마음은 확률, LLM 마음은 LLM 판정)
+    - [x] 결정 근거(관계/맥락)를 추적 가능하게 남긴다(두 마음의 `encounter_log`: 근거 종류·우호도·마지막 대화 시각·이유, 최근 20개)
 
 - [ ] `P2` 대화 결과를 plan 업데이트에 반영한다
   - Depends on: pass-by vs converse 결정 구현

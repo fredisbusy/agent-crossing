@@ -7,6 +7,7 @@
 - `state.py` 화행 효과(수락 → 약속, 초대·소문 → 사실, 선물 → 우호도)와 꺼낼 이야깃거리(`talking_points`)
 - `facts.py` 사실 저장소(행사 소문 포함), `friendship.py` 우호도·쿨다운·오랜만 판정
 - `voice.py` 주민 말투 유형·말버릇(규칙 마음 템플릿과 LLM 프롬프트가 같이 쓴다), `places.py` 장소 한국어 이름표
+- `encounters.py` 조우 판정의 공통 규칙(쿨다운 → 지나침, 이야깃거리 → 대화)과 판정 근거 진단 기록(`EncounterLog`)
 - `events.py` 행사·시각 문장 표현, `conversation.py` 대화를 멈추는 공통 조건
 - 일과 출처만 마음마다 다르다: 규칙 마음은 일정표, LLM 마음은 하루 계획
 - 의존 방향: `world.contracts`만 import한다
