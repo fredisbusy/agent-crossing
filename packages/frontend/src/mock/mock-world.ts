@@ -138,6 +138,7 @@ export function createMockWorld(
       emoji: state.spec.emoji,
       utterance_text: speaks ? line : null,
       mind_kind: state.spec.mind,
+      current_plan_item: null,
     };
   }
 

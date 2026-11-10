@@ -108,6 +108,13 @@ def test_snapshot_hides_nothing_needed_and_text_state_is_short_json() -> None:
     }
 
 
+def test_snapshot_carries_plan_item_from_mind() -> None:
+    mind = ScriptedMind()
+    mind.plan_item = "카페 일과"
+    sim = make_sim({"ann": (CAFE, mind)})
+    assert sim.snapshot().residents[0].current_plan_item == "카페 일과"
+
+
 def _run_states(seed: int) -> list[str]:
     ann = ScriptedMind("llm", encounter="converse", replies=["안녕", "잘 지내?", None])
     bob = ScriptedMind(plan=move_to(SQUARE, minutes=3), encounter="converse", replies=["안녕", None])

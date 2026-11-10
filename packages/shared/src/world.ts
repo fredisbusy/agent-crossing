@@ -24,6 +24,8 @@ export interface ResidentSnapshot {
   utterance_text: string | null;
   /** 디버그 인스펙터 전용. */
   mind_kind: MindKind | null;
+  /** 지금 속한 일과·약속 구간(하루 단위 항목)의 서술. `action_description`보다 한 단계 위. */
+  current_plan_item: string | null;
 }
 
 export interface WorldSnapshot {
@@ -33,4 +35,14 @@ export interface WorldSnapshot {
   residents: ResidentSnapshot[];
 }
 
-export type WorldMessage = { type: "snapshot"; snapshot: WorldSnapshot };
+/** 이 연결에 마지막으로 보낸 상태와 달라진 주민만 담은 변경분. 주민은 전체 `ResidentSnapshot`. */
+export interface WorldDelta {
+  tick: number;
+  /** ISO 8601 시뮬레이션 시각. */
+  sim_time: string;
+  residents: ResidentSnapshot[];
+}
+
+export type WorldMessage =
+  | { type: "snapshot"; snapshot: WorldSnapshot }
+  | ({ type: "delta" } & WorldDelta);

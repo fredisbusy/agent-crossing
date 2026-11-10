@@ -3,6 +3,7 @@
 약속·소문·우호도는 `minds.social.SocialState`를 LLMMind와 함께 쓴다.
 """
 
+import datetime
 import random
 from typing import Literal
 
@@ -47,6 +48,10 @@ class ScheduleMind:
     async def next_action(self, ctx: MindContext) -> ActionIntent:
         slot = self.social.agenda.slot_at(ctx.now)
         return intent_for_slot(slot, ctx.self_state.location_path)
+
+    def plan_item_at(self, now: datetime.datetime) -> str | None:
+        """지금 속한 일정표·약속 구간의 서술(읽기 전용)."""
+        return self.social.agenda.slot_at(now).description
 
     async def on_encounter(
         self, ctx: MindContext, other: ResidentPublicView

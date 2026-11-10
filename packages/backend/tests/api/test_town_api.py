@@ -59,17 +59,30 @@ def test_scheduler_start_and_stop(client: TestClient) -> None:
     assert client.get("/world/state").json()["scheduler_running"] is False
 
 
-def test_websocket_sends_initial_and_advance_snapshots(client: TestClient) -> None:
+def test_websocket_sends_initial_snapshot_then_advance_deltas(client: TestClient) -> None:
     with client.websocket_connect("/ws/world") as ws:
         first = ws.receive_json()
         assert first["type"] == "snapshot"
         assert first["snapshot"]["tick"] == 0
         assert isinstance(first["snapshot"]["sim_time"], str)
         client.post("/world/advance", params={"minutes": 2})
-        ticks = [ws.receive_json()["snapshot"]["tick"]]
+        ticks = [ws.receive_json()["tick"]]
         while ticks[-1] < 2:
-            ticks.append(ws.receive_json()["snapshot"]["tick"])
+            ticks.append(ws.receive_json()["tick"])
         assert ticks[-1] == 2
+
+
+def test_websocket_sends_deltas_after_initial_snapshot(client: TestClient) -> None:
+    with client.websocket_connect("/ws/world") as ws:
+        first = ws.receive_json()
+        client.post("/world/advance", params={"minutes": 1})
+        message = ws.receive_json()
+        assert message["type"] == "delta"
+        assert message["tick"] == 1 and isinstance(message["sim_time"], str)
+        known = {r["resident_id"] for r in first["snapshot"]["residents"]}
+        assert {r["resident_id"] for r in message["residents"]} <= known
+        for resident in message["residents"]:
+            assert "current_plan_item" in resident
 
 
 def test_state_exposes_last_error_null(client: TestClient) -> None:
@@ -81,7 +94,7 @@ def test_websocket_ignores_binary_frames(client: TestClient) -> None:
         ws.receive_json()
         ws.send_bytes(b"\x00\x01")
         client.post("/world/advance", params={"minutes": 1})
-        assert ws.receive_json()["snapshot"]["tick"] == 1
+        assert ws.receive_json()["tick"] == 1
 
 
 def test_startup_survives_init_db_failure() -> None:

@@ -41,6 +41,7 @@ export function createPosesWorld(startHour: number = MOCK_START_HOUR): MockWorld
     emoji: spec.emoji,
     utterance_text: spec.line ?? null,
     mind_kind: "llm",
+    current_plan_item: null,
   }));
   return {
     next: () => {

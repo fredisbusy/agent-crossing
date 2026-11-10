@@ -118,6 +118,7 @@ class ScriptedMind:
         self.encounter_with: list[str] = []
         self.respond_calls = 0
         self.observed: list[Observation] = []
+        self.plan_item: str | None = None
 
     async def next_action(self, ctx: MindContext) -> ActionIntent:
         self.next_action_calls += 1
@@ -146,6 +147,9 @@ class ScriptedMind:
 
     async def observe(self, observations: tuple[Observation, ...]) -> None:
         self.observed.extend(observations)
+
+    def plan_item_at(self, now: datetime.datetime) -> str | None:
+        return self.plan_item
 
 
 class _Factory:

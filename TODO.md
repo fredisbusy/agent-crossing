@@ -280,11 +280,11 @@
     - [x] 단일 기준 시계로 tick이 안정적으로 증가한다
     - [x] tick loop에서 perceive-plan-act 순서가 유지된다
 
-- [ ] `P1` WebSocket state broadcast를 구현한다
+- [x] `P1` WebSocket state broadcast를 구현한다
   - Depends on: world clock + tick scheduler 연동
   - DoD:
     - [x] `position`, `action`, `dialogue`, `emoji`를 브로드캐스트한다(`WS /ws/world`, 2026-10-23, SPEC §9)
-    - [ ] `current_plan`을 스냅샷에 싣는다
+    - [x] `current_plan`을 스냅샷에 싣는다(`current_plan_item`, 2026-11-10, SPEC §9)
     - [x] 누락 필드 없이 클라이언트에서 파싱 가능하다(프런트 파서 통과, 브라우저에서 연결 확인)
 
 ### 4-B. Frontend 시각화
@@ -449,11 +449,11 @@
     - [x] 이름 뒤 조사가 틀린다("Mei Lin가", "Eddy Lin가") → `josa`가 로마자 이름의 받침을 판정한다(l·m·n·ng, 모음 뒤 b·k·p) (2026-11-10)
     - [x] 이동 서술에 같은 장소가 두 번 나온다("홉스 카페 홀에서 홉스 카페 홀 쪽으로 이동한다") → "홉스 카페 홀 안에서 자리를 옮긴다" (2026-11-10)
     - [x] 규칙 마음이 사실을 전할 때 존댓말 뒤에 평서형 문장이 그대로 붙는다("연구 얘기 들으셨어요? … 조사하고 있다.") → 말투에 맞춰 "…조사하고 있대요." / "…있대."로 바꿔 전한다 (2026-11-10, `minds/schedule/lines.py` `relay`)
-- [ ] `P1` WebSocket 스냅샷·변경분 브로드캐스트, `/world/text`·`/world/advance`
+- [x] `P1` WebSocket 스냅샷·변경분 브로드캐스트, `/world/text`·`/world/advance`
   - DoD:
     - [x] API가 `TownRuntime`을 서비스한다: `/world/state`·`/world/text`·`/world/advance`·`/world/tick/start|stop`·`WS /ws/world` (2026-10-23, SPEC §9)
     - [x] CLI와 API가 `build_town` 하나로 마을을 조립한다
-    - [ ] 변경분(delta) 메시지
+    - [x] 변경분(delta) 메시지 (2026-11-10, SPEC §9)
 - [ ] `P2` 밸런타인 파티 시나리오: 전원 LLM 대 하이브리드 비교 리포트
   - DoD:
     - [x] 시나리오 실행기·지표(확산·약속·참석·마음 호출 수)와 CLI(`run_town_scenario.py`)

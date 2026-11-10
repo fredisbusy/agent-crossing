@@ -102,6 +102,7 @@ class TownSimulation:
                     emoji=state.action.emoji if state.action else None,
                     utterance_text=spoken[1] if spoken and spoken[0] == self.tick_count else None,
                     mind_kind=resident.config.mind,
+                    current_plan_item=resident.mind.plan_item_at(self.clock.now),
                 )
             )
         return WorldSnapshot(

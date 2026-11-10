@@ -215,6 +215,10 @@ class Mind(Protocol):
         """관찰을 기억·사실 저장소에 반영한다."""
         ...
 
+    def plan_item_at(self, now: datetime.datetime) -> str | None:
+        """`now`가 속한 일과·약속 구간의 서술. 읽기만 하며 없으면 None."""
+        ...
+
 
 # --- 공간 (SPEC §15) --------------------------------------------------------
 
@@ -254,9 +258,19 @@ class ResidentSnapshot(_Frozen):
     utterance_text: str | None = None
     mind_kind: MindKind | None = None
     """디버그 인스펙터 전용. 마음에는 절대 전달하지 않는다."""
+    current_plan_item: str | None = None
+    """주민이 지금 속한 일과·약속 구간(하루 단위 항목)의 서술. `action_description`보다 한 단계 위."""
 
 
 class WorldSnapshot(_Frozen):
+    tick: int
+    sim_time: datetime.datetime
+    residents: tuple[ResidentSnapshot, ...] = Field(default_factory=tuple)
+
+
+class WorldDelta(_Frozen):
+    """직전에 보낸 스냅샷과 달라진 주민만 담은 변경분. 주민은 전체 `ResidentSnapshot`."""
+
     tick: int
     sim_time: datetime.datetime
     residents: tuple[ResidentSnapshot, ...] = Field(default_factory=tuple)
