@@ -62,10 +62,9 @@ def call_kind(record: CallRecord) -> str:
     return "other"
 
 
-def _is_bad(record: CallRecord) -> bool:
-    if record.error is not None:
-        return True
-    if not record.format_json:
+def _is_untidy(record: CallRecord) -> bool:
+    """JSON 응답이 그대로는 읽히지 않는다(예: 뒤에 `</final` 꼬리). 파서가 잘라 읽으면 실패가 아니다."""
+    if record.error is not None or not record.format_json:
         return False
     try:
         json.loads(record.response)
@@ -74,8 +73,21 @@ def _is_bad(record: CallRecord) -> bool:
     return False
 
 
+def _is_bad(record: CallRecord) -> bool:
+    """호출 오류, 또는 첫 `{`부터 마지막 `}`까지 잘라도 JSON 객체로 읽히지 않는 응답."""
+    if record.error is not None:
+        return True
+    if not record.format_json:
+        return False
+    start, end = record.response.find("{"), record.response.rfind("}")
+    try:
+        return not isinstance(json.loads(record.response[start : end + 1]), dict)
+    except ValueError:
+        return True
+
+
 def summarize(records: Sequence[CallRecord]) -> dict[str, dict[str, float | int]]:
-    """종류별 호출 수, 지연 중앙값·최댓값(초), 오류·JSON 형식 실패 수."""
+    """종류별 호출 수, 지연 중앙값·최댓값(초), 실패(`bad`)·잘라 읽어야 하는 응답(`untidy`) 수."""
     grouped: dict[str, list[CallRecord]] = defaultdict(list)
     for record in records:
         grouped[call_kind(record)].append(record)
@@ -86,6 +98,7 @@ def summarize(records: Sequence[CallRecord]) -> dict[str, dict[str, float | int]
             "max_seconds": round(max(r.seconds for r in items), 2),
             "total_seconds": round(sum(r.seconds for r in items), 1),
             "bad": sum(_is_bad(r) for r in items),
+            "untidy": sum(_is_untidy(r) for r in items),
         }
         for kind, items in sorted(grouped.items(), key=lambda kv: -len(kv[1]))
     }

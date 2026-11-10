@@ -40,20 +40,22 @@ def test_call_kind_reads_template_headings_then_response_keys() -> None:
         assert call_kind(_generate(prompt, response)) == kind
 
 
-def test_summarize_counts_latency_and_format_failures() -> None:
+def test_summarize_counts_latency_and_separates_unreadable_from_untidy() -> None:
     records = [
         _generate("## Persona Context", '{"items":[]}', seconds=2.0),
         _generate("## Persona Context", '{"items":[]}</final', seconds=4.0),
+        _generate("## Persona Context", '{"items":}', seconds=3.0),
         CallRecord(op="embed", label="", seconds=0.5, thread="t", concurrent=2, input_count=3),
     ]
 
     summary = summarize(records)
 
     assert summary["plan:day"] == {
-        "count": 2,
+        "count": 3,
         "median_seconds": 3.0,
         "max_seconds": 4.0,
-        "total_seconds": 6.0,
+        "total_seconds": 9.0,
         "bad": 1,
+        "untidy": 2,
     }
     assert summary["embed"]["count"] == 1 and summary["embed"]["bad"] == 0
