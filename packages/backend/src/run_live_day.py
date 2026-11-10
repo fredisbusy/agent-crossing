@@ -3,6 +3,9 @@
 기본은 LLM 주민 2명·게임 24시간. 결과는 `--out` 폴더에 남긴다:
 `calls.jsonl`(호출별 프롬프트·응답), `hourly.txt`(매시간 마을 상태), `summary.json`.
 예: EMBEDDING_MODEL=local/BAAI/bge-m3 uv run python src/run_live_day.py --out /tmp/live-day
+
+응답 캐시(`LLM_RESPONSE_CACHE`)가 켜져 있으면 캐시 적중도 0초에 가까운 호출로 기록돼
+지연 값이 실제보다 작게 나온다. 지연을 잴 때는 캐시를 끄고, 요약의 `response_cache`로 확인한다.
 """
 
 import argparse
@@ -16,6 +19,7 @@ from pathlib import Path
 from typing import IO
 
 from llm.clients import CallRecord, RecordingProviderClient
+from settings import LLM_RESPONSE_CACHE, LLM_RESPONSE_CACHE_MODE
 from world.scenarios import build_llm_client, build_town, load_scenario
 
 MINUTES_PER_HOUR = 60
@@ -40,17 +44,20 @@ _RESPONSE_KINDS: tuple[tuple[str, str], ...] = (
     ('"summary"', "summary"),
     ('"memo"', "talk:notes"),
 )
-"""`## 인물`로 시작하는 마을 프롬프트는 응답의 키로 나눈다."""
+"""`## 인물`로 시작하는 마을 프롬프트는 응답의 키로 나눈다. 키가 없으면(실패·형식 오류) `town:unreadable`."""
+_TOWN_HEADING = "## 인물"
 
 
 def call_kind(record: CallRecord) -> str:
     if record.op == "embed":
         return "embed"
+    if record.prompt.startswith(_TOWN_HEADING):
+        for marker, kind in _RESPONSE_KINDS:
+            if marker in record.response:
+                return kind
+        return "town:unreadable"
     for marker, kind in _PROMPT_KINDS:
         if marker in record.prompt:
-            return kind
-    for marker, kind in _RESPONSE_KINDS:
-        if marker in record.response:
             return kind
     return "other"
 
@@ -128,6 +135,7 @@ async def _run(args: argparse.Namespace, calls: IO[str], hourly: IO[str]) -> dic
         "diffusion_rate": round(report.diffusion_rate, 3),
         "wall_seconds": round(time.perf_counter() - started, 1),
         "max_concurrent": max((r.concurrent for r in records), default=0),
+        "response_cache": LLM_RESPONSE_CACHE_MODE if LLM_RESPONSE_CACHE else "off",
         "calls": summarize(records),
     }
 

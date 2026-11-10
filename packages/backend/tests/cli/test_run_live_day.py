@@ -32,6 +32,8 @@ def test_call_kind_reads_template_headings_then_response_keys() -> None:
         ("## 인물", '{"utterance": "안녕"}'): "speech",
         ("## 인물", '{"summary": "요약"}'): "summary",
         ("## 인물", '{"memo": "메모", "plan_note": ""}'): "talk:notes",
+        ("## 인물\n그에게 가장 중요한 것은 가족이다", '{"utterance": "네"}'): "speech",
+        ("## 인물", ""): "town:unreadable",
         ("처음 보는 프롬프트", "{}"): "other",
     }
     for (prompt, response), kind in cases.items():
