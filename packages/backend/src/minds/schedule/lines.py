@@ -4,10 +4,12 @@
 문장에는 마음 종류를 암시하는 단어를 쓰지 않는다 (SPEC §12 불가지 원칙).
 `greet_again`은 오랜만에 만난 상대 인사, `thanks`는 선물을 받았을 때의 말이다.
 채움 필드: {topic} {fact} {event} {day} {time} {place} {item}
+`{fact}`에는 평서형 사실 문장을 말투에 맞는 전하는 말로 바꿔 넣는다(`relay`).
 """
 
 import datetime
 import random
+import re
 from collections.abc import Sequence
 
 from minds.social import Voice, format_day, format_time, place_name
@@ -107,6 +109,31 @@ _TEMPLATES: dict[tuple[str, Tone], tuple[str, ...]] = {
 }
 
 
+_PLAIN_ENDING = re.compile(r"(이|아니)?다(?=\.(?:\s|$)|$)")
+"""마침표나 글 끝 앞의 평서형 "-다". 앞의 "이·아니"는 "-래"로 바뀌므로 함께 잡는다."""
+_FORMAL_ENDING = "니"
+""""-ㅂ니다·습니다"의 "니". 이미 높임말이라 바꾸지 않는다."""
+
+
+def relay(fact: str, tone: Tone) -> str:
+    """평서형 사실 문장("…하고 있다.")을 전하는 말("…하고 있대요." / "…하고 있대.")로 바꾼다.
+
+    "-이다·아니다"는 "-이래(요)·아니래(요)"로, 그 밖의 "-다"는 "-대(요)"로 바꾼다.
+    "-다"로 끝나지 않는 문장(명사구, 이미 "-대요"·"-습니다"인 문장)은 그대로 둔다.
+    """
+    suffix = "요" if tone == "polite" else ""
+
+    def swap(match: re.Match[str]) -> str:
+        copula = match.group(1)
+        if copula:
+            return f"{copula}래{suffix}"
+        if fact[: match.start()].endswith(_FORMAL_ENDING):
+            return match.group(0)
+        return f"대{suffix}"
+
+    return _PLAIN_ENDING.sub(swap, fact.strip())
+
+
 def render(
     key: str,
     tone: Tone,
@@ -130,7 +157,7 @@ def render(
     filled = [
         template.format(
             topic=topic,
-            fact=fact,
+            fact=relay(fact, tone),
             event=event,
             day=format_day(when, now) if when else "",
             time=format_time(when) if when else "",
