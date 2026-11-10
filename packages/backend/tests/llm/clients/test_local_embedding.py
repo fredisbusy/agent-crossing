@@ -65,3 +65,15 @@ def test_factory_wraps_only_local_embedding_models() -> None:
 
     assert isinstance(local, LocalEmbeddingClient)
     assert isinstance(remote, LiteLlmClient)
+
+
+def test_model_failures_surface_as_client_errors() -> None:
+    class _Broken:
+        def encode(self, texts: list[str], **_: object) -> np.ndarray:
+            raise OSError("model files missing")
+
+    client = LocalEmbeddingClient(_Inner(), "local/BAAI/bge-m3")
+    client._model = _Broken()
+
+    with pytest.raises(LiteLlmClientError, match="model files missing"):
+        client.embed_many(inputs=["a"])

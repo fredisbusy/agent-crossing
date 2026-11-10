@@ -79,10 +79,15 @@ class LocalEmbeddingClient:
         expected = (
             expected_dimension if expected_dimension is not None else EMBEDDING_DIMENSION
         )
-        with self._lock:
-            vectors = self._load().encode(
-                list(inputs), normalize_embeddings=True, show_progress_bar=False
-            )
+        try:
+            with self._lock:
+                vectors = self._load().encode(
+                    list(inputs), normalize_embeddings=True, show_progress_bar=False
+                )
+        except LiteLlmClientError:
+            raise
+        except Exception as exc:
+            raise LiteLlmClientError(f"Local embedding failed: {exc}") from exc
         result = [[float(value) for value in vector] for vector in vectors]
         if any(len(vector) != expected for vector in result):
             raise LiteLlmClientError(
