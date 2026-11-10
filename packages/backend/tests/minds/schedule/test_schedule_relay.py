@@ -50,3 +50,25 @@ def test_share_fact_lines_never_end_in_a_plain_statement(tone: str) -> None:
         )
         assert "조사하고 있다" not in text
         assert "조사하고 있대요" in text if tone == "polite" else "조사하고 있대" in text
+
+
+@pytest.mark.parametrize(
+    ("topic", "expected"),
+    [
+        ("파티", "파티는"),
+        ("용건", "용건은"),
+        ("도서관에 가는지", "그"),
+        ("Eddy가 현재 있는 곳", "그"),
+        ("오늘입은옷의색깔과무늬", "그"),
+        ("", "그"),
+    ],
+)
+def test_unknown_topic_is_echoed_only_when_it_is_a_single_word(
+    topic: str, expected: str
+) -> None:
+    for tone in ("polite", "casual"):
+        for seed in range(4):
+            text = render("unknown", tone, random.Random(seed), now=NOW, topic=topic)
+            assert expected in text
+            if expected == "그":
+                assert topic == "" or topic not in text
