@@ -116,9 +116,9 @@ class LLMMind:
     async def next_action(self, ctx: MindContext) -> ActionIntent:
         await self._flush()
         await asyncio.to_thread(self._digest_talk, ctx)
-        await asyncio.to_thread(self._prepare_day, ctx)
+        planned = await asyncio.to_thread(self._prepare_day, ctx)
         slot = self.social.agenda.slot_at(ctx.now)
-        if await asyncio.to_thread(self._react, ctx, slot):
+        if not planned and await asyncio.to_thread(self._react, ctx, slot):
             slot = self.social.agenda.slot_at(ctx.now)
         item = self.routine.item_for(slot)
         if (
@@ -227,12 +227,13 @@ class LLMMind:
             events=event_lines(self.social, ctx.now),
         )
 
-    def _prepare_day(self, ctx: MindContext) -> None:
+    def _prepare_day(self, ctx: MindContext) -> bool:
+        """오늘 계획이 없으면 세운다. 이번 깨움에서 세웠으면 True(바로 반응 판정을 하지 않는다, SPEC §7)."""
         self._remember_seed(ctx.now)
         today = ctx.now.date()
         self._refresh_summary(ctx.now)
         if self.routine.has_plan(today):
-            return
+            return False
         try:
             items = self._planner.generate_day_plan(self._plan_request(ctx))
         except (RuntimeError, TimeoutError, ValueError):
@@ -247,6 +248,7 @@ class LLMMind:
             self._writer.store(
                 f"{self.persona.display_name}의 오늘 계획: {summary}", ctx.now, "plan"
             )
+        return bool(slots)
 
     def _refresh_summary(self, now: datetime.datetime) -> None:
         """에이전트 요약 설명을 하루에 한 번만 만든다 (논문 부록 A)."""

@@ -91,3 +91,15 @@ def test_declined_judgement_does_not_start_a_cooldown() -> None:
         now = after(minutes)
         asyncio.run(mind.next_action(woken(now, seen("maria", now))))
     assert len(judged(client)) == 2 and len(planner.requests) == plans
+
+
+def test_wake_that_made_the_day_plan_does_not_judge_or_replan() -> None:
+    client = ScriptedClient(
+        lambda prompt: REACT if MARKER in prompt else {"summary": "카페 주인이다"}
+    )
+    planner = FixedPlanner()
+    mind, _ = make_mind(client, planner=planner)
+    asyncio.run(mind.next_action(woken(START, seen("maria", START))))
+    assert len(planner.requests) == 1 and judged(client) == []
+    asyncio.run(mind.next_action(woken(after(1), seen("maria", after(1)))))
+    assert len(planner.requests) == 2 and len(judged(client)) == 1
