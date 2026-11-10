@@ -1,6 +1,6 @@
 import datetime
 
-from minds.social import Agenda, Slot
+from minds.social import Agenda, Slot, intent_for_slot
 from world.contracts import SocialEvent
 
 MONDAY = datetime.datetime(2026, 10, 19)
@@ -70,3 +70,13 @@ def test_commit_is_idempotent_and_host_role_wins() -> None:
     assert len(agenda.commitments) == 1
     agenda.commit(party(), "host")
     assert [c.role for c in agenda.commitments] == ["host"]
+
+
+def test_move_description_names_the_place_once_when_names_match() -> None:
+    hall = "Smallville > Hobbs Cafe > Seating"
+    slot = Slot(hall + " > Table 3", "앉아서 쉰다", None, "idle", at(9), at(10))
+    inside = intent_for_slot(slot, hall)
+    assert inside.kind == "move"
+    assert inside.description == "홉스 카페 홀 안에서 자리를 옮긴다"
+    outside = intent_for_slot(slot, SQUARE)
+    assert outside.description == "홉스 카페 홀 쪽으로 이동한다"

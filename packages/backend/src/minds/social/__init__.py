@@ -1,4 +1,12 @@
-from .agenda import Agenda, Commitment, Routine, Slot, SlotAction, intent_for_slot
+from .agenda import (
+    MOVING_WITHIN,
+    Agenda,
+    Commitment,
+    Routine,
+    Slot,
+    SlotAction,
+    intent_for_slot,
+)
 from .conversation import must_end, my_turns, partner_of, should_stop
 from .events import (
     DEFAULT_EVENT_DURATION,
@@ -17,6 +25,7 @@ from .state import HasSocialState, SocialSeed, SocialState
 
 __all__ = [
     "DEFAULT_EVENT_DURATION",
+    "MOVING_WITHIN",
     "Agenda",
     "Commitment",
     "Fact",

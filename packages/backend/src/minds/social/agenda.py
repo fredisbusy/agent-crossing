@@ -128,13 +128,21 @@ class Agenda:
         return slot
 
 
+MOVING_WITHIN = "안에서 자리를 옮긴다"
+"""출발지와 목적지의 장소 이름이 같을 때의 이동 서술(앞에 장소 이름이 붙는다)."""
+
+
 def intent_for_slot(slot: Slot, here: LocationPath) -> ActionIntent:
     """구간 장소 밖이면 그쪽으로 이동, 안이면 구간 행동."""
     at_place = here == slot.location_path or here.startswith(slot.location_path + " > ")
     if not at_place:
+        target = place_name(slot.location_path)
+        same_name = place_name(here) == target
         return ActionIntent(
             kind="move",
-            description=f"{place_name(slot.location_path)} 쪽으로 이동한다",
+            description=(
+                f"{target} {MOVING_WITHIN}" if same_name else f"{target} 쪽으로 이동한다"
+            ),
             location_path=slot.location_path,
             until=slot.end,
             emoji=slot.emoji,

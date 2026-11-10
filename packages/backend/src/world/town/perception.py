@@ -6,7 +6,7 @@
 import datetime
 from collections.abc import Sequence
 
-from minds.social import josa, place_name
+from minds.social import MOVING_WITHIN, josa, place_name
 from world.contracts import LOCATION_SEPARATOR, Observation, Utterance
 from world.residents import Resident
 
@@ -49,9 +49,18 @@ def near_pairs(
 
 
 def sight_text(other: Resident) -> str:
+    """`<이름>이/가 <장소>에서 <하는 일>`. 같은 이름의 장소 안에서 옮기는 중이면 장소를 한 번만 쓴다."""
     view = other.public_view()
-    doing = view.action_description or "서 있다"
-    return f"{josa(view.display_name, '이', '가')} {place_name(view.location_path)}에서 {doing}"
+    who = josa(view.display_name, "이", "가")
+    here = place_name(view.location_path)
+    action = other.body.state.action
+    if (
+        action is not None
+        and action.kind == "move"
+        and place_name(action.location_path) == here
+    ):
+        return f"{who} {here} {MOVING_WITHIN}"
+    return f"{who} {here}에서 {view.action_description or '서 있다'}"
 
 
 def sight_signature(other: Resident) -> tuple[str, str | None]:
