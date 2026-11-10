@@ -74,7 +74,7 @@ def utterance_observation(
 ) -> Observation:
     return Observation(
         kind="utterance",
-        text=f'{speaker_name}가 말했다: "{utterance.text}"',
+        text=f'{josa(speaker_name, "이", "가")} 말했다: "{utterance.text}"',
         observed_at=utterance.spoken_at,
         location_path=where,
         subject_id=utterance.speaker_id,

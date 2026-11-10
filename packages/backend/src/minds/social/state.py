@@ -18,7 +18,7 @@ from world.contracts import (
 )
 
 from .agenda import Agenda, Routine
-from .events import describe_event, event_act, event_from_act
+from .events import describe_event, event_act, event_from_act, josa
 from .facts import Fact, FactStore
 from .friendship import GIFT_GAIN, INVITE_ACCEPT_GAIN, Friendship
 
@@ -269,7 +269,7 @@ class SocialState:
         notes: list[str] = []
         for event in self._events_in_mind(now):
             if other == event.host_id:
-                notes.append(f"{event.name}은(는) {{partner}}가 여는 행사다.")
+                notes.append(f"{josa(event.name, '은', '는')} {{partner}}가 여는 행사다.")
             if (event.name, other) in self._going:
                 notes.append(f"{{partner}}는 {event.name}에 가겠다고 이미 말했다.")
             elif (event.name, other) in self._invited:

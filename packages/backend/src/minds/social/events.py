@@ -31,11 +31,41 @@ def format_day(moment: datetime.datetime, now: datetime.datetime) -> str:
     return f"{moment.month}월 {moment.day}일"
 
 
+ROMAN_FINAL_ENDINGS = ("l", "m", "n", "ng")
+"""로마자 이름이 이 글자로 끝나면 받침이 있다고 본다(Lin→린, Sam→샘, Hill→힐)."""
+ROMAN_STOP_FINALS = "bkp"
+"""모음(또는 ck의 c) 바로 뒤에서 끝나면 받침으로 읽는 글자(Jack→잭, Bob→밥, Philip→필립)."""
+_ROMAN_VOWELS = "aeiouy"
+_DIGITS_WITH_FINAL = "013678"
+"""영·일·삼·육·칠·팔."""
+
+
+def has_final(word: str) -> bool:
+    """마지막 글자를 한국어로 읽을 때 받침이 있으면 True.
+
+    한글은 종성으로 판정한다. 로마자는 한글 표기 관행을 따른 어림 규칙이다: l·m·n·ng로
+    끝나거나 모음 뒤 b·k·p(ck 포함)로 끝나면 받침이 있고, 나머지(모음, s·z·r·t·d 등은
+    보통 "스·즈·르·트·드"로 풀어 적는다)는 받침이 없다. 숫자는 읽는 소리로 판정한다.
+    """
+    text = word.rstrip(" .,!?\"')")
+    if not text:
+        return False
+    last = text[-1]
+    if "가" <= last <= "힣":
+        return (ord(last) - ord("가")) % 28 != 0
+    if last.isdigit():
+        return last in _DIGITS_WITH_FINAL
+    lower = text.lower()
+    if lower.endswith(ROMAN_FINAL_ENDINGS):
+        return True
+    if len(lower) >= 2 and lower[-1] in ROMAN_STOP_FINALS:
+        return lower[-2] in _ROMAN_VOWELS or lower.endswith("ck")
+    return False
+
+
 def josa(word: str, with_final: str, without_final: str) -> str:
-    """받침 유무에 맞는 조사를 붙인다. 한글이 아니면 받침 없는 쪽을 쓴다."""
-    last = word[-1] if word else ""
-    has_final = "가" <= last <= "힣" and (ord(last) - ord("가")) % 28 != 0
-    return word + (with_final if has_final else without_final)
+    """받침 유무에 맞는 조사를 붙인다. 판정은 `has_final`(로마자 이름 포함)을 따른다."""
+    return word + (with_final if has_final(word) else without_final)
 
 
 def describe_event(event: SocialEvent, now: datetime.datetime) -> str:

@@ -15,6 +15,7 @@ from minds.social import (
     Slot,
     SocialState,
     intent_for_slot,
+    josa,
     must_end,
     partner_of,
     place_name,
@@ -295,7 +296,8 @@ class LLMMind:
         self.social.said(utterance, ctx.now)
         partner = names.get(other, other)
         self._writer.defer(
-            f'{self.persona.display_name}가 {partner}에게 말했다: "{draft.text}"',
+            f'{josa(self.persona.display_name, "이", "가")} {partner}에게 말했다: '
+            f'"{draft.text}"',
             ctx.now,
         )
         return utterance

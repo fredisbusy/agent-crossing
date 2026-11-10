@@ -10,6 +10,7 @@ from typing import cast
 
 from llm.clients.types import LlmGenerateOptions
 from llm.template_loader import render_template
+from minds.social import josa
 
 from .contracts import GenerateClient, LlmPersona, MemoryStore
 
@@ -27,7 +28,7 @@ def summary_queries(name: str) -> tuple[str, str, str]:
     return (
         f"{name}의 핵심 성격",
         f"{name}의 요즘 하루 일과와 하는 일",
-        f"{name}가 요즘 자기 삶을 어떻게 느끼는지",
+        f"{josa(name, '이', '가')} 요즘 자기 삶을 어떻게 느끼는지",
     )
 
 
