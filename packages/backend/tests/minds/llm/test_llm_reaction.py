@@ -324,7 +324,7 @@ def test_nested_reaction_with_failed_replan_is_not_decomposed() -> None:
     mind, _ = make_mind(_by_minutes(120, 10), planner=planner)
     _start(mind)
     asyncio.run(mind.next_action(woken(at(10), sight("소란", at(10)))))
-    asyncio.run(mind.next_action(woken(at(10, 20), sight("또 소란", at(10, 20)))))
+    asyncio.run(mind.next_action(woken(at(10, 20), sight("또 소란", at(10, 20), "eddy"))))
     calls = len(planner.hourly_calls)
     action = asyncio.run(mind.next_action(ctx("isabella", at(10, 35), where=SQUARE)))
     assert action.description == "반응120" and action.until == at(12)

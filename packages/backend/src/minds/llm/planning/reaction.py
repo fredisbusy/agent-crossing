@@ -1,6 +1,7 @@
 """관찰에 반응할지 판정하고, 반응하면 지금 이후 계획만 다시 세운다 (논문 §4.3.1, SPEC §7, §14).
 
-깨움당 판정은 최대 1회(LLM 1회), 반응 시 재계획 1회가 더 든다. 판정 근거는 도메인 결과가 아닌
+깨움당 판정은 최대 1회(LLM 1회), 반응 시 재계획 1회가 더 든다. 한 주민을 보고 반응했으면
+`REACTION_COOLDOWN_MINUTES` 동안 그 주민의 새 시야는 판정하지 않는다. 판정 근거는 도메인 결과가 아닌
 진단 버퍼(`ReactionRecord`)에만 남긴다 (AGENTS.md §9).
 """
 
@@ -16,7 +17,7 @@ from agents.planning.models import DayPlanBroadStrokesRequest, DayPlanItem
 from llm.clients.types import LlmGenerateOptions
 from llm.template_loader import render_template
 from minds.social import Slot, format_time, place_name
-from world.contracts import MindContext, Observation
+from world.contracts import MindContext, Observation, ResidentId
 
 from ..contracts import DayPlanner, GenerateClient, LlmPersona, MemoryStore
 from ..prompts import persona_text
@@ -29,6 +30,8 @@ REACTION_TOP_K = 5
 """판정 프롬프트에 싣는 관련 기억 수."""
 MIN_REACTION_MINUTES = 5
 MAX_REACTION_MINUTES = 120
+REACTION_COOLDOWN_MINUTES = 60
+"""한 주민을 보고 반응한 뒤, 그 주민의 새 시야 관찰을 다시 판정하지 않는 게임 시간(분) (SPEC §7)."""
 REACTION_LOG_SIZE = 20
 """진단 버퍼에 남기는 최근 판정 수."""
 SUMMARY_MAX_CHARS = 120
@@ -84,6 +87,8 @@ class Reactor:
         self._routine = routine
         self._decomposer = decomposer
         self._log: deque[ReactionRecord] = deque(maxlen=REACTION_LOG_SIZE)
+        self._reacted_at: dict[ResidentId, datetime.datetime] = {}
+        """주민별로 마지막으로 반응한 시각. 같은 대상에 연달아 재계획하지 않게 한다."""
         self.items: set[DayPlanItem] = set()
         """반응으로 끼워 넣은 계획 항목. 짧아서 다시 쪼개지 않는다."""
 
@@ -92,13 +97,21 @@ class Reactor:
         return tuple(self._log)
 
     def new_sights(self, ctx: MindContext) -> list[Observation]:
-        """이번 깨움에서 판정할 관찰: 시야·사건. 발화와 내 관찰은 뺀다."""
+        """이번 깨움에서 판정할 관찰: 시야·사건. 발화, 내 관찰, 최근에 반응한 주민의 관찰은 뺀다."""
         me = self._persona.resident_id
         return [
             o
             for o in ctx.observations
-            if o.kind in _JUDGED_KINDS and o.subject_id != me
+            if o.kind in _JUDGED_KINDS
+            and o.subject_id != me
+            and not self._in_cooldown(o.subject_id, ctx.now)
         ]
+
+    def _in_cooldown(self, subject: ResidentId | None, now: datetime.datetime) -> bool:
+        reacted = self._reacted_at.get(subject) if subject is not None else None
+        if reacted is None:
+            return False
+        return now - reacted < datetime.timedelta(minutes=REACTION_COOLDOWN_MINUTES)
 
     def react(
         self,
@@ -118,6 +131,9 @@ class Reactor:
         self._log.append(ReactionRecord(ctx.now, verdict.react, verdict.reason, digest))
         if not verdict.react or verdict.reaction is None:
             return False
+        for observation in seen:
+            if observation.subject_id is not None:
+                self._reacted_at[observation.subject_id] = ctx.now
         self._apply(ctx, verdict.reaction, seen, make_request)
         return True
 
