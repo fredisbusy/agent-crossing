@@ -7,7 +7,7 @@ import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from llm.clients.provider_factory import build_provider_client
+from llm.clients.provider_factory import ProviderClient, build_provider_client
 from settings import (
     EMBEDDING_API_KEY,
     EMBEDDING_BASE_URL,
@@ -73,12 +73,9 @@ def assemble_town(
     )
 
 
-def _llm_factory(
-    configs: Sequence[ResidentConfig], space: Space
-) -> LLMMindFactory | None:
-    if all(config.mind != "llm" for config in configs):
-        return None
-    client = build_provider_client(
+def build_llm_client() -> ProviderClient:
+    """설정(`settings`)대로 만든 LLM 클라이언트. 감싸서 `build_town`에 넘길 수 있다."""
+    return build_provider_client(
         timeout_seconds=LLM_TIMEOUT_SECONDS,
         generation_model=LLM_MODEL,
         embedding_model=EMBEDDING_MODEL,
@@ -88,8 +85,17 @@ def _llm_factory(
         embedding_api_key=EMBEDDING_API_KEY or None,
         reasoning_effort=LLM_REASONING_EFFORT,
     )
+
+
+def _llm_factory(
+    configs: Sequence[ResidentConfig],
+    space: Space,
+    llm_client: ProviderClient | None,
+) -> LLMMindFactory | None:
+    if all(config.mind != "llm" for config in configs):
+        return None
     return LLMMindFactory(
-        client=client,
+        client=llm_client if llm_client is not None else build_llm_client(),
         embedding_model=EMBEDDING_MODEL,
         known_places=space.location_paths(),
     )
@@ -101,8 +107,12 @@ def build_town(
     agent_ids: Sequence[str] | None = None,
     agent_count: int | None = None,
     seed: int = 0,
+    llm_client: ProviderClient | None = None,
 ) -> TownBuild:
-    """둘 다 비우면 전원 규칙 마음(LLM 호출 0)으로 마을을 만든다."""
+    """둘 다 비우면 전원 규칙 마음(LLM 호출 0)으로 마을을 만든다.
+
+    `llm_client`를 주면 설정으로 만든 클라이언트 대신 쓴다(실측 기록, 테스트용 가짜).
+    """
     if agent_ids is None and agent_count is None:
         agent_count = 0
     configs = apply_mind_selection(
@@ -113,7 +123,7 @@ def build_town(
     factory = ResidentMindFactory(
         start_time=scenario.start_time,
         seed=seed,
-        llm_factory=_llm_factory(configs, space),
+        llm_factory=_llm_factory(configs, space, llm_client),
     )
     return assemble_town(
         scenario, configs=configs, space=space, mind_factory=factory, seed=seed

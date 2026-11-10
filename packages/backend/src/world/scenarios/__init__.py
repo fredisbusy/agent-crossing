@@ -1,4 +1,4 @@
-from .build import TownBuild, assemble_town, build_town
+from .build import TownBuild, assemble_town, build_llm_client, build_town
 from .contracts import ResidentPatch, ScenarioConfig, ScenarioReport
 from .loader import DEFAULT_SCENARIO_DIR, apply_scenario, focus_event, load_scenario
 from .report import ScenarioTracker
@@ -13,6 +13,7 @@ __all__ = [
     "TownBuild",
     "apply_scenario",
     "assemble_town",
+    "build_llm_client",
     "build_town",
     "focus_event",
     "load_scenario",
