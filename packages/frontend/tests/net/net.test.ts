@@ -67,6 +67,10 @@ class FakeSocket implements SocketLike {
   onclose: (() => void) | null = null;
   onerror: (() => void) | null = null;
   onmessage: ((event: { data: unknown }) => void) | null = null;
+  sent: string[] = [];
+  send = (data: string): void => {
+    this.sent.push(data);
+  };
   close = vi.fn();
 }
 
@@ -144,6 +148,24 @@ describe("WorldSocket delta merge", () => {
     expect(seen[1].residents[0].tile.x).toBe(9);
     expect(seen[2].residents[0].tile.x).toBe(9);
     expect(seen[2].residents).toHaveLength(1);
+  });
+
+  it("asks for a full snapshot once when a message cannot be parsed and drops deltas until it arrives", () => {
+    const { sockets, seen } = setup();
+    sockets[0].onmessage?.({ data: SNAPSHOT_JSON });
+    sockets[0].onmessage?.({ data: "{broken" });
+    sockets[0].onmessage?.({ data: JSON.stringify({ type: "delta", tick: 4 }) });
+    sockets[0].onmessage?.({ data: delta(5, 9) });
+    expect(sockets[0].sent).toEqual([JSON.stringify({ type: "resync" })]);
+    expect(seen.map((s) => s.tick)).toEqual([3]);
+
+    sockets[0].onmessage?.({ data: SNAPSHOT_JSON });
+    sockets[0].onmessage?.({ data: delta(6, 7) });
+    expect(seen.map((s) => s.tick)).toEqual([3, 3, 6]);
+    expect(seen[2].residents[0].tile.x).toBe(7);
+
+    sockets[0].onmessage?.({ data: "{broken again" });
+    expect(sockets[0].sent).toHaveLength(2);
   });
 
   it("resets the merge base on reconnect", () => {

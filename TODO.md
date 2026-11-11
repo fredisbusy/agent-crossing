@@ -475,7 +475,7 @@
     - [x] API가 `TownRuntime`을 서비스한다: `/world/state`·`/world/text`·`/world/advance`·`/world/tick/start|stop`·`WS /ws/world` (2026-10-23, SPEC §9)
     - [x] CLI와 API가 `build_town` 하나로 마을을 조립한다
     - [x] 변경분(delta) 메시지 (2026-11-10, SPEC §9)
-    - [ ] 프런트가 delta 하나를 파싱하지 못하면 재연결 전까지 낡은 상태가 남는다. 파싱 실패 시 전체 스냅샷을 다시 받게 한다
+    - [x] 프런트가 delta 하나를 파싱하지 못하면 재연결 전까지 낡은 상태가 남는다 → 파싱 실패 시 `{"type": "resync"}`를 보내 같은 연결에서 전체 스냅샷을 다시 받는다 (2026-11-11, SPEC §9)
 - [ ] `P2` 밸런타인 파티 시나리오: 전원 LLM 대 하이브리드 비교 리포트
   - DoD:
     - [x] 시나리오 실행기·지표(확산·약속·참석·마음 호출 수)와 CLI(`run_town_scenario.py`)

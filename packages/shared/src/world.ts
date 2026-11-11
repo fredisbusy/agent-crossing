@@ -46,3 +46,6 @@ export interface WorldDelta {
 export type WorldMessage =
   | { type: "snapshot"; snapshot: WorldSnapshot }
   | ({ type: "delta" } & WorldDelta);
+
+/** 프런트가 서버로 보내는 메시지. `resync`: delta를 합치지 못했으니 전체 스냅샷을 다시 보내 달라. */
+export type WorldClientMessage = { type: "resync" };

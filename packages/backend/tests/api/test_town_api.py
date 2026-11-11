@@ -97,6 +97,30 @@ def test_websocket_ignores_binary_frames(client: TestClient) -> None:
         assert ws.receive_json()["tick"] == 1
 
 
+def test_websocket_resends_full_snapshot_on_resync_request(client: TestClient) -> None:
+    with client.websocket_connect("/ws/world") as ws:
+        ws.receive_json()
+        client.post("/world/advance", params={"minutes": 1})
+        assert ws.receive_json()["type"] == "delta"
+        ws.send_text(json.dumps({"type": "resync"}))
+        again = ws.receive_json()
+        assert again["type"] == "snapshot"
+        assert again["snapshot"]["tick"] == 1
+        # 다시 맞춘 스냅샷을 기준으로 delta가 이어진다.
+        client.post("/world/advance", params={"minutes": 1})
+        after = ws.receive_json()
+        assert after["type"] == "delta" and after["tick"] == 2
+
+
+def test_websocket_ignores_unknown_text_frames(client: TestClient) -> None:
+    with client.websocket_connect("/ws/world") as ws:
+        ws.receive_json()
+        ws.send_text("not json")
+        ws.send_text(json.dumps({"type": "other"}))
+        client.post("/world/advance", params={"minutes": 1})
+        assert ws.receive_json()["type"] == "delta"
+
+
 def test_startup_survives_init_db_failure() -> None:
     def broken() -> None:
         raise RuntimeError("no db")

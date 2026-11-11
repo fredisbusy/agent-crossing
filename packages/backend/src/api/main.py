@@ -1,6 +1,7 @@
 """마을 시뮬레이션 API (SPEC §15): 백엔드가 단일 권한, 프런트는 스냅샷만 받는다."""
 
 import asyncio
+import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -23,6 +24,8 @@ from world.town import TownRuntime, diff_snapshots
 
 logger = logging.getLogger(__name__)
 MAX_ADVANCE_MINUTES = 1440
+RESYNC_REQUEST = "resync"
+"""프런트가 보내는 다시 맞춤 요청의 `type` (shared `WorldClientMessage`)."""
 
 RuntimeFactory = Callable[[], Awaitable[TownRuntime]]
 
@@ -120,22 +123,10 @@ def create_app(
         runtime = runtime_of(websocket)
         await websocket.accept()
         queue = runtime.subscribe()
-        disconnected = asyncio.create_task(_wait_disconnect(websocket))
+        resync = asyncio.Event()
+        disconnected = asyncio.create_task(_receive_requests(websocket, resync))
         try:
-            last_sent = runtime.snapshot()
-            await _send_snapshot(websocket, last_sent)
-            while True:
-                next_snapshot = asyncio.ensure_future(queue.get())
-                done, _ = await asyncio.wait(
-                    {next_snapshot, disconnected},
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                if next_snapshot not in done:
-                    next_snapshot.cancel()
-                    break
-                latest = next_snapshot.result()
-                await _send_delta(websocket, diff_snapshots(last_sent, latest))
-                last_sent = latest
+            await _stream_world(websocket, runtime, queue, resync, disconnected)
         except (WebSocketDisconnect, RuntimeError):
             pass
         finally:
@@ -143,6 +134,43 @@ def create_app(
             runtime.unsubscribe(queue)
 
     return app
+
+
+async def _stream_world(
+    websocket: WebSocket,
+    runtime: TownRuntime,
+    queue: asyncio.Queue[WorldSnapshot],
+    resync: asyncio.Event,
+    disconnected: asyncio.Task[None],
+) -> None:
+    """처음과 다시 맞춤 요청마다 전체 스냅샷, 그 사이에는 마지막으로 보낸 상태와의 delta (SPEC §9)."""
+    last_sent = runtime.snapshot()
+    await _send_snapshot(websocket, last_sent)
+    next_snapshot: asyncio.Future[WorldSnapshot] | None = None
+    while True:
+        if next_snapshot is None:
+            next_snapshot = asyncio.ensure_future(queue.get())
+        resync_wait = asyncio.ensure_future(resync.wait())
+        done, _ = await asyncio.wait(
+            {next_snapshot, resync_wait, disconnected},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if disconnected in done:
+            next_snapshot.cancel()
+            resync_wait.cancel()
+            return
+        if resync_wait in done:
+            resync.clear()
+            last_sent = runtime.snapshot()
+            await _send_snapshot(websocket, last_sent)
+        else:
+            resync_wait.cancel()
+        if next_snapshot in done:
+            latest = next_snapshot.result()
+            next_snapshot = None
+            if latest.tick > last_sent.tick:
+                await _send_delta(websocket, diff_snapshots(last_sent, latest))
+                last_sent = latest
 
 
 async def _send_snapshot(websocket: WebSocket, snapshot: WorldSnapshot) -> None:
@@ -156,15 +184,28 @@ async def _send_delta(websocket: WebSocket, delta: WorldDelta) -> None:
     await websocket.send_json({"type": "delta", **payload})
 
 
-async def _wait_disconnect(websocket: WebSocket) -> None:
-    """클라이언트가 보내는 프레임은 버리고, 끊김만 기다린다."""
+async def _receive_requests(websocket: WebSocket, resync: asyncio.Event) -> None:
+    """클라이언트 프레임 중 다시 맞춤 요청만 받고 나머지는 버린다. 끊기면 끝난다."""
     try:
         while True:
             message = await websocket.receive()
             if message["type"] == "websocket.disconnect":
                 return
+            if _is_resync_request(message.get("text")):
+                resync.set()
     except (WebSocketDisconnect, RuntimeError):
         return
+
+
+def _is_resync_request(text: object) -> bool:
+    """`{"type": "resync"}`: 프런트가 delta를 합치지 못해 전체 스냅샷을 다시 원한다."""
+    if not isinstance(text, str):
+        return False
+    try:
+        parsed = cast(object, json.loads(text))
+    except json.JSONDecodeError:
+        return False
+    return isinstance(parsed, dict) and cast(dict[str, object], parsed).get("type") == RESYNC_REQUEST
 
 
 app = create_app()
